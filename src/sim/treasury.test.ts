@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { asTick, asTileIndex, type TileIndex } from "./ids";
-import { addOccupancy, occupancyAt, removeOccupancy, STEPS_PER_TILE, type Imp } from "./imps";
+import { addOccupancy, occupancyAt, removeOccupancy, type Imp } from "./imps";
+import { STEPS_PER_TILE } from "./pathfind";
 import {
-  asCommandLog,
+  sortCommands,
   createWorld,
   hashWorld,
   MAP_WIDTH,
   ROOM_KIND,
   run,
-  sortCommands,
   step,
   TREASURY_CAPACITY,
   TREASURY_COST,
@@ -110,7 +110,7 @@ function treasurySetup(): Command[] {
 
 describe("treasury room", () => {
   it("refuses paintRoom on unclaimed floor", () => {
-    const world = run(1, asCommandLog([addGold(0, 100), paint(1, EARTH_TILE)]), 2);
+    const world = run(1, sortCommands([addGold(0, 100), paint(1, EARTH_TILE)]), 2);
     expect(tileKindAt(world.tiles, EARTH_TILE)).toBe("earth");
     expect(world.rooms[EARTH_TILE]).toBe(ROOM_KIND.none);
     expect(world.goldStored).toBe(100);
@@ -118,7 +118,7 @@ describe("treasury room", () => {
   });
 
   it("refuses paintRoom without enough gold", () => {
-    const world = run(1, asCommandLog([paint(0, HEART_TILE)]), 1);
+    const world = run(1, sortCommands([paint(0, HEART_TILE)]), 1);
     expect(tileKindAt(world.tiles, HEART_TILE)).toBe("claimed");
     expect(world.rooms[HEART_TILE]).toBe(ROOM_KIND.none);
     expect(world.goldStored).toBe(0);
@@ -126,7 +126,7 @@ describe("treasury room", () => {
   });
 
   it("refuses paintRoom on an already painted tile", () => {
-    const world = run(1, asCommandLog([addGold(0, 100), paint(0, HEART_TILE), paint(1, HEART_TILE)]), 2);
+    const world = run(1, sortCommands([addGold(0, 100), paint(0, HEART_TILE), paint(1, HEART_TILE)]), 2);
     expect(tileKindAt(world.tiles, HEART_TILE)).toBe("room");
     expect(world.rooms[HEART_TILE]).toBe(ROOM_KIND.treasury);
     expect(world.goldStored).toBe(100 - TREASURY_COST);
@@ -134,19 +134,19 @@ describe("treasury room", () => {
   });
 
   it("paints a treasury, deducts its cost and records the spend", () => {
-    const world = run(1, asCommandLog([addGold(0, 100), paint(1, HEART_TILE)]), 2);
+    const world = run(1, sortCommands([addGold(0, 100), paint(1, HEART_TILE)]), 2);
     expect(tileKindAt(world.tiles, HEART_TILE)).toBe("room");
     expect(world.rooms[HEART_TILE]).toBe(ROOM_KIND.treasury);
     expect(world.treasuryStock[HEART_TILE]).toBe(0);
     expect(world.goldStored).toBe(100 - TREASURY_COST);
     expect(world.goldSpent).toBe(TREASURY_COST);
-    expect(hashWorld(world)).not.toBe(hashWorld(run(1, asCommandLog([addGold(0, 100)]), 2)));
+    expect(hashWorld(world)).not.toBe(hashWorld(run(1, sortCommands([addGold(0, 100)]), 2)));
   });
 
   it("delivers mined gold into the nearest treasury", () => {
-    const world = run(1, asCommandLog(treasurySetup()), 1);
+    const world = run(1, sortCommands(treasurySetup()), 1);
     for (let t = 0; t < 4000 && treasuryStockTotal(world) === 0; t += 1) {
-      step(world, asCommandLog([]));
+      step(world, sortCommands([]));
     }
     expect(treasuryStockTotal(world)).toBeGreaterThan(0);
     for (let i = 0; i < TREASURY_TILES.length; i += 1) {
@@ -160,13 +160,13 @@ describe("treasury room", () => {
   });
 
   it("caps treasury stock and keeps the excess carried", () => {
-    const world = run(1, asCommandLog([addGold(0, 100), paint(0, TREASURY_B)].concat(corridorCommands())), 1);
+    const world = run(1, sortCommands([addGold(0, 100), paint(0, TREASURY_B)].concat(corridorCommands())), 1);
     world.treasuryStock[TREASURY_B] = TREASURY_CAPACITY - 5;
     world.treasuryVersion += 1;
     const initial = totalGold(world);
     let reached = false;
     for (let t = 0; t < 4000; t += 1) {
-      step(world, asCommandLog([]));
+      step(world, sortCommands([]));
       const stock = world.treasuryStock[TREASURY_B];
       expect(stock === undefined ? 0 : stock).toBeLessThanOrEqual(TREASURY_CAPACITY);
       if (stock === TREASURY_CAPACITY) {
@@ -183,7 +183,7 @@ describe("treasury room", () => {
     }
     const storedBefore = world.goldStored;
     for (let t = 0; t < 800; t += 1) {
-      step(world, asCommandLog([]));
+      step(world, sortCommands([]));
       expect(world.treasuryStock[TREASURY_B]).toBe(TREASURY_CAPACITY);
       expect(totalGold(world)).toBe(initial);
     }
@@ -193,7 +193,7 @@ describe("treasury room", () => {
   it("allows two carriers to overlap on a treasury delivery target", () => {
     const target = TREASURY_B;
     const adjacent = asTileIndex(30 * MAP_WIDTH + 31);
-    const world = run(1, asCommandLog([addGold(0, 100), paint(0, target)]), 1);
+    const world = run(1, sortCommands([addGold(0, 100), paint(0, target)]), 1);
     const firstSlot = world.imps.slots[0];
     const secondSlot = world.imps.slots[1];
     if (firstSlot === undefined || secondSlot === undefined || firstSlot.kind !== "live" || secondSlot.kind !== "live") {
@@ -228,7 +228,7 @@ describe("treasury room", () => {
     second.path[1] = target;
     second.state = second.delivering;
     expect(occupancyAt(world.imps, target)).toBe(1);
-    step(world, asCommandLog([]));
+    step(world, sortCommands([]));
     expect(occupancyAt(world.imps, target)).toBe(2);
     expect(world.treasuryStock[target]).toBe(40);
     expect(treasuryStockTotal(world)).toBe(40);
@@ -254,9 +254,9 @@ describe("treasury room", () => {
       paint(5, EARTH_TILE),
       tag(2, asTileIndex(32 * MAP_WIDTH + 38)),
     ];
-    const a = hashWorld(run(9, asCommandLog(commands), 10000));
-    const b = hashWorld(run(9, asCommandLog(commands), 10000));
+    const a = hashWorld(run(9, sortCommands(commands), 10000));
+    const b = hashWorld(run(9, sortCommands(commands), 10000));
     expect(a).toBe(b);
-    expect(a).not.toBe(hashWorld(run(9, asCommandLog([addGold(0, 1000)]), 10000)));
+    expect(a).not.toBe(hashWorld(run(9, sortCommands([addGold(0, 1000)]), 10000)));
   });
 });

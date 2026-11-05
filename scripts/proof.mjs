@@ -849,8 +849,8 @@ async function run() {
       if (result.tick <= duringPause) {
         throw new Error(`tick did not advance after resume: ${String(duringPause)} -> ${String(result.tick)}`);
       }
-      if (result.drawCalls > 8) {
-        throw new Error(`tile draw calls ${String(result.drawCalls)} exceed 8`);
+      if (result.drawCalls > 7) {
+        throw new Error(`draw calls ${String(result.drawCalls)} exceed 7`);
       }
       if (result.goldStored < 40) {
         throw new Error(`goldStored ended at ${String(result.goldStored)}`);

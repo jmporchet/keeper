@@ -1,7 +1,7 @@
 import { asCreatureId, asTileIndex, type CreatureId, type TileIndex } from "./ids";
-import { findPath, STEPS_PER_TILE } from "./imps";
 import { PORTAL_X, PORTAL_Y, ROOM_KIND, tileKindAt } from "./map";
 import { PATH_CELL_COUNT } from "./path";
+import { findPath, STEPS_PER_TILE } from "./pathfind";
 import type { World } from "./worldCore";
 
 export const CREATURE_CAPACITY = 8;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { asTick, asTileIndex } from "./ids";
-import { asCommandLog, createWorld, MAP_WIDTH, step, type Command, type World } from "./world";
+import { sortCommands, createWorld, MAP_WIDTH, step, type Command, type World } from "./world";
 
 const WINDOW = 200;
 const FROM = 1000;
@@ -53,7 +53,7 @@ describe("idle imps", () => {
     const commands = corridorCommands();
     const world = createWorld(1);
     for (let t = 0; t < FROM; t += 1) {
-      step(world, asCommandLog(commands));
+      step(world, sortCommands(commands));
     }
     const slotCount = world.imps.slots.length;
     const failures: string[] = [];
@@ -67,7 +67,7 @@ describe("idle imps", () => {
         workingAll.push(true);
       }
       for (let t = 0; t < WINDOW; t += 1) {
-        step(world, asCommandLog(commands));
+        step(world, sortCommands(commands));
         for (let i = 0; i < slotCount; i += 1) {
           const tile = tileOf(world, i);
           if (tile === undefined) {

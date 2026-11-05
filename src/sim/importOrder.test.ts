@@ -13,7 +13,7 @@ describe("module import order", () => {
       { kind: "paintRoom", tick: ids.asTick(0), tile: ids.asTileIndex(30 * worldModule.MAP_WIDTH + 30), room: "lair" },
       { kind: "paintRoom", tick: ids.asTick(0), tile: ids.asTileIndex(30 * worldModule.MAP_WIDTH + 31), room: "lair" },
     ];
-    const world = worldModule.run(1, worldModule.asCommandLog(commands), creatures.ARRIVE_TICKS + 1);
+    const world = worldModule.run(1, worldModule.sortCommands(commands), creatures.ARRIVE_TICKS + 1);
     expect(worldModule.liveCreatureCount(world.creatures)).toBe(1);
   });
 
@@ -26,7 +26,7 @@ describe("module import order", () => {
     for (let x = 35; x <= 37; x += 1) {
       commands.push({ kind: "tag", tick: ids.asTick(0), tile: ids.asTileIndex(32 * worldModule.MAP_WIDTH + x) });
     }
-    const world = worldModule.run(1, worldModule.asCommandLog(commands), 600);
+    const world = worldModule.run(1, worldModule.sortCommands(commands), 600);
     for (let x = 35; x <= 37; x += 1) {
       const kind = worldModule.tileKindAt(world.tiles, 32 * worldModule.MAP_WIDTH + x);
       expect(kind === "dirt" || kind === "claimed").toBe(true);

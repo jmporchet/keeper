@@ -16,11 +16,11 @@ import {
   jobHeldOnTile,
   removeOccupancy,
   setHeading,
-  STEPS_PER_TILE,
   type Imp,
   type ImpWorld,
   type MovingImpState,
 } from "./imps";
+import { STEPS_PER_TILE } from "./pathfind";
 
 export function stepImps(world: ImpWorld): void {
   world.walkableSaturated = world.imps.liveCount - world.imps.heldCount >= world.walkableTileCount;

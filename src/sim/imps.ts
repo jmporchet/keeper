@@ -11,14 +11,14 @@ import {
   TREASURY_CAPACITY,
   type TileRead,
 } from "./map";
-import { bumpPathGen, isWalkableCode, PATH_CELL_COUNT, type PathScratch } from "./path";
-import { bfsToGoal, floodWalkable, reconstructPath } from "./path.hot";
+import { bumpPathGen, isWalkableCode, PATH_CELL_COUNT } from "./path";
+import { floodWalkable, reconstructPath } from "./path.hot";
+import { findPath, STEPS_PER_TILE } from "./pathfind";
 import { advanceRng } from "./rng";
 import { setTile, type World } from "./worldCore";
 
 export const IMP_CAPACITY = 200;
 export const STARTING_IMP_COUNT = 4;
-export const STEPS_PER_TILE = 6;
 export const DIG_TICKS = 40;
 export const CLAIM_TICKS = 30;
 export const MINE_TICKS = 30;
@@ -240,34 +240,6 @@ export function spawnStartingImps(board: ImpBoard): void {
 
 export function tileIndex(x: number, y: number, width: number): number {
   return y * width + x;
-}
-
-export function findPath(
-  tiles: TileRead,
-  width: number,
-  height: number,
-  start: number,
-  goal: number,
-  scratch: PathScratch,
-  outPath: Int16Array,
-): number {
-  const gen = bumpPathGen(scratch);
-  const reached = bfsToGoal(
-    tiles,
-    width,
-    height,
-    start,
-    goal,
-    scratch.queue,
-    scratch.generation,
-    gen,
-    scratch.cameFrom,
-    scratch.distance,
-  );
-  if (!reached) {
-    return 0;
-  }
-  return reconstructPath(start, goal, scratch.cameFrom, scratch.reverseBuf, outPath);
 }
 
 export type ImpWorld = World;

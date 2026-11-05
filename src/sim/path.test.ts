@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findPath } from "./imps";
+import { findPath } from "./pathfind";
 import { createPathScratch, isWalkableCode } from "./path";
 import { MAP_HEIGHT, MAP_WIDTH, TILE_KIND } from "./world";
 

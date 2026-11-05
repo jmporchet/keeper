@@ -3,7 +3,7 @@ import { MAP_HALF, ROOM_KIND, TREASURY_CAPACITY } from "../sim";
 
 const ROOM_FLOOR_HEIGHT = 0.2;
 
-export function syncGoldPileInstances(
+export function syncPropInstances(
   rooms: Uint8Array,
   stock: Uint16Array,
   width: number,

@@ -48,7 +48,6 @@ export {
   carryingCount,
   CLAIM_TICKS,
   DIG_TICKS,
-  findPath,
   finishClaim,
   hashImps,
   IMP_CAPACITY,
@@ -59,7 +58,6 @@ export {
   reserveBestReachableJob,
   SLAP_TICKS,
   STARTING_IMP_COUNT,
-  STEPS_PER_TILE,
   workerOf,
   type Imp,
   type ImpBoard,
@@ -94,8 +92,8 @@ export {
 } from "./jobs";
 export type { Job, JobBoard, JobKind, JobLifecycle } from "./jobs";
 export { createPathScratch, isWalkableCode } from "./path";
+export { findPath, STEPS_PER_TILE } from "./pathfind";
 export {
-  asCommandLog,
   countTagged,
   createWorld,
   GOLD_PER_TILE,

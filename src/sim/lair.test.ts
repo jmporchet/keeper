@@ -2,14 +2,13 @@ import { describe, expect, it } from "vitest";
 import { asTick, asTileIndex, type TileIndex } from "./ids";
 import type { Imp } from "./imps";
 import {
-  asCommandLog,
+  sortCommands,
   createWorld,
   hashWorld,
   LAIR_COST,
   MAP_WIDTH,
   ROOM_KIND,
   run,
-  sortCommands,
   step,
   TREASURY_COST,
   tileKindAt,
@@ -83,7 +82,7 @@ function corridorCommands(): Command[] {
 
 describe("lair room", () => {
   it("refuses paintRoom lair on unclaimed floor", () => {
-    const world = run(1, asCommandLog([addGold(0, 100), paint(1, EARTH_TILE, "lair")]), 2);
+    const world = run(1, sortCommands([addGold(0, 100), paint(1, EARTH_TILE, "lair")]), 2);
     expect(tileKindAt(world.tiles, EARTH_TILE)).toBe("earth");
     expect(world.rooms[EARTH_TILE]).toBe(ROOM_KIND.none);
     expect(world.goldStored).toBe(100);
@@ -91,7 +90,7 @@ describe("lair room", () => {
   });
 
   it("refuses paintRoom lair without enough gold", () => {
-    const world = run(1, asCommandLog([paint(0, HEART_TILE, "lair")]), 1);
+    const world = run(1, sortCommands([paint(0, HEART_TILE, "lair")]), 1);
     expect(tileKindAt(world.tiles, HEART_TILE)).toBe("claimed");
     expect(world.rooms[HEART_TILE]).toBe(ROOM_KIND.none);
     expect(world.goldStored).toBe(0);
@@ -99,7 +98,7 @@ describe("lair room", () => {
   });
 
   it("refuses paintRoom lair on an already painted tile", () => {
-    const world = run(1, asCommandLog([addGold(0, 100), paint(0, HEART_TILE, "treasury"), paint(1, HEART_TILE, "lair")]), 2);
+    const world = run(1, sortCommands([addGold(0, 100), paint(0, HEART_TILE, "treasury"), paint(1, HEART_TILE, "lair")]), 2);
     expect(tileKindAt(world.tiles, HEART_TILE)).toBe("room");
     expect(world.rooms[HEART_TILE]).toBe(ROOM_KIND.treasury);
     expect(world.goldStored).toBe(100 - TREASURY_COST);
@@ -107,12 +106,12 @@ describe("lair room", () => {
   });
 
   it("paints a lair, deducts its cost and records the spend", () => {
-    const world = run(1, asCommandLog([addGold(0, 100), paint(1, HEART_TILE, "lair")]), 2);
+    const world = run(1, sortCommands([addGold(0, 100), paint(1, HEART_TILE, "lair")]), 2);
     expect(tileKindAt(world.tiles, HEART_TILE)).toBe("room");
     expect(world.rooms[HEART_TILE]).toBe(ROOM_KIND.lair);
     expect(world.goldStored).toBe(100 - LAIR_COST);
     expect(world.goldSpent).toBe(LAIR_COST);
-    expect(hashWorld(world)).not.toBe(hashWorld(run(1, asCommandLog([addGold(0, 100)]), 2)));
+    expect(hashWorld(world)).not.toBe(hashWorld(run(1, sortCommands([addGold(0, 100)]), 2)));
   });
 
   it("conserves gold exactly every tick with a lair", () => {
@@ -140,9 +139,9 @@ describe("lair room", () => {
       paint(5, EARTH_TILE, "lair"),
       tag(2, asTileIndex(32 * MAP_WIDTH + 38)),
     ];
-    const a = hashWorld(run(9, asCommandLog(commands), 10000));
-    const b = hashWorld(run(9, asCommandLog(commands), 10000));
+    const a = hashWorld(run(9, sortCommands(commands), 10000));
+    const b = hashWorld(run(9, sortCommands(commands), 10000));
     expect(a).toBe(b);
-    expect(a).not.toBe(hashWorld(run(9, asCommandLog([addGold(0, 1000)]), 10000)));
+    expect(a).not.toBe(hashWorld(run(9, sortCommands([addGold(0, 1000)]), 10000)));
   });
 });

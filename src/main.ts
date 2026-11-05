@@ -12,12 +12,12 @@ import { createCameraPose, eyeFromPose } from "./camera/pose";
 import { bindCameraInput } from "./input/bindCamera";
 import { isPainting } from "./input/inputCameraMachine";
 import { createCreatureMeshes, syncCreatures } from "./render/creatures";
-import { createGoldPileMeshes, syncGoldPiles } from "./render/goldPiles";
+import { createPropMeshes, syncProps } from "./render/props";
 import { createImpMeshes, syncImps } from "./render/imps";
 import { addTorchLighting, DUNGEON_EXPOSURE } from "./render/lights";
 import { createMapMeshes, syncMap } from "./render/map";
 import {
-  asCommandLog,
+  requireSorted,
   buildSave,
   carryingCount,
   countTagged,
@@ -132,15 +132,15 @@ const pose = createCameraPose();
 
 let world = createWorld(1);
 let commands: Command[] = [];
-let commandLog: CommandLog = asCommandLog(commands);
+let commandLog: CommandLog = requireSorted(commands);
 const hudElement = document.getElementById("hud");
 const hud = createHud(hudElement);
-const goldPiles = createGoldPileMeshes(scene);
+const props = createPropMeshes(scene);
 const map = createMapMeshes(scene);
 const impsVisual = createImpMeshes(scene);
 const creaturesVisual = createCreatureMeshes(scene);
 syncMap(world, map, world.tick);
-syncGoldPiles(world, goldPiles);
+syncProps(world, props);
 syncImps(world.imps, world.hand, 1, undefined, impsVisual, world.tick);
 syncCreatures(world.creatures, 1, creaturesVisual);
 addTorchLighting(scene);
@@ -189,9 +189,9 @@ function loadSave(save: Save): void {
     const replayed = replaySave(save);
     world = replayed;
     commands = save.commands.slice();
-    commandLog = asCommandLog(commands);
+    commandLog = requireSorted(commands);
     syncMap(world, map, world.tick);
-    syncGoldPiles(world, goldPiles);
+    syncProps(world, props);
     syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual, world.tick);
     syncCreatures(world.creatures, 1, creaturesVisual);
     placeCamera();
@@ -576,7 +576,7 @@ if (proof) {
         cameraInput.tickHeldKeys();
       }
       syncMap(world, map, world.tick);
-      syncGoldPiles(world, goldPiles);
+      syncProps(world, props);
       syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual, world.tick);
       syncCreatures(world.creatures, 1, creaturesVisual);
       placeCamera();
@@ -633,7 +633,7 @@ if (proof) {
           requestAnimationFrame(() => {
             const start = performance.now();
             syncMap(world, map, world.tick);
-            syncGoldPiles(world, goldPiles);
+            syncProps(world, props);
             syncImps(world.imps, world.hand, 1, undefined, impsVisual, world.tick);
             syncCreatures(world.creatures, 1, creaturesVisual);
             placeCamera();
@@ -685,7 +685,7 @@ if (proof) {
     }
     cameraInput.tickHeldKeys();
     syncMap(world, map, now / 1000);
-    syncGoldPiles(world, goldPiles);
+    syncProps(world, props);
     syncImps(world.imps, world.hand, accumulator / TICK_DT, cameraInput.cursorTile(), impsVisual, now / 1000);
     syncCreatures(world.creatures, accumulator / TICK_DT, creaturesVisual);
     placeCamera();
