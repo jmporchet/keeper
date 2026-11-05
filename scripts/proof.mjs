@@ -134,6 +134,7 @@ async function run() {
         recordVideo: { dir: "proof/tmp", size: { width: 1280, height: 720 } },
       });
       const page = await context.newPage();
+      const recordStart = Date.now();
       await page.goto(`${ORIGIN}/?proof=1`);
       await page.waitForFunction(() => globalThis.__keeper !== undefined);
       const canvas = page.locator("canvas");
@@ -271,6 +272,10 @@ async function run() {
         result.camera.targetZ,
         result.camera.distance,
       );
+      const hold = 12000 - (Date.now() - recordStart);
+      if (hold > 0) {
+        await delay(hold);
+      }
       await page.screenshot({ path: "proof/shot.png" });
       await context.close();
       const files = await readdir("proof/tmp");
