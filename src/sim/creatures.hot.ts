@@ -1,9 +1,13 @@
 import {
+  beginEating,
+  beginHungry,
   beginSleeping,
   beginToBed,
+  beginToFood,
   captureCreatureCurr,
   captureCreaturePrev,
   CREATURE_STEPS_PER_TILE,
+  finishEating,
   setCreatureHeading,
   tryArrival,
   type Creature,
@@ -45,6 +49,29 @@ function stepLiveCreature(world: World, creature: Creature): void {
       }
       break;
     case "sleeping":
+      if (state.remaining > 0) {
+        state.remaining -= 1;
+        break;
+      }
+      beginHungry(creature);
+      break;
+    case "hungry":
+      if (state.retry > 0) {
+        state.retry -= 1;
+        break;
+      }
+      beginToFood(world, creature);
+      break;
+    case "toFood":
+      if (advanceAlongPath(creature, state, world.width, 1)) {
+        beginEating(creature, state.chickenId);
+      }
+      break;
+    case "eating":
+      state.remaining -= 1;
+      if (state.remaining <= 0) {
+        finishEating(world, creature, state.chickenId);
+      }
       break;
     default: {
       const never: never = state;

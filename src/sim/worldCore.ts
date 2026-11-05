@@ -1,3 +1,4 @@
+import type { ChickenBoard } from "./chickens";
 import type { CreatureBoard } from "./creatures";
 import type { Hand } from "./hand";
 import type { Tick } from "./ids";
@@ -21,6 +22,12 @@ export type World = {
   readonly lairCache: Int32Array;
   lairCacheCount: number;
   lairCacheVersion: number;
+  readonly hatcheryCache: Int32Array;
+  hatcheryCacheCount: number;
+  hatcheryCacheVersion: number;
+  readonly chickenTileCount: Uint16Array;
+  chickens: ChickenBoard;
+  chickensVersion: number;
   tilesVersion: number;
   roomsVersion: number;
   treasuryVersion: number;

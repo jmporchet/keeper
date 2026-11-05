@@ -4,6 +4,7 @@ export type ImpId = number & { readonly __brand: "ImpId" };
 export type JobId = number & { readonly __brand: "JobId" };
 export type WorkerId = number & { readonly __brand: "WorkerId" };
 export type CreatureId = number & { readonly __brand: "CreatureId" };
+export type ChickenId = number & { readonly __brand: "ChickenId" };
 
 export function asTick(n: number): Tick {
   return n as Tick;
@@ -27,4 +28,8 @@ export function asWorkerId(n: number): WorkerId {
 
 export function asCreatureId(n: number): CreatureId {
   return n as CreatureId;
+}
+
+export function asChickenId(n: number): ChickenId {
+  return n as ChickenId;
 }

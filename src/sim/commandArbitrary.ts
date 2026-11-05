@@ -10,7 +10,7 @@ export function commandList(maxTick: number): fc.Arbitrary<Command[]> {
         fc.integer({ min: 0, max: maxTick - 1 }),
         fc.integer({ min: 1, max: 8 }),
         fc.integer({ min: 0, max: MAP_WIDTH * MAP_WIDTH - 1 }),
-        fc.integer({ min: 0, max: 9 }),
+        fc.integer({ min: 0, max: 10 }),
       )
       .map(([tick, amount, tile, kind]) => {
         switch (kind) {
@@ -51,6 +51,16 @@ export function commandList(maxTick: number): fc.Arbitrary<Command[]> {
           }
           case 8:
             return { kind: "spawnImp", tick: asTick(tick) };
+          case 9: {
+            const tileX = 30 + (tile % 5);
+            const tileY = 30 + ((tile >> 3) % 5);
+            return {
+              kind: "paintRoom",
+              tick: asTick(tick),
+              tile: asTileIndex(tileY * MAP_WIDTH + tileX),
+              room: "hatchery",
+            };
+          }
           default:
             return { kind: "slap", tick: asTick(tick), impId: asImpId(tile % 4) };
         }

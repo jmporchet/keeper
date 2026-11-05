@@ -39,6 +39,7 @@ export function createSandboxPanel(
   const goldButton = root === null ? null : root.querySelector<HTMLButtonElement>("#add-gold");
   const paintTreasuryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-treasury");
   const paintLairButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-lair");
+  const paintHatcheryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-hatchery");
   const saveButton = root === null ? null : root.querySelector<HTMLButtonElement>("#save-game");
   const loadButton = root === null ? null : root.querySelector<HTMLButtonElement>("#load-game");
   const fileInput = root === null ? null : root.querySelector<HTMLInputElement>("#load-file");
@@ -57,6 +58,9 @@ export function createSandboxPanel(
     }
     if (paintLairButton !== null) {
       paintLairButton.disabled = paused || replaying;
+    }
+    if (paintHatcheryButton !== null) {
+      paintHatcheryButton.disabled = paused || replaying;
     }
     if (saveButton !== null) {
       saveButton.disabled = replaying;
@@ -96,6 +100,14 @@ export function createSandboxPanel(
         return;
       }
       togglePaint("lair");
+    });
+  }
+  if (paintHatcheryButton !== null) {
+    paintHatcheryButton.addEventListener("click", () => {
+      if (paused || replaying) {
+        return;
+      }
+      togglePaint("hatchery");
     });
   }
   if (saveButton !== null) {
@@ -171,6 +183,9 @@ export function createSandboxPanel(
     }
     if (paintLairButton !== null) {
       paintLairButton.setAttribute("aria-pressed", painting && room === "lair" ? "true" : "false");
+    }
+    if (paintHatcheryButton !== null) {
+      paintHatcheryButton.setAttribute("aria-pressed", painting && room === "hatchery" ? "true" : "false");
     }
   }
 

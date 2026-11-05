@@ -1,3 +1,10 @@
+import {
+  CHICKEN_TILE_CAP,
+  createChickenBoard,
+  HATCH_TICKS,
+  hashChickens,
+  spawnChicken,
+} from "./chickens";
 import { createCreatureBoard, hashCreatures } from "./creatures";
 import { stepCreatures } from "./creatures.hot";
 import { addHeld, createHand, hashHand, isHeld, removeHeld } from "./hand";
@@ -17,6 +24,7 @@ import {
 import { stepImps } from "./imps.hot";
 import { cancelJobAtTile, createJobBoard, hashJobs, openJob, releaseWorker } from "./jobs";
 import {
+  HATCHERY_COST,
   HEART_X,
   HEART_Y,
   LAIR_COST,
@@ -36,6 +44,7 @@ import { advanceRng } from "./rng";
 import { attachTiles, setTile, type World } from "./worldCore";
 
 export {
+  HATCHERY_COST,
   HEART_X,
   HEART_Y,
   MAP_HALF,
@@ -63,6 +72,7 @@ export {
 } from "./map";
 export { setTile, type World } from "./worldCore";
 export { openClaimJobsAround } from "./claims";
+export { CHICKEN_CAPACITY, CHICKEN_TILE_CAP, HATCH_TICKS, liveChickenCount } from "./chickens";
 export { lairTileCount, liveCreatureCount } from "./creatures";
 
 export const TICK_HZ = 20;
@@ -173,6 +183,8 @@ export function createWorld(seed: number): World {
   const treasuryStock = new Uint16Array(width * height);
   const treasuryCache = new Int32Array(width * height);
   const lairCache = new Int32Array(width * height);
+  const hatcheryCache = new Int32Array(width * height);
+  const chickenTileCount = new Uint16Array(width * height);
   let walkableTileCount = 0;
   for (let i = 0; i < tiles.length; i += 1) {
     const code = tiles[i];
@@ -203,6 +215,12 @@ export function createWorld(seed: number): World {
     lairCache,
     lairCacheCount: 0,
     lairCacheVersion: -1,
+    hatcheryCache,
+    hatcheryCacheCount: 0,
+    hatcheryCacheVersion: -1,
+    chickenTileCount,
+    chickens: createChickenBoard(),
+    chickensVersion: 0,
     tilesVersion: 1,
     roomsVersion: 0,
     treasuryVersion: 0,
@@ -270,6 +288,7 @@ export function hashWorld(world: World): number {
   }
   h = mix(h, hashImps(world.imps));
   h = mix(h, hashCreatures(world.creatures));
+  h = mix(h, hashChickens(world.chickens));
   return h >>> 0;
 }
 
@@ -359,6 +378,17 @@ function applyPaintRoom(world: World, tile: TileIndex, room: RoomTool): void {
       world.roomsVersion += 1;
       return;
     }
+    case "hatchery": {
+      if (world.goldStored < HATCHERY_COST) {
+        return;
+      }
+      world.goldStored -= HATCHERY_COST;
+      world.goldSpent += HATCHERY_COST;
+      setTile(world, tile, TILE_KIND.room);
+      world.rooms[tile] = ROOM_KIND.hatchery;
+      world.roomsVersion += 1;
+      return;
+    }
     default: {
       const never: never = room;
       return never;
@@ -387,6 +417,56 @@ export function treasuryTileCount(world: World): number {
     }
   }
   return total;
+}
+
+export function hatcheryTileCount(world: World): number {
+  let total = 0;
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room === ROOM_KIND.hatchery) {
+      total += 1;
+    }
+  }
+  return total;
+}
+
+function refreshHatcheryCache(world: World): void {
+  if (world.hatcheryCacheVersion === world.roomsVersion) {
+    return;
+  }
+  world.hatcheryCacheVersion = world.roomsVersion;
+  let count = 0;
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room !== ROOM_KIND.hatchery) {
+      continue;
+    }
+    world.hatcheryCache[count] = i;
+    count += 1;
+  }
+  world.hatcheryCacheCount = count;
+}
+
+function hatchChickens(world: World): void {
+  if (world.tick === 0 || world.tick % HATCH_TICKS !== 0) {
+    return;
+  }
+  refreshHatcheryCache(world);
+  for (let i = 0; i < world.hatcheryCacheCount; i += 1) {
+    const tile = world.hatcheryCache[i];
+    if (tile === undefined) {
+      continue;
+    }
+    const count = world.chickenTileCount[tile];
+    if (count === undefined || count >= CHICKEN_TILE_CAP) {
+      continue;
+    }
+    if (!spawnChicken(world.chickens, asTileIndex(tile))) {
+      return;
+    }
+    world.chickenTileCount[tile] = count + 1;
+    world.chickensVersion += 1;
+  }
 }
 
 function liveImpById(world: World, impId: ImpId): Imp | undefined {
@@ -564,6 +644,7 @@ export function step(world: World, commands: CommandLog): void {
   }
   world.commandCursor = i;
   stepImps(world);
+  hatchChickens(world);
   stepCreatures(world);
   advanceRng(world);
   world.tick = asTick(world.tick + 1);
