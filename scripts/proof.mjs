@@ -1,0 +1,113 @@
+import { spawn } from "node:child_process";
+import { readdir, rm } from "node:fs/promises";
+import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { chromium } from "playwright";
+
+const PORT = 4173;
+const ORIGIN = `http://127.0.0.1:${PORT}`;
+
+async function waitUntilReady() {
+  const deadline = Date.now() + 20000;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(ORIGIN);
+      if (res.ok) {
+        return;
+      }
+    } catch {
+      await delay(100);
+    }
+  }
+  throw new Error("vite preview did not become ready");
+}
+
+function killProcess(child) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  child.kill("SIGTERM");
+}
+
+async function convertWebm(webmPath) {
+  await new Promise((resolve, reject) => {
+    const ffmpeg = spawn(
+      "/usr/bin/ffmpeg",
+      ["-y", "-i", webmPath, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "proof/play.mp4"],
+      { stdio: "inherit" },
+    );
+    ffmpeg.on("error", reject);
+    ffmpeg.on("exit", (code) => {
+      if (code === 0) {
+        resolve(undefined);
+      } else {
+        reject(new Error(`ffmpeg exited ${String(code)}`));
+      }
+    });
+  });
+}
+
+function startPreview() {
+  const preview = spawn(
+    "node_modules/.bin/vite",
+    ["preview", "--host", "127.0.0.1", "--port", String(PORT), "--strictPort"],
+    { stdio: "inherit" },
+  );
+  return new Promise((resolve, reject) => {
+    const onExit = (code, signal) => {
+      reject(new Error(`vite preview exited (${String(code)}/${String(signal)})`));
+    };
+    preview.once("exit", onExit);
+    waitUntilReady().then(() => {
+      preview.off("exit", onExit);
+      resolve(preview);
+    }, reject);
+  });
+}
+
+async function run() {
+  const preview = await startPreview();
+  try {
+    const browser = await chromium.launch({
+      channel: "chrome",
+      headless: true,
+      args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+    });
+    try {
+      const context = await browser.newContext({
+        viewport: { width: 1280, height: 720 },
+        recordVideo: { dir: "proof/tmp", size: { width: 1280, height: 720 } },
+      });
+      const page = await context.newPage();
+      await page.goto(`${ORIGIN}/?proof=1`);
+      await page.waitForFunction(() => globalThis.__keeper !== undefined);
+      const until = Date.now() + 15000;
+      while (Date.now() < until) {
+        await page.evaluate(() => {
+          globalThis.__keeper.step(1);
+        });
+        await delay(50);
+      }
+      const tick = await page.evaluate(() => globalThis.__keeper.tick);
+      console.log(tick);
+      await page.screenshot({ path: "proof/shot.png" });
+      await context.close();
+      const files = await readdir("proof/tmp");
+      const webm = files.find((name) => name.endsWith(".webm"));
+      if (webm === undefined) {
+        throw new Error("recordVideo did not write a webm");
+      }
+      await convertWebm(path.join("proof/tmp", webm));
+      await rm("proof/tmp", { recursive: true, force: true });
+    } finally {
+      await browser.close();
+    }
+  } finally {
+    killProcess(preview);
+  }
+}
+
+run().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

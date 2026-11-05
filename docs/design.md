@@ -177,12 +177,25 @@ Job priority follows KeeperFX's digger stack in spirit: dig tagged tiles, then m
 - `Command`: discriminated union (`tag`, `untag`, `paintRoom`, `pickUp`, `drop`, `slap`, `spawnImp`, `addGold`), each with `tick`.
 - Branded ids: `TileIndex`, `ImpId`, `JobId`, `Tick`. A raw number cannot be passed where an id is expected.
 
+### Chart 0: scaffold render loop
+
+The first canvas has two mutually exclusive loops. Live play uses the wall clock. Proof mode (`?proof=1`) never reads real time: Playwright calls `window.__keeper.step(n)`, which advances a discrete orbit tick and draws once.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Live: default
+    [*] --> Proof: query proof=1
+    Live --> Live: requestAnimationFrame
+    Proof --> Proof: __keeper.step
+```
+
 ### Rendering
 
 - One `InstancedMesh` per tile visual kind. A tile change updates one instance matrix. A removed block gets scale 0, so the instance index can stay the tile index.
 - Imps are instanced too. Animation is cheap vertex or transform motion, no skinned meshes in milestone 1.
-- Camera: perspective, orbit around a ground target, pitch clamped, zoom clamped, target clamped to the map.
+- Camera: perspective, orbit around a ground target, pitch clamped, zoom clamped, target clamped to the map. Scaffold uses a fixed-radius orbit from `src/orbit.ts`; later PRs replace it with chart 2.
 - Visual style: low-poly blocks, warm torchlight, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
+- Scaffold placeholder: a 9×9 of earth boxes, a lower claimed patch in the middle, one gold block, dim ambient light and a warm point light.
 
 ## Open questions
 
