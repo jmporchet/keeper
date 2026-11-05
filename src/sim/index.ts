@@ -3,11 +3,30 @@ export {
   asJobId,
   asTick,
   asTileIndex,
+  asWorkerId,
   type ImpId,
   type JobId,
   type Tick,
   type TileIndex,
+  type WorkerId,
 } from "./ids";
+export {
+  assertJobInvariants,
+  cancelJobAtTile,
+  completeJob,
+  createJobBoard,
+  hashJobs,
+  jobAtTile,
+  jobHeldBy,
+  jobPriority,
+  JOB_KINDS,
+  listJobs,
+  openJob,
+  printJobs,
+  releaseWorker,
+  reserveOpenJob,
+} from "./jobs";
+export type { Job, JobBoard, JobKind, JobLifecycle } from "./jobs";
 export {
   countTagged,
   createWorld,

@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`job board > prints jobs created by a tag sweep 1`] = `
+"0 dig tile=642 open
+1 dig tile=643 open
+2 dig tile=644 open
+3 dig tile=645 open
+4 mineGold tile=2022 open"
+`;
