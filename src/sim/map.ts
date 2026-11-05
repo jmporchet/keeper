@@ -1,6 +1,8 @@
 export const MAP_WIDTH = 64;
 export const MAP_HEIGHT = 64;
 export const MAP_HALF = 32;
+export const HEART_X = 32;
+export const HEART_Y = 32;
 
 export const TILE_KINDS = [
   "earth",

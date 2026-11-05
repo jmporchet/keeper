@@ -4,7 +4,9 @@ import {
   captureCurr,
   capturePrev,
   finishClaim,
+  finishDelivery,
   finishDig,
+  finishMine,
   goIdle,
   jobHeldOnTile,
   setHeading,
@@ -69,11 +71,19 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
           case "claim":
             finishClaim(world, imp, state.tile);
             break;
+          case "mine":
+            finishMine(world, imp, state.tile);
+            break;
           default: {
             const never: never = state.work;
             throw never;
           }
         }
+      }
+      break;
+    case "delivering":
+      if (advanceAlongPath(imp, state, world.width)) {
+        finishDelivery(world, imp);
       }
       break;
     default: {

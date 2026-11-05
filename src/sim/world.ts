@@ -8,6 +8,8 @@ import { advanceRng } from "./rng";
 import { attachTiles, setTile, type World } from "./worldCore";
 
 export {
+  HEART_X,
+  HEART_Y,
   MAP_HALF,
   MAP_HEIGHT,
   MAP_WIDTH,
@@ -26,6 +28,7 @@ export const TICK_HZ = 20;
 export const TICK_DT = 1 / TICK_HZ;
 export const MAX_FRAME_DELTA = 0.1;
 export const MAX_STEPS_PER_FRAME = 4;
+export const GOLD_PER_TILE = 40;
 
 export type Command =
   | { kind: "noop"; tick: Tick }
@@ -104,6 +107,12 @@ export function createWorld(seed: number): World {
   const height = MAP_HEIGHT;
   const tiles = new Uint8Array(width * height);
   fillStartingMap(tiles, width, height);
+  const goldStock = new Uint32Array(width * height);
+  for (let i = 0; i < tiles.length; i += 1) {
+    if (tiles[i] === TILE_KIND.goldSeam) {
+      goldStock[i] = GOLD_PER_TILE;
+    }
+  }
   const imps = createImpBoard();
   spawnStartingImps(imps);
   const world: World = {
@@ -115,6 +124,7 @@ export function createWorld(seed: number): World {
     tiles,
     tilesVersion: 1,
     goldStored: 0,
+    goldStock,
     commandCursor: 0,
     jobs: createJobBoard(width * height),
     imps,
@@ -136,6 +146,14 @@ export function hashWorld(world: World): number {
   h = mix(h, world.width);
   h = mix(h, world.height);
   h = mix(h, world.goldStored);
+  h = mix(h, world.goldStock.length);
+  for (let i = 0; i < world.goldStock.length; i += 1) {
+    const stock = world.goldStock[i];
+    if (stock === undefined) {
+      continue;
+    }
+    h = mix(h, stock);
+  }
   h = mix(h, world.tilesVersion);
   h = mix(h, hashJobs(world.jobs));
   const tiles = world.tiles;
