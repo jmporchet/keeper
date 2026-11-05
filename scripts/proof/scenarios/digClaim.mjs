@@ -170,6 +170,7 @@ export async function run(ctx) {
   }
   await ctx.panToTileCenter(34.5, 32);
   await ctx.stepOnce(1, 150);
+  await ctx.screenshot("proof/walls.png", "walls");
   ctx.clipEnd();
 
   const result = await page.evaluate(() => ({

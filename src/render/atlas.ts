@@ -16,7 +16,7 @@ export const ATLAS_CELL = {
   goldVeins: 4,
   roomFloor: 5,
   portalFloor: 6,
-  spareStone: 7,
+  wall: 7,
 } as const;
 
 export function atlasCellForKind(kind: TileKind): number {
@@ -211,13 +211,24 @@ function drawPortalFloor(data: Uint8ClampedArray, ox: number, oy: number): void 
   }
 }
 
-function drawSpareStone(data: Uint8ClampedArray, ox: number, oy: number): void {
+function drawCaveWall(data: Uint8ClampedArray, ox: number, oy: number): void {
   for (let y = 0; y < ATLAS_CELL_SIZE; y += 1) {
     for (let x = 0; x < ATLAS_CELL_SIZE; x += 1) {
       const broad = valueNoise(x / 9, y / 9, 127);
       const grain = hashNoise(x, y, 131);
-      const v = clamp(0.7 + broad * 0.22 + (grain - 0.5) * 0.08, 0, 1);
-      setPixel(data, ox + x, oy + y, 255 * v, 255 * v * 0.98, 255 * v * 0.95);
+      const vertical = valueNoise(x / 4, y / 18, 137);
+      const seam = x % 16;
+      let shade = 0.6 + broad * 0.2 + (vertical - 0.5) * 0.14;
+      if (seam === 0) {
+        shade -= 0.22;
+      } else if (seam === 1) {
+        shade += 0.06;
+      }
+      if (grain > 0.95) {
+        shade += 0.08;
+      }
+      const v = clamp(shade, 0, 1);
+      setPixel(data, ox + x, oy + y, 255 * v, 255 * v * 0.97, 255 * v * 0.92);
     }
   }
 }
@@ -238,7 +249,7 @@ function drawCell(data: Uint8ClampedArray, cell: number, ox: number, oy: number)
   } else if (cell === ATLAS_CELL.portalFloor) {
     drawPortalFloor(data, ox, oy);
   } else {
-    drawSpareStone(data, ox, oy);
+    drawCaveWall(data, ox, oy);
   }
 }
 

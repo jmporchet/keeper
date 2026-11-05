@@ -15,7 +15,70 @@ import {
   TILE_HEIGHT,
   TRAP_COLOR,
   TRAP_SPENT_COLOR,
+  WALL_COLOR,
 } from "./tileLookups";
+
+export const WALL_NORTH = 1;
+export const WALL_SOUTH = 2;
+export const WALL_WEST = 4;
+export const WALL_EAST = 8;
+
+const WALL_THICKNESS = 0.08;
+
+function isHighTileCode(code: number): boolean {
+  return (
+    code === TILE_KIND.earth ||
+    code === TILE_KIND.goldSeam ||
+    code === TILE_KIND.rock ||
+    code === TILE_KIND.taggedEarth ||
+    code === TILE_KIND.taggedGold
+  );
+}
+
+function isLowFloorCode(code: number): boolean {
+  return (
+    code === TILE_KIND.claimed ||
+    code === TILE_KIND.dirt ||
+    code === TILE_KIND.room ||
+    code === TILE_KIND.portal
+  );
+}
+
+export function wallFaceMask(tiles: TileRead, width: number, index: number): number {
+  const code = tiles[index];
+  if (code === undefined || !isHighTileCode(code)) {
+    return 0;
+  }
+  const height = (tiles.length / width) | 0;
+  const y = (index / width) | 0;
+  const x = index - y * width;
+  let mask = 0;
+  if (y > 0) {
+    const north = tiles[index - width];
+    if (north !== undefined && isLowFloorCode(north)) {
+      mask |= WALL_NORTH;
+    }
+  }
+  if (y + 1 < height) {
+    const south = tiles[index + width];
+    if (south !== undefined && isLowFloorCode(south)) {
+      mask |= WALL_SOUTH;
+    }
+  }
+  if (x > 0) {
+    const west = tiles[index - 1];
+    if (west !== undefined && isLowFloorCode(west)) {
+      mask |= WALL_WEST;
+    }
+  }
+  if (x + 1 < width) {
+    const east = tiles[index + 1];
+    if (east !== undefined && isLowFloorCode(east)) {
+      mask |= WALL_EAST;
+    }
+  }
+  return mask;
+}
 
 export function syncMapInstances(
   tiles: TileRead,
@@ -35,6 +98,7 @@ export function syncMapInstances(
   taggedGroups: Uint8Array,
   taggedSlots: Int32Array,
   taggedKinds: Uint8Array,
+  wallAtlasCell: number,
 ): number {
   counts.fill(0);
   groupCounts.fill(0);
@@ -121,6 +185,85 @@ export function syncMapInstances(
     if (kindCount !== undefined) {
       counts[code] = kindCount + 1;
     }
+  }
+  for (let i = 0; i < n; i += 1) {
+    const mask = wallFaceMask(tiles, width, i);
+    if (mask === 0) {
+      continue;
+    }
+    const code = tiles[i];
+    if (code === undefined) {
+      continue;
+    }
+    const group = kindToGroup[code];
+    if (group === undefined) {
+      continue;
+    }
+    const mesh = meshes[group];
+    if (mesh === undefined) {
+      continue;
+    }
+    const h = TILE_HEIGHT[code];
+    if (h === undefined) {
+      continue;
+    }
+    const atlasAttribute = atlasAttributes[group];
+    if (atlasAttribute === undefined) {
+      continue;
+    }
+    let wallSlot = groupCounts[group];
+    if (wallSlot === undefined) {
+      continue;
+    }
+    const y = (i / width) | 0;
+    const x = i - y * width;
+    const centerX = x - MAP_HALF;
+    const centerZ = y - MAP_HALF;
+    if ((mask & WALL_NORTH) !== 0) {
+      dummy.position.set(centerX, h * 0.5, centerZ - 0.5);
+      dummy.scale.set(1, h, WALL_THICKNESS);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(wallSlot, dummy.matrix);
+      color.setHex(WALL_COLOR);
+      mesh.setColorAt(wallSlot, color);
+      atlasAttribute.array[wallSlot] = wallAtlasCell;
+      wallSlot += 1;
+    }
+    if ((mask & WALL_SOUTH) !== 0) {
+      dummy.position.set(centerX, h * 0.5, centerZ + 0.5);
+      dummy.scale.set(1, h, WALL_THICKNESS);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(wallSlot, dummy.matrix);
+      color.setHex(WALL_COLOR);
+      mesh.setColorAt(wallSlot, color);
+      atlasAttribute.array[wallSlot] = wallAtlasCell;
+      wallSlot += 1;
+    }
+    if ((mask & WALL_WEST) !== 0) {
+      dummy.position.set(centerX - 0.5, h * 0.5, centerZ);
+      dummy.scale.set(WALL_THICKNESS, h, 1);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(wallSlot, dummy.matrix);
+      color.setHex(WALL_COLOR);
+      mesh.setColorAt(wallSlot, color);
+      atlasAttribute.array[wallSlot] = wallAtlasCell;
+      wallSlot += 1;
+    }
+    if ((mask & WALL_EAST) !== 0) {
+      dummy.position.set(centerX + 0.5, h * 0.5, centerZ);
+      dummy.scale.set(WALL_THICKNESS, h, 1);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(wallSlot, dummy.matrix);
+      color.setHex(WALL_COLOR);
+      mesh.setColorAt(wallSlot, color);
+      atlasAttribute.array[wallSlot] = wallAtlasCell;
+      wallSlot += 1;
+    }
+    groupCounts[group] = wallSlot;
   }
   for (let g = 0; g < meshes.length; g += 1) {
     const mesh = meshes[g];
