@@ -1,6 +1,12 @@
 import * as THREE from "three";
-import { MAP_HEIGHT, MAP_WIDTH, TILE_KINDS, TILE_KIND, type TileKind, type TileRead, type World } from "../sim";
-import { ATLAS_CELL, atlasCellForKind, createTileAtlasMaterial, createTileAtlasTexture } from "./atlas";
+import { MAP_HEIGHT, MAP_WIDTH, ROOM_KIND_COUNT, TILE_KINDS, TILE_KIND, type TileKind, type TileRead, type World } from "../sim";
+import {
+  ATLAS_CELL,
+  atlasCellForKind,
+  atlasCellForRoomKind,
+  createTileAtlasMaterial,
+  createTileAtlasTexture,
+} from "./atlas";
 import { syncMapInstances } from "./map.hot";
 import { TILE_COLOR, TILE_HEIGHT, TILE_KIND_COUNT } from "./tileLookups";
 
@@ -11,6 +17,7 @@ export type MapMeshes = {
   materials: THREE.MeshLambertMaterial[];
   atlasAttributes: THREE.InstancedBufferAttribute[];
   atlasCells: Uint8Array;
+  roomAtlasCells: Uint8Array;
   dummy: THREE.Object3D;
   color: THREE.Color;
   counts: Uint32Array;
@@ -82,11 +89,16 @@ export function createMapMeshes(scene: THREE.Scene): MapMeshes {
     kindToGroup[code] = groupForKind(kind);
     atlasCellByKind[code] = atlasCellForKind(kind);
   }
+  const roomAtlasCells = new Uint8Array(ROOM_KIND_COUNT);
+  for (let roomCode = 0; roomCode < ROOM_KIND_COUNT; roomCode += 1) {
+    roomAtlasCells[roomCode] = atlasCellForRoomKind(roomCode);
+  }
   return {
     meshes,
     materials,
     atlasAttributes,
     atlasCells: atlasCellByKind,
+    roomAtlasCells,
     dummy: new THREE.Object3D(),
     color,
     counts: new Uint32Array(TILE_KIND_COUNT),
@@ -158,6 +170,7 @@ export function syncMap(world: World, map: MapMeshes, time: number): void {
     map.groupCounts,
     map.kindToGroup,
     map.atlasCells,
+    map.roomAtlasCells,
     map.atlasAttributes,
     map.taggedGroups,
     map.taggedSlots,

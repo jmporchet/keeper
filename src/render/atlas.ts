@@ -1,8 +1,8 @@
 import * as THREE from "three";
-import type { TileKind } from "../sim";
+import { ROOM_KIND, type TileKind } from "../sim";
 
 export const ATLAS_COLUMNS = 4;
-export const ATLAS_ROWS = 2;
+export const ATLAS_ROWS = 4;
 export const ATLAS_CELL_SIZE = 64;
 export const ATLAS_WIDTH = ATLAS_COLUMNS * ATLAS_CELL_SIZE;
 export const ATLAS_HEIGHT = ATLAS_ROWS * ATLAS_CELL_SIZE;
@@ -17,7 +17,32 @@ export const ATLAS_CELL = {
   roomFloor: 5,
   portalFloor: 6,
   wall: 7,
+  treasuryFloor: 8,
+  lairFloor: 9,
+  hatcheryFloor: 10,
+  trainingFloor: 11,
+  workshopFloor: 12,
+  libraryFloor: 13,
 } as const;
+
+export function atlasCellForRoomKind(roomKindCode: number): number {
+  switch (roomKindCode) {
+    case ROOM_KIND.treasury:
+      return ATLAS_CELL.treasuryFloor;
+    case ROOM_KIND.lair:
+      return ATLAS_CELL.lairFloor;
+    case ROOM_KIND.hatchery:
+      return ATLAS_CELL.hatcheryFloor;
+    case ROOM_KIND.training:
+      return ATLAS_CELL.trainingFloor;
+    case ROOM_KIND.workshop:
+      return ATLAS_CELL.workshopFloor;
+    case ROOM_KIND.library:
+      return ATLAS_CELL.libraryFloor;
+    default:
+      return ATLAS_CELL.roomFloor;
+  }
+}
 
 export function atlasCellForKind(kind: TileKind): number {
   switch (kind) {
@@ -211,6 +236,183 @@ function drawPortalFloor(data: Uint8ClampedArray, ox: number, oy: number): void 
   }
 }
 
+function drawTreasuryFloor(data: Uint8ClampedArray, ox: number, oy: number): void {
+  for (let y = 0; y < ATLAS_CELL_SIZE; y += 1) {
+    for (let x = 0; x < ATLAS_CELL_SIZE; x += 1) {
+      const cx = x % 32;
+      const cy = y % 32;
+      const dx = cx - 16;
+      const dy = cy - 16;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const grain = valueNoise(x / 9, y / 9, 139);
+      const sparkle = hashNoise(x, y, 149);
+      let shade = 0.42 + grain * 0.16 + (sparkle - 0.5) * 0.06;
+      let warm = 0.72;
+      if (dist < 8.5) {
+        warm = 1;
+        if (dist > 7.2) {
+          shade = 0.36;
+        } else if (dist < 2) {
+          shade = 0.95;
+        } else {
+          shade = 0.82 + hashNoise(x, y, 151) * 0.12;
+        }
+      } else if (dist > 8.5 && dist < 10.5) {
+        shade -= 0.12;
+      }
+      const v = clamp(shade, 0, 1);
+      setPixel(data, ox + x, oy + y, 255 * v, 255 * v * (0.72 + warm * 0.26), 255 * v * warm);
+    }
+  }
+}
+
+function drawLairFloor(data: Uint8ClampedArray, ox: number, oy: number): void {
+  for (let y = 0; y < ATLAS_CELL_SIZE; y += 1) {
+    for (let x = 0; x < ATLAS_CELL_SIZE; x += 1) {
+      const band = Math.floor(y / 8);
+      const fy = y % 8;
+      const fiber = hashNoise(x * 2, y, 163);
+      let shade = 0.48 + hashNoise(band, 0, 157) * 0.16 + valueNoise(x / 13, y / 5, 159) * 0.1;
+      if (fy === 0) {
+        shade = 0.32;
+      } else if (fy === 1) {
+        shade += 0.14;
+      } else if (fy >= 6) {
+        shade -= 0.08;
+      }
+      if (fiber > 0.9) {
+        shade += 0.14;
+      }
+      const v = clamp(shade, 0, 1);
+      setPixel(data, ox + x, oy + y, 255 * v * 0.88, 255 * v, 255 * v * 0.9);
+    }
+  }
+}
+
+function drawHatcheryFloor(data: Uint8ClampedArray, ox: number, oy: number): void {
+  for (let y = 0; y < ATLAS_CELL_SIZE; y += 1) {
+    for (let x = 0; x < ATLAS_CELL_SIZE; x += 1) {
+      const cx = x % 32;
+      const cy = y % 32;
+      const dx = cx - 16;
+      const dy = cy - 16;
+      const oval = (dx * dx) / 169 + (dy * dy) / 64;
+      const straw = hashNoise(x * 3, y, 167);
+      let shade = 0.44 + valueNoise(x / 10, y / 10, 169) * 0.16 + (straw - 0.5) * 0.08;
+      let warm = 0.82;
+      if (oval < 1) {
+        warm = 1;
+        if (oval > 0.72) {
+          shade = 0.34;
+        } else if (oval < 0.18) {
+          shade = 0.86;
+        } else {
+          shade = 0.62 + straw * 0.18;
+        }
+      } else if (oval > 1 && oval < 1.25) {
+        shade -= 0.1;
+      }
+      const v = clamp(shade, 0, 1);
+      setPixel(data, ox + x, oy + y, 255 * v * (0.78 + warm * 0.22), 255 * v * (0.72 + warm * 0.28), 255 * v * warm * 0.9);
+    }
+  }
+}
+
+function drawTrainingFloor(data: Uint8ClampedArray, ox: number, oy: number): void {
+  for (let y = 0; y < ATLAS_CELL_SIZE; y += 1) {
+    for (let x = 0; x < ATLAS_CELL_SIZE; x += 1) {
+      const dx = x - 32;
+      const dy = y - 32;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const grain = valueNoise(x / 8, y / 8, 173);
+      let shade = 0.5 + grain * 0.14;
+      if (Math.abs(dist - 8) < 1 || Math.abs(dist - 18) < 1 || Math.abs(dist - 28) < 1) {
+        shade = 0.84;
+      } else if (Math.abs(dx) < 0.9 || Math.abs(dy) < 0.9) {
+        shade = 0.36;
+      } else if (Math.abs(dx - dy) < 0.9 || Math.abs(dx + dy) < 0.9) {
+        shade = 0.4;
+      } else if (dist < 8) {
+        shade += 0.1;
+      }
+      const v = clamp(shade, 0, 1);
+      setPixel(data, ox + x, oy + y, 255 * v, 255 * v * (0.82 + grain * 0.18), 255 * v * 0.62);
+    }
+  }
+}
+
+function drawWorkshopFloor(data: Uint8ClampedArray, ox: number, oy: number): void {
+  for (let y = 0; y < ATLAS_CELL_SIZE; y += 1) {
+    for (let x = 0; x < ATLAS_CELL_SIZE; x += 1) {
+      const fx = x % 16;
+      const fy = y % 16;
+      const grain = valueNoise(x / 9, y / 9, 179);
+      let shade = 0.5 + grain * 0.16;
+      let cool = 0.9;
+      if (fx === 0 || fy === 0) {
+        shade = 0.34;
+      } else if (fx === 1 || fy === 1) {
+        shade += 0.1;
+      } else if (fx === 15 || fy === 15) {
+        shade -= 0.06;
+      }
+      if (x >= 20 && x <= 44 && y >= 28 && y <= 36) {
+        shade = 0.78;
+        cool = 1;
+      }
+      if (x >= 24 && x <= 40 && y >= 24 && y <= 28) {
+        shade = 0.9;
+        cool = 1;
+      }
+      if (x >= 30 && x <= 34 && y >= 36 && y <= 44) {
+        shade = 0.66;
+        cool = 1;
+      }
+      if ((fx === 8 && fy === 8) || (fx === 8 && fy === 0) || (fx === 0 && fy === 8)) {
+        shade = 0.22;
+      }
+      const v = clamp(shade, 0, 1);
+      setPixel(data, ox + x, oy + y, 255 * v * (0.84 + cool * 0.16), 255 * v * (0.86 + cool * 0.14), 255 * v * cool);
+    }
+  }
+}
+
+function drawLibraryFloor(data: Uint8ClampedArray, ox: number, oy: number): void {
+  for (let y = 0; y < ATLAS_CELL_SIZE; y += 1) {
+    for (let x = 0; x < ATLAS_CELL_SIZE; x += 1) {
+      const row = Math.floor(y / 16);
+      const fy = y % 16;
+      const fx = x % 8;
+      const book = Math.floor(x / 8) + row * 7;
+      let shade = 0.44 + valueNoise(x / 10, y / 10, 181) * 0.14;
+      let cool = 0.82;
+      if (fy === 0 || fy === 15) {
+        shade = 0.3;
+      } else if (fy > 1 && fy < 14) {
+        cool = 1;
+        shade = 0.56 + hashNoise(book, row, 191) * 0.28;
+        if (fx === 0) {
+          shade = 0.28;
+        } else if (fx === 1) {
+          shade += 0.08;
+        }
+      }
+      const dx = x - 32;
+      const dy = y - 32;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (Math.abs(dist - 10) < 1.2) {
+        shade = 0.9;
+        cool = 1;
+      } else if (dist < 10 && (Math.abs(dx) < 0.8 || Math.abs(dy) < 0.8)) {
+        shade = 0.7;
+        cool = 1;
+      }
+      const v = clamp(shade, 0, 1);
+      setPixel(data, ox + x, oy + y, 255 * v * (0.82 + cool * 0.18), 255 * v * (0.76 + cool * 0.24), 255 * v * cool);
+    }
+  }
+}
+
 function drawCaveWall(data: Uint8ClampedArray, ox: number, oy: number): void {
   for (let y = 0; y < ATLAS_CELL_SIZE; y += 1) {
     for (let x = 0; x < ATLAS_CELL_SIZE; x += 1) {
@@ -248,6 +450,18 @@ function drawCell(data: Uint8ClampedArray, cell: number, ox: number, oy: number)
     drawRoomFloor(data, ox, oy);
   } else if (cell === ATLAS_CELL.portalFloor) {
     drawPortalFloor(data, ox, oy);
+  } else if (cell === ATLAS_CELL.treasuryFloor) {
+    drawTreasuryFloor(data, ox, oy);
+  } else if (cell === ATLAS_CELL.lairFloor) {
+    drawLairFloor(data, ox, oy);
+  } else if (cell === ATLAS_CELL.hatcheryFloor) {
+    drawHatcheryFloor(data, ox, oy);
+  } else if (cell === ATLAS_CELL.trainingFloor) {
+    drawTrainingFloor(data, ox, oy);
+  } else if (cell === ATLAS_CELL.workshopFloor) {
+    drawWorkshopFloor(data, ox, oy);
+  } else if (cell === ATLAS_CELL.libraryFloor) {
+    drawLibraryFloor(data, ox, oy);
   } else {
     drawCaveWall(data, ox, oy);
   }
