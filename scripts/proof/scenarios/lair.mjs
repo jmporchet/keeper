@@ -115,6 +115,22 @@ export async function run(ctx) {
       `resumed creature bed changed from ${String(bedX)},${String(bedY)} to ${String(wanderCheck.bedTileX)},${String(wanderCheck.bedTileY)}`,
     );
   }
+  let beetleTicks = 0;
+  let beetle;
+  for (;;) {
+    const snapshot = await page.evaluate(() => globalThis.__keeper.creatureSnapshot());
+    beetle = snapshot.find((creature) => creature.kind === "beetle");
+    if (beetle !== undefined) {
+      break;
+    }
+    if (beetleTicks >= 800) {
+      throw new Error(`no beetle arrived after ${String(beetleTicks)} ticks`);
+    }
+    await ctx.stepOnce(12, 10);
+    beetleTicks += 12;
+  }
+  await ctx.panToTileCenter(beetle.tileX, beetle.tileY);
+  await ctx.stepOnce(1, 150);
   await ctx.screenshot("proof/lair.png", "lair");
   await ctx.checkpoint("lair-wander");
   const result = await page.evaluate(() => ({
@@ -131,7 +147,7 @@ export async function run(ctx) {
     throw new Error(`lairTileCount ended at ${String(result.lairTileCount)}`);
   }
   console.log(
-    `lair tick=${String(result.tick)} creatures=${String(result.creatureCount)} lairTiles=${String(result.lairTileCount)} goldSpent=${String(result.goldSpent)} bed=${String(bedX)},${String(bedY)} wanderTicks=${String(wanderTicks)}`,
+    `lair tick=${String(result.tick)} creatures=${String(result.creatureCount)} lairTiles=${String(result.lairTileCount)} goldSpent=${String(result.goldSpent)} bed=${String(bedX)},${String(bedY)} wanderTicks=${String(wanderTicks)} beetleTicks=${String(beetleTicks)} beetle=${String(beetle.kind)}@${String(beetle.tileX)},${String(beetle.tileY)}`,
   );
   for (let i = 0; i < 3; i += 1) {
     await ctx.panToTileCenter(i % 2 === 0 ? 35 : 30, 32);

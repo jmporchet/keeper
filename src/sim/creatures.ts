@@ -20,7 +20,10 @@ export const WANDER_CHANCE = 1;
 export const WANDER_ROLL = 2;
 export const CREATURE_MAX_LEVEL = 1;
 export const CREATURE_HP = 3;
+export const BEETLE_HP = 5;
 export const CREATURE_HP_PER_LEVEL = 1;
+
+export type CreatureKind = "fly" | "beetle";
 
 export type CreatureArriving = { kind: "arriving" };
 export type CreatureToBed = {
@@ -67,6 +70,7 @@ export type CreatureState =
 
 export type Creature = {
   id: CreatureId;
+  kind: CreatureKind;
   bedTile: TileIndex;
   tileX: number;
   tileY: number;
@@ -99,7 +103,27 @@ export type CreatureBoard = {
   slots: CreatureSlot[];
 };
 
-export function createCreature(index: number, tileX: number, tileY: number, bedTile: TileIndex): Creature {
+function creatureKindHp(kind: CreatureKind): number {
+  switch (kind) {
+    case "fly":
+      return CREATURE_HP;
+    case "beetle":
+      return BEETLE_HP;
+    default: {
+      const never: never = kind;
+      return never;
+    }
+  }
+}
+
+export function createCreature(
+  index: number,
+  tileX: number,
+  tileY: number,
+  bedTile: TileIndex,
+  kind: CreatureKind,
+): Creature {
+  const hp = creatureKindHp(kind);
   const arriving: CreatureArriving = { kind: "arriving" };
   const toBed: CreatureToBed = { kind: "toBed", pathStep: 0, pathLength: 0, progress: 0 };
   const sleeping: CreatureSleeping = { kind: "sleeping", remaining: HUNGER_TICKS };
@@ -129,6 +153,7 @@ export function createCreature(index: number, tileX: number, tileY: number, bedT
   const eating: CreatureEating = { kind: "eating", chickenId: asChickenId(0), remaining: EAT_TICKS };
   return {
     id: asCreatureId(index),
+    kind,
     bedTile,
     tileX,
     tileY,
@@ -139,8 +164,8 @@ export function createCreature(index: number, tileX: number, tileY: number, bedT
     currX: tileX,
     currZ: tileY,
     level: 0,
-    hp: CREATURE_HP,
-    maxHp: CREATURE_HP,
+    hp,
+    maxHp: hp,
     attackCooldown: 0,
     path: new Int16Array(PATH_CELL_COUNT),
     arriving,
@@ -346,7 +371,7 @@ export function freeBedTiles(world: World): TileIndex[] {
   return free;
 }
 
-function spawnCreature(world: World, bedTile: TileIndex): boolean {
+function spawnCreature(world: World, bedTile: TileIndex, kind: CreatureKind): boolean {
   for (let i = 0; i < world.creatures.slots.length; i += 1) {
     const slot = world.creatures.slots[i];
     if (slot === undefined) {
@@ -354,7 +379,10 @@ function spawnCreature(world: World, bedTile: TileIndex): boolean {
     }
     switch (slot.kind) {
       case "empty":
-        world.creatures.slots[i] = { kind: "live", creature: createCreature(i, PORTAL_X, PORTAL_Y, bedTile) };
+        world.creatures.slots[i] = {
+          kind: "live",
+          creature: createCreature(i, PORTAL_X, PORTAL_Y, bedTile, kind),
+        };
         return true;
       case "live":
         break;
@@ -381,7 +409,8 @@ export function tryArrival(world: World): void {
   if (bed === undefined) {
     return;
   }
-  spawnCreature(world, bed);
+  const kind: CreatureKind = world.rng % 2 === 0 ? "fly" : "beetle";
+  spawnCreature(world, bed, kind);
 }
 
 function tileIndex(x: number, y: number, width: number): number {
@@ -767,6 +796,19 @@ function mixPath(h: number, path: Int16Array, length: number): number {
   return next;
 }
 
+function creatureKindCode(kind: CreatureKind): number {
+  switch (kind) {
+    case "fly":
+      return 1;
+    case "beetle":
+      return 2;
+    default: {
+      const never: never = kind;
+      return never;
+    }
+  }
+}
+
 function creatureStateCode(kind: CreatureState["kind"]): number {
   switch (kind) {
     case "arriving":
@@ -810,6 +852,7 @@ export function hashCreatures(board: CreatureBoard): number {
         const creature = slot.creature;
         h = mix(h, 1);
         h = mix(h, creature.id);
+        h = mix(h, creatureKindCode(creature.kind));
         h = mix(h, creature.bedTile);
         h = mix(h, creature.level);
         h = mix(h, creature.hp);

@@ -77,6 +77,7 @@ type JobDebug = { tileX: number; tileY: number; kind: string; state: string; hol
 type ImpDebug = { id: number; tileX: number; tileY: number; state: string; boost: number; job: JobDebug | null };
 type CreatureDebug = {
   id: number;
+  kind: string;
   tileX: number;
   tileY: number;
   state: string;
@@ -730,6 +731,7 @@ if (proof) {
             const bedX = creature.bedTile - bedY * world.width;
             creatures.push({
               id: creature.id,
+              kind: creature.kind,
               tileX: creature.tileX,
               tileY: creature.tileY,
               state: creature.state.kind,
