@@ -18,7 +18,7 @@ import {
   type TileKind,
   type World,
 } from "../sim";
-import { inputCameraMachine, isHolding, isOrbiting, isPanning, isTagging } from "./inputCameraMachine";
+import { inputCameraMachine, isHolding, isOrbiting, isPainting, isPanning, isTagging } from "./inputCameraMachine";
 import { pickTileIndex } from "./pick";
 
 export type HeldKeys = { w: boolean; a: boolean; s: boolean; d: boolean };
@@ -93,10 +93,23 @@ export function bindCameraInput(
   let lastY = 0;
   let sweepMode: SweepMode;
   const swept = new Uint8Array(world.width * world.height);
+  const painted = new Uint8Array(world.width * world.height);
 
   function resetSweep(): void {
     sweepMode = undefined;
     swept.fill(0);
+  }
+
+  function resetPaint(): void {
+    painted.fill(0);
+  }
+
+  function paintTile(tile: TileIndex): void {
+    if (painted[tile] === 1) {
+      return;
+    }
+    painted[tile] = 1;
+    enqueue({ kind: "paintRoom", tick: world.tick, tile: asTileIndex(tile), room: "treasury" });
   }
 
   function applySweepTile(tile: TileIndex): void {
@@ -210,6 +223,14 @@ export function bindCameraInput(
       }
       return;
     }
+    if (isPainting(snapshot)) {
+      const tile = pickFromEvent(event);
+      if (tile !== undefined) {
+        resetPaint();
+        paintTile(tile);
+      }
+      return;
+    }
     if (isHolding(snapshot) || snapshot.matches("Idle")) {
       const impId = pickImpFromEvent(event);
       if (impId !== undefined && snapshot.context.heldCount < HAND_CAPACITY) {
@@ -254,6 +275,13 @@ export function bindCameraInput(
       if (tile !== undefined) {
         applySweepTile(tile);
       }
+      return;
+    }
+    if (isPainting(snapshot)) {
+      const tile = pickFromEvent(event);
+      if (tile !== undefined) {
+        paintTile(tile);
+      }
     }
   });
 
@@ -262,6 +290,10 @@ export function bindCameraInput(
     if (isTagging(snapshot)) {
       actor.send({ type: "TAG_RELEASE" });
       resetSweep();
+      return;
+    }
+    if (isPainting(snapshot)) {
+      resetPaint();
       return;
     }
     actor.send({ type: "POINTER_UP" });

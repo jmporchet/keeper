@@ -120,7 +120,7 @@ async function findHandTarget(page) {
     if (target !== undefined && !imps.some((imp) => imp.id !== target.id && imp.state === "idle")) {
       return target;
     }
-    await stepOnce(page, 3, 20);
+    await stepOnce(page, 3, 10);
   }
   throw new Error("no walking imp with a reserved job and no idle imps appeared");
 }
@@ -157,7 +157,7 @@ async function panToTileCenter(page, box, tx, ty) {
     await page.mouse.down({ button: "middle" });
     await page.mouse.move(cx - right / scale, cy + forward / scale);
     await page.mouse.up({ button: "middle" });
-    await stepOnce(page);
+    await stepOnce(page, 1, 10);
   }
   throw new Error(`tile ${String(tx)},${String(ty)} never reached screen center`);
 }
@@ -210,6 +210,7 @@ async function run() {
       }
       await page.mouse.up();
       await stepOnce(page);
+      console.log("checkpoint tag", Date.now() - recordStart);
       const taggedAfterSweep = await page.evaluate(() => globalThis.__keeper.taggedCount);
       if (taggedAfterSweep !== 5) {
         throw new Error(`expected 5 tagged tiles after earth sweep, got ${String(taggedAfterSweep)}`);
@@ -230,6 +231,59 @@ async function run() {
         throw new Error(`tagged count after rock click was ${String(afterRock)}`);
       }
 
+      console.log("checkpoint rock", Date.now() - recordStart);
+      await panToTileCenter(page, box, 31, 30);
+      await page.click("#add-gold");
+      await stepOnce(page);
+      const treasuryXs = [30, 31, 32];
+      const treasuryY = 30;
+      const treasuryPoints = [];
+      for (const tx of treasuryXs) {
+        const point = await pagePointForTile(page, box, tx, treasuryY);
+        if (point === null) {
+          throw new Error(`treasury tile ${String(tx)},${String(treasuryY)} is off screen`);
+        }
+        treasuryPoints.push(point);
+      }
+      await page.click("#paint-treasury");
+      const paintingOn = await page.evaluate(() => globalThis.__keeper.painting);
+      if (!paintingOn) {
+        throw new Error("paint treasury tool did not select Painting");
+      }
+      const treasuryFirst = treasuryPoints[0];
+      await page.mouse.move(treasuryFirst.x, treasuryFirst.y);
+      await page.mouse.down();
+      await stepOnce(page);
+      for (let i = 1; i < treasuryPoints.length; i += 1) {
+        const point = treasuryPoints[i];
+        await page.mouse.move(point.x, point.y);
+        await stepOnce(page);
+      }
+      await page.mouse.up();
+      await stepOnce(page);
+      const treasuryTiles = await page.evaluate(() => globalThis.__keeper.treasuryTiles());
+      if (treasuryTiles.length !== 3) {
+        throw new Error(`expected 3 treasury tiles after drag, got ${String(treasuryTiles.length)}`);
+      }
+      for (const tile of treasuryTiles) {
+        if (!treasuryXs.includes(tile.x) || tile.y !== treasuryY) {
+          throw new Error(`unexpected treasury tile ${String(tile.x)},${String(tile.y)}`);
+        }
+        if (tile.stock !== 0) {
+          throw new Error(`treasury tile ${String(tile.x)},${String(tile.y)} started with stock ${String(tile.stock)}`);
+        }
+      }
+      const spentAfterPaint = await page.evaluate(() => globalThis.__keeper.goldSpent);
+      if (spentAfterPaint !== 75) {
+        throw new Error(`expected 75 gold spent after painting 3 tiles, got ${String(spentAfterPaint)}`);
+      }
+      await page.click("#paint-treasury");
+      const paintingOff = await page.evaluate(() => globalThis.__keeper.painting);
+      if (paintingOff) {
+        throw new Error("paint treasury tool stayed selected after toggle");
+      }
+
+      console.log("checkpoint paint", Date.now() - recordStart);
       await panToTileCenter(page, box, 29, 32);
 
       const { target, point: pickPoint } = await locateHandTarget(page, box);
@@ -270,13 +324,13 @@ async function run() {
 
       const holdStart = Date.now();
       let angle = 0;
-      while (Date.now() - holdStart < 3000) {
+      while (Date.now() - holdStart < 1000) {
         angle += 0.16;
         await page.mouse.move(
           cx + Math.cos(angle) * box.width * 0.32,
           cy + Math.sin(angle) * box.height * 0.24,
         );
-        await stepOnce(page, 1, 50);
+        await stepOnce(page, 1, 25);
       }
       await page.mouse.move(cx + box.width * 0.11, cy - box.height * 0.09);
       await stepOnce(page, 1, 80);
@@ -292,6 +346,7 @@ async function run() {
         throw new Error(`imp ${String(target.id)} was not held during the arc`);
       }
       await page.screenshot({ path: "proof/shot.png" });
+      console.log("checkpoint shot", Date.now() - recordStart);
 
       const dropX = 30;
       const dropY = 30;
@@ -338,6 +393,7 @@ async function run() {
         throw new Error(`tile ${String(dropX)},${String(dropY)} stopped being walkable after drop`);
       }
 
+      console.log("checkpoint drop", Date.now() - recordStart);
       await panToTileCenter(page, box, 34.5, 32);
       await page.mouse.move(cx, cy);
       for (let i = 0; i < 6; i += 1) {
@@ -363,6 +419,7 @@ async function run() {
         await stepOnce(page, 5);
       }
 
+      console.log("checkpoint corridor", Date.now() - recordStart);
       const beforePause = await page.evaluate(() => globalThis.__keeper.tick);
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible");
@@ -389,12 +446,16 @@ async function run() {
         await stepOnce(page);
       }
 
+      console.log("checkpoint pause", Date.now() - recordStart);
       let extraTicks = 0;
       let maxCarrying = 0;
       let carryingSeen = false;
       for (;;) {
         const counts = await page.evaluate(() => ({
           goldStored: globalThis.__keeper.goldStored,
+          goldSpent: globalThis.__keeper.goldSpent,
+          treasuryTileCount: globalThis.__keeper.treasuryTileCount,
+          treasuryStockTotal: globalThis.__keeper.treasuryStockTotal,
           carryingCount: globalThis.__keeper.carryingCount,
           tagged: globalThis.__keeper.taggedCount,
           claimed: globalThis.__keeper.claimedCount,
@@ -407,23 +468,40 @@ async function run() {
         }
         const elapsed = Date.now() - recordStart;
         if (
-          counts.goldStored >= 40 &&
+          counts.treasuryTileCount === 3 &&
+          counts.treasuryStockTotal >= 20 &&
           carryingSeen &&
           counts.tagged === 0 &&
-          counts.claimed === claimedAtStart + 5 &&
-          elapsed >= 3000
+          counts.claimed + counts.treasuryTileCount === claimedAtStart + 5 &&
+          elapsed >= 1000
         ) {
           break;
         }
         if (extraTicks >= 4000) {
           throw new Error(
-            `gold and claim proof not complete after ${String(extraTicks)} extra ticks: goldStored ${String(counts.goldStored)}, maxCarrying ${String(maxCarrying)}, tagged ${String(counts.tagged)}, claimed ${String(counts.claimed)} (start ${String(claimedAtStart)}), elapsed ${String(elapsed)} ms`,
+            `gold and treasury proof not complete after ${String(extraTicks)} extra ticks: goldStored ${String(counts.goldStored)}, goldSpent ${String(counts.goldSpent)}, treasuryTiles ${String(counts.treasuryTileCount)}, treasuryStock ${String(counts.treasuryStockTotal)}, maxCarrying ${String(maxCarrying)}, tagged ${String(counts.tagged)}, claimed ${String(counts.claimed)} (start ${String(claimedAtStart)}), elapsed ${String(elapsed)} ms`,
           );
         }
         await stepOnce(page, 4, 5);
         extraTicks += 4;
       }
+      console.log("checkpoint wait", Date.now() - recordStart);
+      await panToTileCenter(page, box, 31, 30);
+      await stepOnce(page);
+      const treasuryAfterDelivery = await page.evaluate(() => ({
+        tiles: globalThis.__keeper.treasuryTiles(),
+        stock: globalThis.__keeper.treasuryStockTotal,
+      }));
+      if (treasuryAfterDelivery.stock < 20) {
+        throw new Error(`treasury stock ended at ${String(treasuryAfterDelivery.stock)}`);
+      }
+      if (!treasuryAfterDelivery.tiles.some((tile) => tile.stock > 0)) {
+        throw new Error("no treasury tile had a gold pile");
+      }
+      await page.screenshot({ path: "proof/treasury.png" });
+      await panToTileCenter(page, box, 34.5, 32);
 
+      console.log("checkpoint treasury", Date.now() - recordStart);
       const beforePanel = await page.evaluate(() => ({
         impCount: globalThis.__keeper.impCount,
         goldStored: globalThis.__keeper.goldStored,
@@ -470,6 +548,7 @@ async function run() {
         await stepOnce(page, 1, 20);
       }
 
+      console.log("checkpoint panel", Date.now() - recordStart);
       const targetImps = 200;
       const beforeSpawn = await page.evaluate(() => globalThis.__keeper.impCount);
       const toSpawn = targetImps - beforeSpawn;
@@ -506,6 +585,7 @@ async function run() {
         throw new Error(`benchSim ended at ${String(impsAfterBench)} imps, expected ${String(targetImps)}`);
       }
 
+      console.log("checkpoint benchsim", Date.now() - recordStart);
       const frameWarmup = await page.evaluate(() => globalThis.__keeper.benchFrame(5));
       if (frameWarmup.samples.length !== 5) {
         throw new Error(`benchFrame warm-up returned ${String(frameWarmup.samples.length)} samples`);
@@ -580,6 +660,7 @@ async function run() {
         result.goldStored,
         result.hudText,
       );
+      console.log("checkpoint benchframe", Date.now() - recordStart);
       await page.screenshot({ path: "proof/perf.png" });
       await context.close();
       const files = await readdir("proof/tmp");

@@ -3,7 +3,7 @@ import { asTick, asTileIndex, type ImpId, type Tick, type TileIndex } from "./id
 import { createImpBoard, hashImps, spawnImp, spawnStartingImps, workerOf, type Imp } from "./imps";
 import { stepImps } from "./imps.hot";
 import { cancelJobAtTile, createJobBoard, hashJobs, openJob, releaseWorker } from "./jobs";
-import { HEART_X, HEART_Y, MAP_HEIGHT, MAP_HALF, MAP_WIDTH, TILE_KIND, tileKindAt } from "./map";
+import { HEART_X, HEART_Y, MAP_HEIGHT, MAP_HALF, MAP_WIDTH, ROOM_KIND, TILE_KIND, TREASURY_COST, tileKindAt } from "./map";
 import { createPathScratch, isWalkableCode } from "./path";
 import { advanceRng } from "./rng";
 import { attachTiles, setTile, type World } from "./worldCore";
@@ -14,10 +14,18 @@ export {
   MAP_HALF,
   MAP_HEIGHT,
   MAP_WIDTH,
+  ROOM_KIND,
+  ROOM_KIND_COUNT,
+  ROOM_KINDS,
+  roomKindAt,
   TILE_KIND,
   TILE_KIND_COUNT,
   TILE_KINDS,
+  TREASURY_CAPACITY,
+  TREASURY_COST,
   tileKindAt,
+  type RoomKind,
+  type RoomKindCode,
   type TileKind,
   type TileKindCode,
   type TileRead,
@@ -36,6 +44,7 @@ export type Command =
   | { kind: "addGold"; tick: Tick; amount: number }
   | { kind: "tag"; tick: Tick; tile: TileIndex }
   | { kind: "untag"; tick: Tick; tile: TileIndex }
+  | { kind: "paintRoom"; tick: Tick; tile: TileIndex; room: "treasury" }
   | { kind: "spawnImp"; tick: Tick }
   | { kind: "pickUp"; tick: Tick; impId: ImpId }
   | { kind: "drop"; tick: Tick; impId: ImpId; tileX: number; tileY: number };
@@ -112,6 +121,9 @@ export function createWorld(seed: number): World {
   const tiles = new Uint8Array(width * height);
   fillStartingMap(tiles, width, height);
   const goldStock = new Uint32Array(width * height);
+  const rooms = new Uint8Array(width * height);
+  const treasuryStock = new Uint16Array(width * height);
+  const treasuryCache = new Int32Array(width * height);
   for (let i = 0; i < tiles.length; i += 1) {
     if (tiles[i] === TILE_KIND.goldSeam) {
       goldStock[i] = GOLD_PER_TILE;
@@ -126,8 +138,15 @@ export function createWorld(seed: number): World {
     width,
     height,
     tiles,
+    rooms,
+    treasuryStock,
+    treasuryCache,
+    treasuryCacheCount: 0,
+    treasuryCacheVersion: -1,
     tilesVersion: 1,
+    treasuryVersion: 0,
     goldStored: 0,
+    goldSpent: 0,
     goldStock,
     commandCursor: 0,
     jobs: createJobBoard(width * height),
@@ -151,9 +170,24 @@ export function hashWorld(world: World): number {
   h = mix(h, world.width);
   h = mix(h, world.height);
   h = mix(h, world.goldStored);
+  h = mix(h, world.goldSpent);
   h = mix(h, world.goldStock.length);
   for (let i = 0; i < world.goldStock.length; i += 1) {
     const stock = world.goldStock[i];
+    if (stock === undefined) {
+      continue;
+    }
+    h = mix(h, stock);
+  }
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room === undefined) {
+      continue;
+    }
+    h = mix(h, room);
+  }
+  for (let i = 0; i < world.treasuryStock.length; i += 1) {
+    const stock = world.treasuryStock[i];
     if (stock === undefined) {
       continue;
     }
@@ -222,6 +256,58 @@ function applyUntag(world: World, tile: TileIndex): void {
       return never;
     }
   }
+}
+
+function applyPaintRoom(world: World, tile: TileIndex, room: "treasury"): void {
+  switch (room) {
+    case "treasury": {
+      const kind = tileKindAt(world.tiles, tile);
+      if (kind !== "claimed") {
+        return;
+      }
+      const current = world.rooms[tile];
+      if (current === undefined || current !== ROOM_KIND.none) {
+        return;
+      }
+      if (world.goldStored < TREASURY_COST) {
+        return;
+      }
+      world.goldStored -= TREASURY_COST;
+      world.goldSpent += TREASURY_COST;
+      setTile(world, tile, TILE_KIND.room);
+      world.rooms[tile] = ROOM_KIND.treasury;
+      world.treasuryStock[tile] = 0;
+      world.treasuryVersion += 1;
+      return;
+    }
+    default: {
+      const never: never = room;
+      return never;
+    }
+  }
+}
+
+export function treasuryStockTotal(world: World): number {
+  let total = 0;
+  for (let i = 0; i < world.treasuryStock.length; i += 1) {
+    const stock = world.treasuryStock[i];
+    if (stock === undefined) {
+      continue;
+    }
+    total += stock;
+  }
+  return total;
+}
+
+export function treasuryTileCount(world: World): number {
+  let total = 0;
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room === ROOM_KIND.treasury) {
+      total += 1;
+    }
+  }
+  return total;
 }
 
 function liveImpById(world: World, impId: ImpId): Imp | undefined {
@@ -329,6 +415,9 @@ function applyCommand(world: World, command: Command): void {
       return;
     case "untag":
       applyUntag(world, command.tile);
+      return;
+    case "paintRoom":
+      applyPaintRoom(world, command.tile, command.room);
       return;
     case "spawnImp":
       spawnImp(world.imps, HEART_X, HEART_Y);

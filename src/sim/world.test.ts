@@ -244,7 +244,7 @@ function commandList(): fc.Arbitrary<Command[]> {
         fc.integer({ min: 0, max: TICKS - 1 }),
         fc.integer({ min: 1, max: 8 }),
         fc.integer({ min: 0, max: MAP_WIDTH * MAP_HEIGHT - 1 }),
-        fc.integer({ min: 0, max: 5 }),
+        fc.integer({ min: 0, max: 6 }),
       )
       .map(([tick, amount, tile, kind]) => {
         switch (kind) {
@@ -258,10 +258,20 @@ function commandList(): fc.Arbitrary<Command[]> {
             return { kind: "untag", tick: asTick(tick), tile: asTileIndex(tile) };
           case 4:
             return { kind: "pickUp", tick: asTick(tick), impId: asImpId(tile % 4) };
-          default: {
+          case 5: {
             const tileX = tile % MAP_WIDTH;
             const tileY = (tile / MAP_WIDTH) | 0;
             return { kind: "drop", tick: asTick(tick), impId: asImpId(tile % 4), tileX, tileY };
+          }
+          default: {
+            const tileX = 30 + (tile % 5);
+            const tileY = 30 + ((tile >> 3) % 5);
+            return {
+              kind: "paintRoom",
+              tick: asTick(tick),
+              tile: asTileIndex(tileY * MAP_WIDTH + tileX),
+              room: "treasury",
+            };
           }
         }
       }),

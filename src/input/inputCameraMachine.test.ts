@@ -81,6 +81,19 @@ describe("input and camera chart", () => {
     expect(actor.getSnapshot().value).toBe("Idle");
   });
 
+  it("paints alongside holding and only picks up imps when not painting", () => {
+    const actor = startInput();
+    actor.send({ type: "SELECT_ROOM_TOOL" });
+    actor.send({ type: "LEFT_DOWN_IMP" });
+    expect(actor.getSnapshot().value).toBe("Painting");
+    expect(actor.getSnapshot().context.heldCount).toBe(0);
+    actor.send({ type: "ESCAPE" });
+    expect(actor.getSnapshot().value).toBe("Idle");
+    actor.send({ type: "LEFT_DOWN_IMP" });
+    expect(actor.getSnapshot().value).toBe("Holding");
+    expect(actor.getSnapshot().context.heldCount).toBe(1);
+  });
+
   it("holds an imp and stays holding when drop is refused", () => {
     const actor = startInput();
     actor.send({ type: "LEFT_DOWN_IMP" });

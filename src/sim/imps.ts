@@ -1,7 +1,7 @@
 import { openClaimJobsAround } from "./claims";
 import { asImpId, asTileIndex, asWorkerId, type ImpId, type TileIndex, type WorkerId } from "./ids";
 import { betterJob, completeJob, jobForFilledSlot, jobHeldBy, releaseWorker, reserveJob, type Job } from "./jobs";
-import { HEART_X, HEART_Y, MAP_WIDTH, TILE_KIND, type TileRead } from "./map";
+import { HEART_X, HEART_Y, MAP_WIDTH, ROOM_KIND, TILE_KIND, TREASURY_CAPACITY, type TileRead } from "./map";
 import { bumpPathGen, isWalkableCode, PATH_CELL_COUNT, type PathScratch } from "./path";
 import { bfsToGoal, floodWalkable, reconstructPath } from "./path.hot";
 import { advanceRng } from "./rng";
@@ -195,6 +195,7 @@ export function findPath(
     scratch.generation,
     gen,
     scratch.cameFrom,
+    scratch.distance,
   );
   if (!reached) {
     return 0;
@@ -221,6 +222,7 @@ export function beginWander(world: ImpWorld, imp: Imp): void {
     gen,
     world.pathScratch.cameFrom,
     world.pathScratch.reachable,
+    world.pathScratch.distance,
   );
   if (count <= 1) {
     imp.state = imp.idle;
@@ -310,6 +312,7 @@ function bestReachableJob(world: ImpWorld, imp: Imp): Job | undefined {
     gen,
     world.pathScratch.cameFrom,
     world.pathScratch.reachable,
+    world.pathScratch.distance,
   );
   if (count === 0) {
     return undefined;
@@ -438,15 +441,87 @@ export function finishClaim(world: ImpWorld, imp: Imp, tile: TileIndex): void {
   goIdle(imp);
 }
 
-export function beginDelivering(world: ImpWorld, imp: Imp): void {
-  const start = tileIndex(imp.tileX, imp.tileY, world.width);
-  const heart = tileIndex(HEART_X, HEART_Y, world.width);
-  const length = findPath(world.tiles, world.width, world.height, start, heart, world.pathScratch, imp.path);
-  if (length <= 0) {
-    finishDelivery(world, imp);
+function refreshTreasuryCache(world: ImpWorld): void {
+  if (world.treasuryCacheVersion === world.tilesVersion) {
     return;
   }
-  imp.delivering.tile = asTileIndex(heart);
+  world.treasuryCacheVersion = world.tilesVersion;
+  let count = 0;
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room !== ROOM_KIND.treasury) {
+      continue;
+    }
+    world.treasuryCache[count] = i;
+    count += 1;
+  }
+  world.treasuryCacheCount = count;
+}
+
+function nearestTreasuryWithCapacity(world: ImpWorld, gen: number): number | undefined {
+  refreshTreasuryCache(world);
+  const generation = world.pathScratch.generation;
+  const distance = world.pathScratch.distance;
+  let best: number | undefined;
+  let bestDistance = 0;
+  for (let i = 0; i < world.treasuryCacheCount; i += 1) {
+    const tile = world.treasuryCache[i];
+    if (tile === undefined) {
+      continue;
+    }
+    const stock = world.treasuryStock[tile];
+    if (stock === undefined || stock >= TREASURY_CAPACITY) {
+      continue;
+    }
+    const reached = generation[tile];
+    if (reached !== gen) {
+      continue;
+    }
+    const steps = distance[tile];
+    if (steps === undefined) {
+      continue;
+    }
+    if (best === undefined || steps < bestDistance) {
+      best = tile;
+      bestDistance = steps;
+    }
+  }
+  return best;
+}
+
+export function beginDelivering(world: ImpWorld, imp: Imp): void {
+  const start = tileIndex(imp.tileX, imp.tileY, world.width);
+  const gen = bumpPathGen(world.pathScratch);
+  const count = floodWalkable(
+    world.tiles,
+    world.width,
+    world.height,
+    start,
+    world.pathScratch.queue,
+    world.pathScratch.generation,
+    gen,
+    world.pathScratch.cameFrom,
+    world.pathScratch.reachable,
+    world.pathScratch.distance,
+  );
+  if (count === 0) {
+    goIdle(imp);
+    return;
+  }
+  const heart = tileIndex(HEART_X, HEART_Y, world.width);
+  const treasury = nearestTreasuryWithCapacity(world, gen);
+  const reachedHeart = world.pathScratch.generation[heart] === gen;
+  const dest = treasury ?? (reachedHeart ? heart : undefined);
+  if (dest === undefined) {
+    goIdle(imp);
+    return;
+  }
+  const length = reconstructPath(start, dest, world.pathScratch.cameFrom, world.pathScratch.reverseBuf, imp.path);
+  if (length <= 0) {
+    goIdle(imp);
+    return;
+  }
+  imp.delivering.tile = asTileIndex(dest);
   imp.delivering.pathStep = 0;
   imp.delivering.pathLength = length;
   imp.delivering.progress = 0;
@@ -457,19 +532,44 @@ export function beginDelivering(world: ImpWorld, imp: Imp): void {
 export function finishDelivery(world: ImpWorld, imp: Imp): void {
   const carry = imp.carry;
   switch (carry.kind) {
-    case "gold":
-      world.goldStored += carry.amount;
-      carry.amount = 0;
-      imp.carry = imp.carryEmpty;
-      break;
     case "empty":
-      break;
+      goIdle(imp);
+      return;
+    case "gold": {
+      const tile = tileIndex(imp.tileX, imp.tileY, world.width);
+      const room = world.rooms[tile];
+      if (room === ROOM_KIND.treasury) {
+        const stock = world.treasuryStock[tile];
+        const current = stock === undefined ? 0 : stock;
+        const roomLeft = TREASURY_CAPACITY - current;
+        const chunk = carry.amount < roomLeft ? carry.amount : roomLeft;
+        if (chunk > 0) {
+          world.treasuryStock[tile] = current + chunk;
+          carry.amount -= chunk;
+          world.treasuryVersion += 1;
+        }
+        if (carry.amount === 0) {
+          imp.carry = imp.carryEmpty;
+          goIdle(imp);
+          return;
+        }
+      }
+      const heart = tileIndex(HEART_X, HEART_Y, world.width);
+      if (tile === heart) {
+        world.goldStored += carry.amount;
+        carry.amount = 0;
+        imp.carry = imp.carryEmpty;
+        goIdle(imp);
+        return;
+      }
+      beginDelivering(world, imp);
+      return;
+    }
     default: {
       const never: never = carry;
       throw never;
     }
   }
-  goIdle(imp);
 }
 
 export function finishMine(world: ImpWorld, imp: Imp, tile: TileIndex): void {

@@ -79,6 +79,10 @@ export {
   MAX_FRAME_DELTA,
   MAX_STEPS_PER_FRAME,
   openClaimJobsAround,
+  ROOM_KIND,
+  ROOM_KIND_COUNT,
+  ROOM_KINDS,
+  roomKindAt,
   run,
   setTile,
   sortCommands,
@@ -86,9 +90,13 @@ export {
   TILE_KIND,
   TILE_KIND_COUNT,
   TILE_KINDS,
+  TREASURY_CAPACITY,
+  TREASURY_COST,
+  treasuryStockTotal,
+  treasuryTileCount,
   tileIndexFromWorld,
   tileKindAt,
   TICK_DT,
   TICK_HZ,
 } from "./world";
-export type { Command, TileKind, TileKindCode, TileRead, World } from "./world";
+export type { Command, RoomKind, RoomKindCode, TileKind, TileKindCode, TileRead, World } from "./world";
