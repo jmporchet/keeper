@@ -1,7 +1,7 @@
 import { createActor } from "xstate";
 import { describe, expect, it } from "vitest";
 import type { Save } from "../sim/save";
-import { appMachine, isDefeated, isPaused, isReplaying, isSimStepping } from "./appMachine";
+import { appMachine, isDefeated, isPaused, isReplaying, isSimStepping, isVictorious } from "./appMachine";
 
 const save: Save = { version: 1, seed: 1, tick: 0, commands: [] };
 
@@ -75,6 +75,29 @@ describe("app chart", () => {
     actor.send({ type: "TAB_VISIBLE" });
     expect(actor.getSnapshot().value).toEqual({ Sandbox: "Defeated" });
     expect(isDefeated(actor.getSnapshot())).toBe(true);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+  });
+
+  it("enters victorious from running and stops stepping", () => {
+    const actor = startSandbox();
+    actor.send({ type: "VICTORY" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Victorious" });
+    expect(isVictorious(actor.getSnapshot())).toBe(true);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+    expect(isPaused(actor.getSnapshot())).toBe(false);
+    actor.send({ type: "PAUSE" });
+    actor.send({ type: "RESUME" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Victorious" });
+  });
+
+  it("keeps victorious across tab hide and show", () => {
+    const actor = startSandbox();
+    actor.send({ type: "VICTORY" });
+    actor.send({ type: "TAB_HIDDEN" });
+    expect(actor.getSnapshot().value).toBe("Hidden");
+    actor.send({ type: "TAB_VISIBLE" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Victorious" });
+    expect(isVictorious(actor.getSnapshot())).toBe(true);
     expect(isSimStepping(actor.getSnapshot())).toBe(false);
   });
 

@@ -56,6 +56,9 @@ export type World = {
   heartBreached: boolean;
   breachTicks: number;
   defeated: boolean;
+  wavesCleared: number;
+  victorious: boolean;
+  waveActive: boolean;
   repairsDone: number;
   commandCursor: number;
   jobs: JobBoard;

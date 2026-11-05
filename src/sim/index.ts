@@ -184,6 +184,7 @@ export {
   TREASURY_COST,
   treasuryStockTotal,
   treasuryTileCount,
+  VICTORY_WAVES,
   WORKSHOP_COST,
   workshopTileCount,
   tileIndexFromWorld,

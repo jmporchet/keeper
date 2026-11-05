@@ -7,6 +7,7 @@ export const HEART_HP = 20;
 export const HEART_DAMAGE_TICKS = 2;
 export const REPAIR_HEART_COST = 100;
 export const DEFEAT_TICKS = 100;
+export const VICTORY_WAVES = 3;
 
 export const TILE_KINDS = [
   "earth",
