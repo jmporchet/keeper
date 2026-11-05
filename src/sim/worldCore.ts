@@ -1,6 +1,7 @@
 import type { ChickenBoard } from "./chickens";
 import type { CreatureBoard } from "./creatures";
 import type { Hand } from "./hand";
+import type { HeroBoard } from "./heroes";
 import type { Tick } from "./ids";
 import type { ImpBoard } from "./imps";
 import type { JobBoard } from "./jobs";
@@ -42,6 +43,7 @@ export type World = {
   jobs: JobBoard;
   imps: ImpBoard;
   creatures: CreatureBoard;
+  heroes: HeroBoard;
   hand: Hand;
   pathScratch: PathScratch;
   walkableSaturated: boolean;

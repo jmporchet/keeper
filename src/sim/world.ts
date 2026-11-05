@@ -6,6 +6,8 @@ import {
   spawnChicken,
 } from "./chickens";
 import { createCreatureBoard, hashCreatures } from "./creatures";
+import { createHeroBoard, hashHeroes } from "./heroes";
+import { resolveCombat, stepHeroes } from "./heroes.hot";
 import { stepCreatures } from "./creatures.hot";
 import { addHeld, createHand, hashHand, isHeld, removeHeld } from "./hand";
 import { asTick, asTileIndex, type ImpId, type Tick, type TileIndex } from "./ids";
@@ -77,6 +79,20 @@ export { setTile, type World } from "./worldCore";
 export { openClaimJobsAround } from "./claims";
 export { CHICKEN_CAPACITY, CHICKEN_TILE_CAP, HATCH_TICKS, liveChickenCount } from "./chickens";
 export { freeBedTiles, lairTileCount, liveCreatureCount } from "./creatures";
+export {
+  COMBAT_DAMAGE,
+  FIGHT_TICKS,
+  HERO_ARRIVE_TICKS,
+  HERO_CAPACITY,
+  HERO_HP,
+  HERO_PARTY_SIZE,
+  hashHeroes,
+  liveHeroCount,
+  type Hero,
+  type HeroBoard,
+  type HeroSlot,
+  type HeroState,
+} from "./heroes";
 export { CREATURE_WAGE, PAY_TICKS, ticksUntilPayday } from "./wages";
 
 export const TICK_HZ = 20;
@@ -240,6 +256,7 @@ export function createWorld(seed: number): World {
     jobs: createJobBoard(width * height),
     imps,
     creatures: createCreatureBoard(),
+    heroes: createHeroBoard(),
     hand: createHand(),
     pathScratch: createPathScratch(),
     walkableSaturated: false,
@@ -298,6 +315,7 @@ export function hashWorld(world: World): number {
   }
   h = mix(h, hashImps(world.imps));
   h = mix(h, hashCreatures(world.creatures));
+  h = mix(h, hashHeroes(world.heroes));
   h = mix(h, hashChickens(world.chickens));
   return h >>> 0;
 }
@@ -679,6 +697,8 @@ export function step(world: World, commands: CommandLog): void {
   stepImps(world);
   hatchChickens(world);
   stepCreatures(world);
+  stepHeroes(world);
+  resolveCombat(world);
   advanceRng(world);
   world.tick = asTick(world.tick + 1);
 }

@@ -4,6 +4,7 @@ import * as pause from "./pause.mjs";
 import * as treasury from "./treasury.mjs";
 import * as lair from "./lair.mjs";
 import * as hatchery from "./hatchery.mjs";
+import * as heroes from "./heroes.mjs";
 import * as saveReplay from "./saveReplay.mjs";
 import * as panelPerf from "./panelPerf.mjs";
 
@@ -14,6 +15,7 @@ export const scenarios = [
   treasury,
   lair,
   hatchery,
+  heroes,
   saveReplay,
   panelPerf,
 ];

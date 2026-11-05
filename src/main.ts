@@ -48,6 +48,7 @@ import {
   hatcheryTileCount,
   trainingTileCount,
   liveCreatureCount,
+  liveHeroCount,
   liveChickenCount,
   freeBedTiles,
   ticksUntilPayday,
@@ -71,8 +72,18 @@ type CreatureDebug = {
   tileY: number;
   state: string;
   level: number;
+  hp: number;
+  maxHp: number;
   bedTileX: number;
   bedTileY: number;
+};
+type HeroDebug = {
+  id: number;
+  tileX: number;
+  tileY: number;
+  state: string;
+  hp: number;
+  maxHp: number;
 };
 type BenchResult = { samples: number[]; median: number; p95: number; max: number };
 
@@ -112,6 +123,8 @@ declare global {
       treasuryTiles(): { x: number; y: number; stock: number }[];
       jobSnapshot(tx: number, ty: number): JobDebug | null;
       impSnapshot(): ImpDebug[];
+      heroCount: number;
+      heroSnapshot(): HeroDebug[];
       creatureSnapshot(): CreatureDebug[];
       freeBeds(): { x: number; y: number }[];
       dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
@@ -159,7 +172,7 @@ const creaturesVisual = createCreatureMeshes(scene);
 syncMap(world, map, world.tick);
 syncProps(world, props);
 syncImps(world.imps, world.hand, 1, undefined, impsVisual, world.tick);
-syncCreatures(world.creatures, 1, creaturesVisual);
+syncCreatures(world.creatures, world.heroes, 1, creaturesVisual);
 addTorchLighting(scene);
 const screenPoint = new Vector3();
 
@@ -210,7 +223,7 @@ function loadSave(save: Save): void {
     syncMap(world, map, world.tick);
     syncProps(world, props);
     syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual, world.tick);
-    syncCreatures(world.creatures, 1, creaturesVisual);
+    syncCreatures(world.creatures, world.heroes, 1, creaturesVisual);
     placeCamera();
     actor.send({ type: "REPLAY_DONE" });
   } catch {
@@ -498,6 +511,9 @@ if (proof) {
     get liveCreatureCount() {
       return liveCreatureCount(world.creatures);
     },
+    get heroCount() {
+      return liveHeroCount(world.heroes);
+    },
     get lairTileCount() {
       return lairTileCount(world);
     },
@@ -567,6 +583,8 @@ if (proof) {
               tileY: creature.tileY,
               state: creature.state.kind,
               level: creature.level,
+              hp: creature.hp,
+              maxHp: creature.maxHp,
               bedTileX: bedX,
               bedTileY: bedY,
             });
@@ -579,6 +597,36 @@ if (proof) {
         }
       }
       return creatures;
+    },
+    heroSnapshot() {
+      const heroes: HeroDebug[] = [];
+      for (let i = 0; i < world.heroes.slots.length; i += 1) {
+        const slot = world.heroes.slots[i];
+        if (slot === undefined) {
+          continue;
+        }
+        switch (slot.kind) {
+          case "empty":
+            break;
+          case "live": {
+            const hero = slot.hero;
+            heroes.push({
+              id: hero.id,
+              tileX: hero.tileX,
+              tileY: hero.tileY,
+              state: hero.state.kind,
+              hp: hero.hp,
+              maxHp: hero.maxHp,
+            });
+            break;
+          }
+          default: {
+            const never: never = slot;
+            return never;
+          }
+        }
+      }
+      return heroes;
     },
     freeBeds() {
       const beds: { x: number; y: number }[] = [];
@@ -654,7 +702,7 @@ if (proof) {
       syncMap(world, map, world.tick);
       syncProps(world, props);
       syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual, world.tick);
-      syncCreatures(world.creatures, 1, creaturesVisual);
+      syncCreatures(world.creatures, world.heroes, 1, creaturesVisual);
       placeCamera();
       syncHud();
       render();
@@ -711,7 +759,7 @@ if (proof) {
             syncMap(world, map, world.tick);
             syncProps(world, props);
             syncImps(world.imps, world.hand, 1, undefined, impsVisual, world.tick);
-            syncCreatures(world.creatures, 1, creaturesVisual);
+            syncCreatures(world.creatures, world.heroes, 1, creaturesVisual);
             placeCamera();
             syncHud();
             renderer.render(scene, camera);
@@ -763,7 +811,7 @@ if (proof) {
     syncMap(world, map, now / 1000);
     syncProps(world, props);
     syncImps(world.imps, world.hand, accumulator / TICK_DT, cameraInput.cursorTile(), impsVisual, now / 1000);
-    syncCreatures(world.creatures, accumulator / TICK_DT, creaturesVisual);
+    syncCreatures(world.creatures, world.heroes, accumulator / TICK_DT, creaturesVisual);
     placeCamera();
     syncHud();
     render();

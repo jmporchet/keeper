@@ -1,6 +1,7 @@
 export {
   asChickenId,
   asCreatureId,
+  asHeroId,
   asImpId,
   asJobId,
   asTick,
@@ -8,6 +9,7 @@ export {
   asWorkerId,
   type ChickenId,
   type CreatureId,
+  type HeroId,
   type ImpId,
   type JobId,
   type Tick,
@@ -47,6 +49,8 @@ export {
   captureCreatureCurr,
   captureCreaturePrev,
   CREATURE_CAPACITY,
+  CREATURE_HP,
+  CREATURE_HP_PER_LEVEL,
   CREATURE_MAX_LEVEL,
   CREATURE_STEPS_PER_TILE,
   createCreature,
@@ -78,6 +82,7 @@ export {
   finishClaim,
   hashImps,
   IMP_CAPACITY,
+  IMP_HP,
   liveImpCount,
   MINE_CHUNK,
   MINE_TICKS,
@@ -172,6 +177,20 @@ export type {
   TileRead,
   World,
 } from "./world";
+export {
+  COMBAT_DAMAGE,
+  FIGHT_TICKS,
+  HERO_ARRIVE_TICKS,
+  HERO_CAPACITY,
+  HERO_HP,
+  HERO_PARTY_SIZE,
+  hashHeroes,
+  liveHeroCount,
+  type Hero,
+  type HeroBoard,
+  type HeroSlot,
+  type HeroState,
+} from "./heroes";
 export { CREATURE_WAGE, PAY_TICKS, ticksUntilPayday } from "./wages";
 export {
   buildSave,

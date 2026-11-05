@@ -14,6 +14,8 @@ export const HUNGER_RETRY_TICKS = 40;
 export const EAT_TICKS = 20;
 export const TRAIN_TICKS = 80;
 export const CREATURE_MAX_LEVEL = 1;
+export const CREATURE_HP = 3;
+export const CREATURE_HP_PER_LEVEL = 1;
 
 export type CreatureArriving = { kind: "arriving" };
 export type CreatureToBed = {
@@ -62,6 +64,9 @@ export type Creature = {
   currX: number;
   currZ: number;
   level: number;
+  hp: number;
+  maxHp: number;
+  attackCooldown: number;
   path: Int16Array;
   arriving: CreatureArriving;
   toBed: CreatureToBed;
@@ -113,6 +118,9 @@ export function createCreature(index: number, tileX: number, tileY: number, bedT
     currX: tileX,
     currZ: tileY,
     level: 0,
+    hp: CREATURE_HP,
+    maxHp: CREATURE_HP,
+    attackCooldown: 0,
     path: new Int16Array(PATH_CELL_COUNT),
     arriving,
     toBed,
@@ -384,6 +392,8 @@ export function beginTraining(creature: Creature, tile: TileIndex): void {
 
 export function finishTraining(world: World, creature: Creature): void {
   creature.level = CREATURE_MAX_LEVEL;
+  creature.maxHp += CREATURE_HP_PER_LEVEL;
+  creature.hp += CREATURE_HP_PER_LEVEL;
   beginToBed(world, creature);
 }
 
@@ -683,6 +693,9 @@ export function hashCreatures(board: CreatureBoard): number {
         h = mix(h, creature.id);
         h = mix(h, creature.bedTile);
         h = mix(h, creature.level);
+        h = mix(h, creature.hp);
+        h = mix(h, creature.maxHp);
+        h = mix(h, creature.attackCooldown);
         h = mix(h, creature.tileX);
         h = mix(h, creature.tileY);
         h = mix(h, creatureStateCode(creature.state.kind));

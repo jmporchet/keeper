@@ -24,6 +24,7 @@ export const CLAIM_TICKS = 30;
 export const MINE_TICKS = 30;
 export const MINE_CHUNK = 20;
 export const SLAP_TICKS = 60;
+export const IMP_HP = 2;
 
 export type ImpIdle = { kind: "idle" };
 export type ImpWandering = {
@@ -75,6 +76,9 @@ export type Imp = {
   prevZ: number;
   currX: number;
   currZ: number;
+  hp: number;
+  maxHp: number;
+  attackCooldown: number;
   path: Int16Array;
   idle: ImpIdle;
   wandering: ImpWandering;
@@ -177,6 +181,9 @@ export function createImp(index: number, tileX: number, tileY: number): Imp {
     prevZ: tileY,
     currX: tileX,
     currZ: tileY,
+    hp: IMP_HP,
+    maxHp: IMP_HP,
+    attackCooldown: 0,
     path: new Int16Array(PATH_CELL_COUNT),
     idle,
     wandering,
@@ -916,6 +923,9 @@ export function hashImps(board: ImpBoard): number {
         const imp = slot.imp;
         h = mix(h, 1);
         h = mix(h, imp.id);
+        h = mix(h, imp.hp);
+        h = mix(h, imp.maxHp);
+        h = mix(h, imp.attackCooldown);
         h = mix(h, imp.tileX);
         h = mix(h, imp.tileY);
         h = mix(h, carryCode(imp.carry));
