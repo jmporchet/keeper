@@ -13,6 +13,7 @@ export const TILE_KINDS = [
   "room",
   "taggedEarth",
   "taggedGold",
+  "portal",
 ] as const;
 
 export type TileKind = (typeof TILE_KINDS)[number];
@@ -34,13 +35,14 @@ export const TILE_KIND = {
   room: kindCode("room"),
   taggedEarth: kindCode("taggedEarth"),
   taggedGold: kindCode("taggedGold"),
+  portal: kindCode("portal"),
 } as const;
 
 export const TILE_KIND_COUNT = TILE_KINDS.length;
 
 export type TileKindCode = (typeof TILE_KIND)[TileKind];
 
-export const ROOM_KINDS = ["none", "treasury"] as const;
+export const ROOM_KINDS = ["none", "treasury", "lair"] as const;
 
 export type RoomKind = (typeof ROOM_KINDS)[number];
 
@@ -55,6 +57,7 @@ function roomCode(kind: RoomKind): number {
 export const ROOM_KIND = {
   none: roomCode("none"),
   treasury: roomCode("treasury"),
+  lair: roomCode("lair"),
 } as const;
 
 export const ROOM_KIND_COUNT = ROOM_KINDS.length;
@@ -63,6 +66,12 @@ export type RoomKindCode = (typeof ROOM_KIND)[RoomKind];
 
 export const TREASURY_CAPACITY = 200;
 export const TREASURY_COST = 25;
+export const LAIR_COST = 30;
+
+export const PORTAL_X = 32;
+export const PORTAL_Y = 35;
+
+export type RoomTool = "treasury" | "lair";
 
 export type TileRead = {
   readonly length: number;

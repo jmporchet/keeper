@@ -1,34 +1,57 @@
-import type { InstancedMesh, Object3D } from "three";
-import { MAP_HALF, type TileRead } from "../sim";
-import { TILE_HEIGHT } from "./tileLookups";
+import type { Color, InstancedMesh, Object3D } from "three";
+import { MAP_HALF, ROOM_KIND, TILE_KIND, type TileRead } from "../sim";
+import { PORTAL_COLOR, ROOM_FLOOR_COLOR, ROOM_LAIR_COLOR, ROOM_TREASURY_COLOR, TILE_COLOR, TILE_HEIGHT } from "./tileLookups";
 
 export function syncMapInstances(
   tiles: TileRead,
+  rooms: TileRead,
   width: number,
   meshes: InstancedMesh[],
   dummy: Object3D,
+  color: Color,
   counts: Uint32Array,
+  groupCounts: Uint32Array,
+  kindToGroup: Uint8Array,
 ): void {
-  for (let k = 0; k < counts.length; k += 1) {
-    counts[k] = 0;
-  }
+  counts.fill(0);
+  groupCounts.fill(0);
   const n = tiles.length;
   for (let i = 0; i < n; i += 1) {
     const code = tiles[i];
     if (code === undefined) {
       continue;
     }
-    const mesh = meshes[code];
+    const group = kindToGroup[code];
+    if (group === undefined) {
+      continue;
+    }
+    const mesh = meshes[group];
     if (mesh === undefined) {
       continue;
     }
-    const slot = counts[code];
+    const slot = groupCounts[group];
     if (slot === undefined) {
       continue;
     }
     const h = TILE_HEIGHT[code];
     if (h === undefined) {
       continue;
+    }
+    let hex = TILE_COLOR[code];
+    if (hex === undefined) {
+      continue;
+    }
+    if (code === TILE_KIND.room) {
+      const room = rooms[i];
+      if (room === ROOM_KIND.lair) {
+        hex = ROOM_LAIR_COLOR;
+      } else if (room === ROOM_KIND.treasury) {
+        hex = ROOM_TREASURY_COLOR;
+      } else {
+        hex = ROOM_FLOOR_COLOR;
+      }
+    } else if (code === TILE_KIND.portal) {
+      hex = PORTAL_COLOR;
     }
     const y = (i / width) | 0;
     const x = i - y * width;
@@ -37,15 +60,24 @@ export function syncMapInstances(
     dummy.rotation.set(0, 0, 0);
     dummy.updateMatrix();
     mesh.setMatrixAt(slot, dummy.matrix);
-    counts[code] = slot + 1;
+    color.setHex(hex);
+    mesh.setColorAt(slot, color);
+    groupCounts[group] = slot + 1;
+    const kindCount = counts[code];
+    if (kindCount !== undefined) {
+      counts[code] = kindCount + 1;
+    }
   }
-  for (let k = 0; k < meshes.length; k += 1) {
-    const mesh = meshes[k];
-    const count = counts[k];
+  for (let g = 0; g < meshes.length; g += 1) {
+    const mesh = meshes[g];
+    const count = groupCounts[g];
     if (mesh === undefined || count === undefined) {
       continue;
     }
     mesh.count = count;
     mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor !== null) {
+      mesh.instanceColor.needsUpdate = true;
+    }
   }
 }

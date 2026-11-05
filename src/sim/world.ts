@@ -1,9 +1,25 @@
+import { createCreatureBoard, hashCreatures } from "./creatures";
+import { stepCreatures } from "./creatures.hot";
 import { addHeld, createHand, hashHand, isHeld, removeHeld } from "./hand";
 import { asTick, asTileIndex, type ImpId, type Tick, type TileIndex } from "./ids";
 import { boostImp, clearBoost, createImpBoard, hashImps, spawnImp, spawnStartingImps, workerOf, type Imp } from "./imps";
 import { stepImps } from "./imps.hot";
 import { cancelJobAtTile, createJobBoard, hashJobs, openJob, releaseWorker } from "./jobs";
-import { HEART_X, HEART_Y, MAP_HEIGHT, MAP_HALF, MAP_WIDTH, ROOM_KIND, TILE_KIND, TREASURY_COST, tileKindAt } from "./map";
+import {
+  HEART_X,
+  HEART_Y,
+  LAIR_COST,
+  MAP_HEIGHT,
+  MAP_HALF,
+  MAP_WIDTH,
+  PORTAL_X,
+  PORTAL_Y,
+  ROOM_KIND,
+  TILE_KIND,
+  TREASURY_COST,
+  tileKindAt,
+  type RoomTool,
+} from "./map";
 import { createPathScratch, isWalkableCode } from "./path";
 import { advanceRng } from "./rng";
 import { attachTiles, setTile, type World } from "./worldCore";
@@ -13,7 +29,10 @@ export {
   HEART_Y,
   MAP_HALF,
   MAP_HEIGHT,
+  LAIR_COST,
   MAP_WIDTH,
+  PORTAL_X,
+  PORTAL_Y,
   ROOM_KIND,
   ROOM_KIND_COUNT,
   ROOM_KINDS,
@@ -26,12 +45,14 @@ export {
   tileKindAt,
   type RoomKind,
   type RoomKindCode,
+  type RoomTool,
   type TileKind,
   type TileKindCode,
   type TileRead,
 } from "./map";
 export { setTile, type World } from "./worldCore";
 export { openClaimJobsAround } from "./claims";
+export { lairTileCount, liveCreatureCount } from "./creatures";
 
 export const TICK_HZ = 20;
 export const TICK_DT = 1 / TICK_HZ;
@@ -44,7 +65,7 @@ export type Command =
   | { kind: "addGold"; tick: Tick; amount: number }
   | { kind: "tag"; tick: Tick; tile: TileIndex }
   | { kind: "untag"; tick: Tick; tile: TileIndex }
-  | { kind: "paintRoom"; tick: Tick; tile: TileIndex; room: "treasury" }
+  | { kind: "paintRoom"; tick: Tick; tile: TileIndex; room: RoomTool }
   | { kind: "spawnImp"; tick: Tick }
   | { kind: "pickUp"; tick: Tick; impId: ImpId }
   | { kind: "drop"; tick: Tick; impId: ImpId; tileX: number; tileY: number }
@@ -75,6 +96,7 @@ export function countTagged(world: World): number {
       case "dirt":
       case "claimed":
       case "room":
+      case "portal":
         break;
       default: {
         const never: never = kind;
@@ -107,6 +129,8 @@ function fillStartingMap(tiles: Uint8Array, width: number, height: number): void
         tiles[i] = TILE_KIND.rock;
       } else if (isGoldSeamStart(x, y)) {
         tiles[i] = TILE_KIND.goldSeam;
+      } else if (x === PORTAL_X && y === PORTAL_Y) {
+        tiles[i] = TILE_KIND.portal;
       } else if (isClaimedStart(x, y)) {
         tiles[i] = TILE_KIND.claimed;
       } else {
@@ -125,6 +149,7 @@ export function createWorld(seed: number): World {
   const rooms = new Uint8Array(width * height);
   const treasuryStock = new Uint16Array(width * height);
   const treasuryCache = new Int32Array(width * height);
+  const lairCache = new Int32Array(width * height);
   for (let i = 0; i < tiles.length; i += 1) {
     if (tiles[i] === TILE_KIND.goldSeam) {
       goldStock[i] = GOLD_PER_TILE;
@@ -144,7 +169,11 @@ export function createWorld(seed: number): World {
     treasuryCache,
     treasuryCacheCount: 0,
     treasuryCacheVersion: -1,
+    lairCache,
+    lairCacheCount: 0,
+    lairCacheVersion: -1,
     tilesVersion: 1,
+    roomsVersion: 0,
     treasuryVersion: 0,
     goldStored: 0,
     goldSpent: 0,
@@ -152,6 +181,7 @@ export function createWorld(seed: number): World {
     commandCursor: 0,
     jobs: createJobBoard(width * height),
     imps,
+    creatures: createCreatureBoard(),
     hand: createHand(),
     pathScratch: createPathScratch(),
   };
@@ -206,6 +236,7 @@ export function hashWorld(world: World): number {
     h = mix(h, cell);
   }
   h = mix(h, hashImps(world.imps));
+  h = mix(h, hashCreatures(world.creatures));
   return h >>> 0;
 }
 
@@ -226,6 +257,7 @@ function applyTag(world: World, tile: TileIndex): void {
     case "dirt":
     case "claimed":
     case "room":
+    case "portal":
       return;
     default: {
       const never: never = kind;
@@ -251,6 +283,7 @@ function applyUntag(world: World, tile: TileIndex): void {
     case "dirt":
     case "claimed":
     case "room":
+    case "portal":
       return;
     default: {
       const never: never = kind;
@@ -259,17 +292,17 @@ function applyUntag(world: World, tile: TileIndex): void {
   }
 }
 
-function applyPaintRoom(world: World, tile: TileIndex, room: "treasury"): void {
+function applyPaintRoom(world: World, tile: TileIndex, room: RoomTool): void {
+  const kind = tileKindAt(world.tiles, tile);
+  if (kind !== "claimed") {
+    return;
+  }
+  const current = world.rooms[tile];
+  if (current === undefined || current !== ROOM_KIND.none) {
+    return;
+  }
   switch (room) {
     case "treasury": {
-      const kind = tileKindAt(world.tiles, tile);
-      if (kind !== "claimed") {
-        return;
-      }
-      const current = world.rooms[tile];
-      if (current === undefined || current !== ROOM_KIND.none) {
-        return;
-      }
       if (world.goldStored < TREASURY_COST) {
         return;
       }
@@ -279,6 +312,18 @@ function applyPaintRoom(world: World, tile: TileIndex, room: "treasury"): void {
       world.rooms[tile] = ROOM_KIND.treasury;
       world.treasuryStock[tile] = 0;
       world.treasuryVersion += 1;
+      world.roomsVersion += 1;
+      return;
+    }
+    case "lair": {
+      if (world.goldStored < LAIR_COST) {
+        return;
+      }
+      world.goldStored -= LAIR_COST;
+      world.goldSpent += LAIR_COST;
+      setTile(world, tile, TILE_KIND.room);
+      world.rooms[tile] = ROOM_KIND.lair;
+      world.roomsVersion += 1;
       return;
     }
     default: {
@@ -479,6 +524,7 @@ export function step(world: World, commands: readonly Command[]): void {
   }
   world.commandCursor = i;
   stepImps(world);
+  stepCreatures(world);
   advanceRng(world);
   world.tick = asTick(world.tick + 1);
 }

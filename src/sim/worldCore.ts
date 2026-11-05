@@ -1,3 +1,4 @@
+import type { CreatureBoard } from "./creatures";
 import type { Hand } from "./hand";
 import type { Tick } from "./ids";
 import type { ImpBoard } from "./imps";
@@ -17,7 +18,11 @@ export type World = {
   readonly treasuryCache: Int32Array;
   treasuryCacheCount: number;
   treasuryCacheVersion: number;
+  readonly lairCache: Int32Array;
+  lairCacheCount: number;
+  lairCacheVersion: number;
   tilesVersion: number;
+  roomsVersion: number;
   treasuryVersion: number;
   goldStored: number;
   goldSpent: number;
@@ -25,6 +30,7 @@ export type World = {
   commandCursor: number;
   jobs: JobBoard;
   imps: ImpBoard;
+  creatures: CreatureBoard;
   hand: Hand;
   pathScratch: PathScratch;
 };
