@@ -20,6 +20,10 @@ function formatHeal(healCooldown: number): string {
   return healCooldown === 0 ? "ready" : String(healCooldown);
 }
 
+function formatSpeedImps(speedImpsCooldown: number): string {
+  return speedImpsCooldown === 0 ? "ready" : String(speedImpsCooldown);
+}
+
 function formatHeart(
   heartHp: number,
   heartBreached: boolean,
@@ -52,8 +56,9 @@ export function formatHud(
   repairsDone: number,
   lightningCooldown: number,
   healCooldown: number,
+  speedImpsCooldown: number,
 ): string {
-  return `gold ${String(gold)} · imps ${String(imps)} · tick ${String(tick)} · ${formatPay(ticksUntilPayday)} · ${formatHeart(heartHp, heartBreached, breachTicks, defeated, victorious)} · lightning ${formatLightning(lightningCooldown)} · heal ${formatHeal(healCooldown)} · wave ${String(repairsDone + 1)}`;
+  return `gold ${String(gold)} · imps ${String(imps)} · tick ${String(tick)} · ${formatPay(ticksUntilPayday)} · ${formatHeart(heartHp, heartBreached, breachTicks, defeated, victorious)} · lightning ${formatLightning(lightningCooldown)} · heal ${formatHeal(healCooldown)} · speed ${formatSpeedImps(speedImpsCooldown)} · wave ${String(repairsDone + 1)}`;
 }
 
 export function createHud(element: HudElement | null): {
@@ -70,6 +75,7 @@ export function createHud(element: HudElement | null): {
     repairsDone: number,
     lightningCooldown: number,
     healCooldown: number,
+    speedImpsCooldown: number,
   ): void;
 } {
   let prevGold: number | undefined;
@@ -84,6 +90,7 @@ export function createHud(element: HudElement | null): {
   let prevRepairsDone: number | undefined;
   let prevLightningCooldown: number | undefined;
   let prevHealCooldown: number | undefined;
+  let prevSpeedImpsCooldown: number | undefined;
   return {
     update(
       gold: number,
@@ -98,6 +105,7 @@ export function createHud(element: HudElement | null): {
       repairsDone: number,
       lightningCooldown: number,
       healCooldown: number,
+      speedImpsCooldown: number,
     ): void {
       if (
         prevGold === gold &&
@@ -111,7 +119,8 @@ export function createHud(element: HudElement | null): {
         prevVictorious === victorious &&
         prevRepairsDone === repairsDone &&
         prevLightningCooldown === lightningCooldown &&
-        prevHealCooldown === healCooldown
+        prevHealCooldown === healCooldown &&
+        prevSpeedImpsCooldown === speedImpsCooldown
       ) {
         return;
       }
@@ -127,6 +136,7 @@ export function createHud(element: HudElement | null): {
       prevRepairsDone = repairsDone;
       prevLightningCooldown = lightningCooldown;
       prevHealCooldown = healCooldown;
+      prevSpeedImpsCooldown = speedImpsCooldown;
       if (element !== null) {
         element.textContent = formatHud(
           gold,
@@ -141,6 +151,7 @@ export function createHud(element: HudElement | null): {
           repairsDone,
           lightningCooldown,
           healCooldown,
+          speedImpsCooldown,
         );
       }
     },

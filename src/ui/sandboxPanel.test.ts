@@ -68,6 +68,7 @@ describe("sandbox panel paint buttons", () => {
       () => undefined,
       () => undefined,
       () => undefined,
+      () => undefined,
     );
     const click = libraryButton.clicks[0];
     if (click === undefined) {
@@ -98,6 +99,7 @@ describe("sandbox panel door and trap tools", () => {
         selected.push(tool);
       },
       () => emptySave,
+      () => undefined,
       () => undefined,
       () => undefined,
       () => undefined,
@@ -140,6 +142,7 @@ describe("sandbox panel lightning", () => {
         casts += 1;
       },
       () => undefined,
+      () => undefined,
     );
     const click = lightningButton.clicks[0];
     if (click === undefined) {
@@ -174,6 +177,7 @@ describe("sandbox panel heal", () => {
       () => {
         casts += 1;
       },
+      () => undefined,
     );
     const click = healButton.clicks[0];
     if (click === undefined) {
@@ -190,34 +194,69 @@ describe("sandbox panel heal", () => {
   });
 });
 
+describe("sandbox panel speed imps", () => {
+  it("wires the speed button to the cast callback and disables it when paused", () => {
+    const { root, buttons } = fakePanelRoot();
+    const speedButton = fakeButton();
+    buttons.set("#cast-speed-imps", speedButton);
+    let casts = 0;
+    const panel = createSandboxPanel(
+      root,
+      () => asTick(0),
+      () => undefined,
+      () => undefined,
+      () => emptySave,
+      () => undefined,
+      () => undefined,
+      () => undefined,
+      () => undefined,
+      () => {
+        casts += 1;
+      },
+    );
+    const click = speedButton.clicks[0];
+    if (click === undefined) {
+      throw new Error("speed click handler was not registered");
+    }
+    click();
+    expect(casts).toBe(1);
+    panel.setPaused(true);
+    expect(speedButton.disabled).toBe(true);
+    click();
+    expect(casts).toBe(1);
+    panel.setPaused(false);
+    expect(speedButton.disabled).toBe(false);
+  });
+});
+
 describe("hud", () => {
   it("formats gold, imp count, tick, payday countdown, heart hp and wave index", () => {
-    expect(formatHud(140, 6, 512, 38, 20, false, 0, false, false, 0, 0, 0)).toBe(
-      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · lightning ready · heal ready · wave 1",
+    expect(formatHud(140, 6, 512, 38, 20, false, 0, false, false, 0, 0, 0, 0)).toBe(
+      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · lightning ready · heal ready · speed ready · wave 1",
     );
   });
 
   it("shows pay now when a payday is due and the breach countdown after heart damage", () => {
-    expect(formatHud(140, 6, 450, 0, 0, true, 25, false, false, 0, 0, 0)).toBe(
-      "gold 140 · imps 6 · tick 450 · pay now · breach 75 · lightning ready · heal ready · wave 1",
+    expect(formatHud(140, 6, 450, 0, 0, true, 25, false, false, 0, 0, 0, 0)).toBe(
+      "gold 140 · imps 6 · tick 450 · pay now · breach 75 · lightning ready · heal ready · speed ready · wave 1",
     );
   });
 
   it("shows defeated once the breach timer expires", () => {
-    expect(formatHud(140, 6, 550, 0, 0, true, 100, true, false, 0, 0, 0)).toBe(
-      "gold 140 · imps 6 · tick 550 · pay now · defeated · lightning ready · heal ready · wave 1",
+    expect(formatHud(140, 6, 550, 0, 0, true, 100, true, false, 0, 0, 0, 0)).toBe(
+      "gold 140 · imps 6 · tick 550 · pay now · defeated · lightning ready · heal ready · speed ready · wave 1",
     );
   });
 
   it("shows victory in the heart slot after the final cleared wave", () => {
-    expect(formatHud(140, 6, 600, 300, 20, false, 0, false, true, 0, 0, 0)).toBe(
-      "gold 140 · imps 6 · tick 600 · pay 300 · victory · lightning ready · heal ready · wave 1",
+    expect(formatHud(140, 6, 600, 300, 20, false, 0, false, true, 0, 0, 0, 0)).toBe(
+      "gold 140 · imps 6 · tick 600 · pay 300 · victory · lightning ready · heal ready · speed ready · wave 1",
     );
   });
 
   it("shows the escalated wave index after a repair", () => {
-    expect(formatHud(140, 6, 512, 38, 20, false, 0, false, false, 2, 0, 0)).toBe(
-      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · lightning ready · heal ready · wave 3",
+    expect(formatHud(140, 6, 512, 38, 20, false, 0, false, false, 2, 0, 0, 0)).toBe(
+      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · lightning ready · heal ready · speed ready · wave 3",
     );
   });
 
@@ -228,36 +267,45 @@ describe("hud", () => {
   it("writes the DOM only when a value changes", () => {
     const element: HudElement = { textContent: "" };
     const hud = createHud(element);
-    hud.update(0, 4, 0, 450, 20, false, 0, false, false, 0, 0, 0);
-    expect(element.textContent).toBe("gold 0 · imps 4 · tick 0 · pay 450 · heart 20 · lightning ready · heal ready · wave 1");
+    hud.update(0, 4, 0, 450, 20, false, 0, false, false, 0, 0, 0, 0);
+    expect(element.textContent).toBe("gold 0 · imps 4 · tick 0 · pay 450 · heart 20 · lightning ready · heal ready · speed ready · wave 1");
     element.textContent = "unchanged";
-    hud.update(0, 4, 0, 450, 20, false, 0, false, false, 0, 0, 0);
+    hud.update(0, 4, 0, 450, 20, false, 0, false, false, 0, 0, 0, 0);
     expect(element.textContent).toBe("unchanged");
-    hud.update(100, 4, 0, 450, 20, false, 0, false, false, 0, 0, 0);
-    expect(element.textContent).toBe("gold 100 · imps 4 · tick 0 · pay 450 · heart 20 · lightning ready · heal ready · wave 1");
-    hud.update(100, 6, 0, 450, 20, false, 0, false, false, 0, 0, 0);
-    expect(element.textContent).toBe("gold 100 · imps 6 · tick 0 · pay 450 · heart 20 · lightning ready · heal ready · wave 1");
-    hud.update(100, 6, 1, 449, 19, false, 0, false, false, 1, 0, 0);
-    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay 449 · heart 19 · lightning ready · heal ready · wave 2");
-    hud.update(100, 6, 1, 0, 0, true, 40, false, false, 1, 0, 0);
-    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay now · breach 60 · lightning ready · heal ready · wave 2");
-    hud.update(100, 6, 1, 0, 0, true, 100, true, false, 1, 0, 0);
-    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay now · defeated · lightning ready · heal ready · wave 2");
-    hud.update(100, 6, 1, 0, 20, false, 0, false, true, 1, 0, 0);
-    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay now · victory · lightning ready · heal ready · wave 2");
-    hud.update(100, 6, 1, 0, 20, false, 0, false, true, 1, 40, 0);
-    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay now · victory · lightning 40 · heal ready · wave 2");
+    hud.update(100, 4, 0, 450, 20, false, 0, false, false, 0, 0, 0, 0);
+    expect(element.textContent).toBe("gold 100 · imps 4 · tick 0 · pay 450 · heart 20 · lightning ready · heal ready · speed ready · wave 1");
+    hud.update(100, 6, 0, 450, 20, false, 0, false, false, 0, 0, 0, 0);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 0 · pay 450 · heart 20 · lightning ready · heal ready · speed ready · wave 1");
+    hud.update(100, 6, 1, 449, 19, false, 0, false, false, 1, 0, 0, 0);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay 449 · heart 19 · lightning ready · heal ready · speed ready · wave 2");
+    hud.update(100, 6, 1, 0, 0, true, 40, false, false, 1, 0, 0, 0);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay now · breach 60 · lightning ready · heal ready · speed ready · wave 2");
+    hud.update(100, 6, 1, 0, 0, true, 100, true, false, 1, 0, 0, 0);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay now · defeated · lightning ready · heal ready · speed ready · wave 2");
+    hud.update(100, 6, 1, 0, 20, false, 0, false, true, 1, 0, 0, 0);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay now · victory · lightning ready · heal ready · speed ready · wave 2");
+    hud.update(100, 6, 1, 0, 20, false, 0, false, true, 1, 40, 0, 0);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay now · victory · lightning 40 · heal ready · speed ready · wave 2");
   });
 
   it("shows the lightning cooldown readout", () => {
-    expect(formatHud(140, 6, 512, 38, 20, false, 0, false, false, 0, 40, 0)).toBe(
-      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · lightning 40 · heal ready · wave 1",
+    expect(formatHud(140, 6, 512, 38, 20, false, 0, false, false, 0, 40, 0, 0)).toBe(
+      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · lightning 40 · heal ready · speed ready · wave 1",
     );
   });
 
   it("shows the heal cooldown readout", () => {
-    expect(formatHud(140, 6, 512, 38, 20, false, 0, false, false, 0, 0, 25)).toBe(
-      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · lightning ready · heal 25 · wave 1",
+    expect(formatHud(140, 6, 512, 38, 20, false, 0, false, false, 0, 0, 25, 0)).toBe(
+      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · lightning ready · heal 25 · speed ready · wave 1",
+    );
+  });
+
+  it("shows the speed imps cooldown readout", () => {
+    expect(formatHud(140, 6, 512, 38, 20, false, 0, false, false, 0, 0, 0, 0)).toBe(
+      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · lightning ready · heal ready · speed ready · wave 1",
+    );
+    expect(formatHud(140, 6, 512, 38, 20, false, 0, false, false, 0, 0, 0, 31)).toBe(
+      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · lightning ready · heal ready · speed 31 · wave 1",
     );
   });
 });

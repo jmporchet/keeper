@@ -62,6 +62,7 @@ export type World = {
   repairsDone: number;
   lightningCooldown: number;
   healCooldown: number;
+  speedImpsCooldown: number;
   commandCursor: number;
   jobs: JobBoard;
   imps: ImpBoard;

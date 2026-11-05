@@ -147,6 +147,8 @@ function parseCommand(value: unknown): CommandResult {
       }
       return { ok: true, command: { kind: "castHeal", tick, creatureId: asCreatureId(value.creatureId) } };
     }
+    case "castSpeedImps":
+      return { ok: true, command: { kind: "castSpeedImps", tick } };
     case "possessMove": {
       if (!isIntegerInRange(value.creatureId, 0, CREATURE_CAPACITY - 1)) {
         return { ok: false, reason: "invalidCreatureId" };

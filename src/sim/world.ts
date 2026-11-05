@@ -13,6 +13,7 @@ import { addHeld, createHand, hashHand, isHeld, removeHeld } from "./hand";
 import { asTick, asTileIndex, type CreatureId, type HeroId, type ImpId, type Tick, type TileIndex } from "./ids";
 import { applyCastHeal, stepHealCooldown } from "./heal";
 import { applyCastLightning, stepLightningCooldown } from "./lightning";
+import { applyCastSpeedImps, stepSpeedImpsCooldown } from "./speedImps";
 import {
   addOccupancy,
   boostImp,
@@ -158,7 +159,8 @@ export type Command =
   | { kind: "possessMove"; tick: Tick; creatureId: CreatureId; dx: number; dy: number }
   | { kind: "repairHeart"; tick: Tick }
   | { kind: "castLightning"; tick: Tick; heroId: HeroId }
-  | { kind: "castHeal"; tick: Tick; creatureId: CreatureId };
+  | { kind: "castHeal"; tick: Tick; creatureId: CreatureId }
+  | { kind: "castSpeedImps"; tick: Tick };
 
 export type CommandLog = readonly Command[] & { readonly __brand: "CommandLog" };
 
@@ -327,6 +329,7 @@ export function createWorld(seed: number): World {
     repairsDone: 0,
     lightningCooldown: 0,
     healCooldown: 0,
+    speedImpsCooldown: 0,
     commandCursor: 0,
     jobs: createJobBoard(width * height),
     imps,
@@ -367,6 +370,7 @@ export function hashWorld(world: World): number {
   h = mix(h, world.repairsDone);
   h = mix(h, world.lightningCooldown);
   h = mix(h, world.healCooldown);
+  h = mix(h, world.speedImpsCooldown);
   h = mix(h, world.goldStock.length);
   for (let i = 0; i < world.goldStock.length; i += 1) {
     const stock = world.goldStock[i];
@@ -985,6 +989,9 @@ function applyCommand(world: World, command: Command): void {
     case "castHeal":
       applyCastHeal(world, command.creatureId);
       return;
+    case "castSpeedImps":
+      applyCastSpeedImps(world);
+      return;
     default: {
       const never: never = command;
       return never;
@@ -1022,6 +1029,7 @@ export function step(world: World, commands: CommandLog): void {
   world.commandCursor = i;
   stepLightningCooldown(world);
   stepHealCooldown(world);
+  stepSpeedImpsCooldown(world);
   runPayday(world);
   stepImps(world);
   hatchChickens(world);
