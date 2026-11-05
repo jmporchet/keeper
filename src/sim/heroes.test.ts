@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARRIVE_TICKS, BEETLE_HP, WARLOCK_HP, beginWander, freeBedTiles, liveCreatureCount, type Creature } from "./creatures";
+import { ARRIVE_TICKS, BEETLE_HP, TROLL_HP, WARLOCK_HP, beginWander, freeBedTiles, liveCreatureCount, type Creature } from "./creatures";
 import {
   COMBAT_DAMAGE,
   FIGHT_TICKS,
@@ -232,6 +232,29 @@ describe("hero invasion", () => {
     creature.kind = "warlock";
     creature.hp = WARLOCK_HP;
     creature.maxHp = WARLOCK_HP;
+    creature.state = creature.sleeping;
+    hero.tileX = creature.tileX + 1;
+    hero.tileY = creature.tileY;
+    hero.attackCooldown = 0;
+    creature.attackCooldown = FIGHT_TICKS;
+    const before = creature.hp;
+    step(world, sortCommands(lairSetup()));
+    expect(creature.hp).toBe(before - COMBAT_DAMAGE);
+    creature.hp = 1;
+    hero.attackCooldown = 0;
+    step(world, sortCommands(lairSetup()));
+    expect(liveCreatureCount(world.creatures)).toBe(0);
+    expect(freeBedTiles(world)).toContain(bed);
+  });
+
+  it("damages a troll and frees its bed when it dies", () => {
+    const world = run(1, sortCommands(lairSetup()), HERO_ARRIVE_TICKS + 1);
+    const hero = liveHero(world, 0);
+    const creature = liveCreature(world, 0);
+    const bed = creature.bedTile;
+    creature.kind = "troll";
+    creature.hp = TROLL_HP;
+    creature.maxHp = TROLL_HP;
     creature.state = creature.sleeping;
     hero.tileX = creature.tileX + 1;
     hero.tileY = creature.tileY;
