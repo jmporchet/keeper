@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CHICKEN_TILE_CAP, HATCH_TICKS, liveChickenCount } from "./chickens";
-import { WARLOCK_HP } from "./creatures";
+import { TROLL_HP, WARLOCK_HP } from "./creatures";
 import { asTick, asTileIndex, type TileIndex } from "./ids";
 import type { Imp } from "./imps";
 import {
@@ -191,48 +191,52 @@ describe("hatchery room", () => {
     expect(liveChickenCount(world.chickens)).toBeLessThan(maxChickens);
   });
 
-  it("makes a warlock hungry and lets it eat a chicken", () => {
-    const world = createWorld(1);
-    const commands = sortCommands(hatcherySetup());
-    let sawHungry = false;
-    let sawEating = false;
-    for (let t = 0; t < 2000; t += 1) {
-      step(world, commands);
-      for (let i = 0; i < world.creatures.slots.length; i += 1) {
-        const slot = world.creatures.slots[i];
-        if (slot === undefined) {
-          continue;
+  it("makes a warlock and a troll hungry and lets them eat chickens", () => {
+    const kinds = ["warlock", "troll"] as const;
+    for (const kind of kinds) {
+      const world = createWorld(1);
+      const commands = sortCommands(hatcherySetup());
+      const hp = kind === "warlock" ? WARLOCK_HP : TROLL_HP;
+      let sawHungry = false;
+      let sawEating = false;
+      for (let t = 0; t < 2000; t += 1) {
+        step(world, commands);
+        for (let i = 0; i < world.creatures.slots.length; i += 1) {
+          const slot = world.creatures.slots[i];
+          if (slot === undefined) {
+            continue;
+          }
+          switch (slot.kind) {
+            case "empty":
+              break;
+            case "live": {
+              const creature = slot.creature;
+              if (creature.kind !== kind) {
+                creature.kind = kind;
+                creature.hp = hp;
+                creature.maxHp = hp;
+              }
+              if (creature.state.kind === "hungry") {
+                sawHungry = true;
+              }
+              if (creature.state.kind === "eating") {
+                sawEating = true;
+              }
+              break;
+            }
+            default: {
+              const never: never = slot;
+              throw never;
+            }
+          }
         }
-        switch (slot.kind) {
-          case "empty":
-            break;
-          case "live": {
-            const creature = slot.creature;
-            if (creature.kind !== "warlock") {
-              creature.kind = "warlock";
-              creature.hp = WARLOCK_HP;
-              creature.maxHp = WARLOCK_HP;
-            }
-            if (creature.state.kind === "hungry") {
-              sawHungry = true;
-            }
-            if (creature.state.kind === "eating") {
-              sawEating = true;
-            }
-            break;
-          }
-          default: {
-            const never: never = slot;
-            throw never;
-          }
+        if (sawHungry && sawEating) {
+          break;
         }
       }
-      if (sawHungry && sawEating) {
-        break;
-      }
+      expect(sawHungry).toBe(true);
+      expect(sawEating).toBe(true);
     }
-    expect(sawHungry).toBe(true);
-    expect(sawEating).toBe(true);
   });
 
   it("keeps bed claims unique while creatures feed", () => {

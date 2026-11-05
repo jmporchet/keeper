@@ -6,7 +6,8 @@ export const CREATURE_GROUND_Y = 0.2;
 export const CREATURE_KIND_FLY = 0;
 export const CREATURE_KIND_BEETLE = 1;
 export const CREATURE_KIND_WARLOCK = 2;
-export const CREATURE_KIND_HERO = 3;
+export const CREATURE_KIND_TROLL = 3;
+export const CREATURE_KIND_HERO = 4;
 
 function partBox(
   width: number,
@@ -134,6 +135,24 @@ function warlockParts(): THREE.BufferGeometry[] {
   ];
 }
 
+function trollParts(): THREE.BufferGeometry[] {
+  return [
+    partBox(0.18, 0.26, 0.22, -0.17, 0.13, 0, 0, 0, 0),
+    partBox(0.18, 0.26, 0.22, 0.17, 0.13, 0, 0, 0, 0),
+    partBox(0.58, 0.34, 0.36, 0, 0.45, 0, 0, 0, 0),
+    partBox(0.72, 0.14, 0.4, 0, 0.6, 0, 0, 0, 0),
+    partBox(0.3, 0.08, 0.38, 0, 0.28, 0, 0, 0, 0),
+    partSphere(0.2, 7, 5, 0, 0.75, 0.04),
+    partBox(0.24, 0.12, 0.18, 0, 0.63, 0.2, 0, 0, 0),
+    partCone(0.035, 0.14, 4, -0.1, 0.68, 0.3, 0.4, 0, 0),
+    partCone(0.035, 0.14, 4, 0.1, 0.68, 0.3, 0.4, 0, 0),
+    partBox(0.16, 0.32, 0.18, -0.37, 0.42, 0, 0, 0, -0.12),
+    partBox(0.16, 0.32, 0.18, 0.37, 0.42, 0, 0, 0, 0.12),
+    partBox(0.06, 0.4, 0.06, 0.46, 0.25, 0.05, 0, 0, 0),
+    partSphere(0.13, 6, 4, 0.46, 0.47, 0.05),
+  ];
+}
+
 function heroParts(): THREE.BufferGeometry[] {
   return [
     partBox(0.11, 0.36, 0.12, -0.1, 0.18, 0, 0, 0, 0),
@@ -186,6 +205,10 @@ export function createWarlockGeometry(): THREE.BufferGeometry {
   return mergeParts(tagKind(warlockParts(), CREATURE_KIND_WARLOCK));
 }
 
+export function createTrollGeometry(): THREE.BufferGeometry {
+  return mergeParts(tagKind(trollParts(), CREATURE_KIND_TROLL));
+}
+
 export function createHeroGeometry(): THREE.BufferGeometry {
   return mergeParts(tagKind(heroParts(), CREATURE_KIND_HERO));
 }
@@ -195,6 +218,7 @@ export function createCreatureGeometry(): THREE.BufferGeometry {
     ...tagKind(flyParts(), CREATURE_KIND_FLY),
     ...tagKind(beetleParts(), CREATURE_KIND_BEETLE),
     ...tagKind(warlockParts(), CREATURE_KIND_WARLOCK),
+    ...tagKind(trollParts(), CREATURE_KIND_TROLL),
     ...tagKind(heroParts(), CREATURE_KIND_HERO),
   ]);
 }

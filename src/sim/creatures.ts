@@ -22,9 +22,10 @@ export const CREATURE_MAX_LEVEL = 1;
 export const CREATURE_HP = 3;
 export const BEETLE_HP = 5;
 export const WARLOCK_HP = 4;
+export const TROLL_HP = 6;
 export const CREATURE_HP_PER_LEVEL = 1;
 
-export type CreatureKind = "fly" | "beetle" | "warlock";
+export type CreatureKind = "fly" | "beetle" | "warlock" | "troll";
 
 export type CreatureArriving = { kind: "arriving" };
 export type CreatureToBed = {
@@ -112,6 +113,8 @@ function creatureKindHp(kind: CreatureKind): number {
       return BEETLE_HP;
     case "warlock":
       return WARLOCK_HP;
+    case "troll":
+      return TROLL_HP;
     default: {
       const never: never = kind;
       return never;
@@ -254,6 +257,28 @@ function refreshTrainingCache(world: World): void {
     count += 1;
   }
   world.trainingCacheCount = count;
+}
+
+function refreshWorkshopCache(world: World): void {
+  if (world.workshopCacheVersion === world.roomsVersion) {
+    return;
+  }
+  world.workshopCacheVersion = world.roomsVersion;
+  let count = 0;
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room !== ROOM_KIND.workshop) {
+      continue;
+    }
+    world.workshopCache[count] = i;
+    count += 1;
+  }
+  world.workshopCacheCount = count;
+}
+
+function workshopPresent(world: World): boolean {
+  refreshWorkshopCache(world);
+  return world.workshopCacheCount > 0;
 }
 
 function refreshLibraryCache(world: World): void {
@@ -399,11 +424,16 @@ function spawnCreature(world: World, bedTile: TileIndex, kind: CreatureKind): bo
 }
 
 function arrivalKind(world: World): CreatureKind {
-  const roll = world.rng % (world.researchDone ? 3 : 2);
-  if (!world.researchDone) {
-    return roll === 0 ? "fly" : "beetle";
+  const kinds: CreatureKind[] = ["fly", "beetle"];
+  if (world.researchDone) {
+    kinds.push("warlock");
   }
-  return roll === 0 ? "fly" : roll === 1 ? "beetle" : "warlock";
+  if (workshopPresent(world)) {
+    kinds.push("troll");
+  }
+  const roll = world.rng % kinds.length;
+  const kind = kinds[roll];
+  return kind === undefined ? "fly" : kind;
 }
 
 export function tryArrival(world: World): void {
@@ -817,6 +847,8 @@ function creatureKindCode(kind: CreatureKind): number {
       return 2;
     case "warlock":
       return 3;
+    case "troll":
+      return 4;
     default: {
       const never: never = kind;
       return never;

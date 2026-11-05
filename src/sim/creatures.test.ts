@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ARRIVE_TICKS,
   BEETLE_HP,
+  TROLL_HP,
   WARLOCK_HP,
   beginWander,
   CREATURE_CAPACITY,
@@ -156,6 +157,16 @@ describe("creature portal", () => {
     expect(warlock.hp).toBeLessThan(beetle.hp);
   });
 
+  it("gives a troll more hp than a beetle", () => {
+    const bed = asTileIndex(30 * MAP_WIDTH + 30);
+    const beetle = createCreature(0, PORTAL_X, PORTAL_Y, bed, "beetle");
+    const troll = createCreature(1, PORTAL_X, PORTAL_Y, bed, "troll");
+    expect(troll.kind).toBe("troll");
+    expect(troll.hp).toBe(TROLL_HP);
+    expect(troll.maxHp).toBe(TROLL_HP);
+    expect(troll.hp).toBeGreaterThan(beetle.hp);
+  });
+
   it("hashes creature kind", () => {
     const bed = asTileIndex(30 * MAP_WIDTH + 30);
     const fly = createCreature(0, PORTAL_X, PORTAL_Y, bed, "fly");
@@ -167,12 +178,18 @@ describe("creature portal", () => {
     const warlock = createCreature(0, PORTAL_X, PORTAL_Y, bed, "warlock");
     warlock.hp = fly.hp;
     warlock.maxHp = fly.maxHp;
+    const troll = createCreature(0, PORTAL_X, PORTAL_Y, bed, "troll");
+    troll.hp = fly.hp;
+    troll.maxHp = fly.maxHp;
     const warlockBoard = createCreatureBoard();
+    const trollBoard = createCreatureBoard();
     flyBoard.slots[0] = { kind: "live", creature: fly };
     beetleBoard.slots[0] = { kind: "live", creature: beetle };
     warlockBoard.slots[0] = { kind: "live", creature: warlock };
+    trollBoard.slots[0] = { kind: "live", creature: troll };
     expect(hashCreatures(flyBoard)).not.toBe(hashCreatures(beetleBoard));
     expect(hashCreatures(flyBoard)).not.toBe(hashCreatures(warlockBoard));
+    expect(hashCreatures(flyBoard)).not.toBe(hashCreatures(trollBoard));
   });
 
   it("includes creature kind in the world hash", () => {
@@ -244,7 +261,7 @@ describe("creature portal", () => {
   it("trains a warlock through the same lifecycle as a beetle", () => {
     const bed = asTileIndex(30 * MAP_WIDTH + 30);
     const training = asTileIndex(33 * MAP_WIDTH + 30);
-    const kinds: CreatureKind[] = ["beetle", "warlock"];
+    const kinds: CreatureKind[] = ["beetle", "warlock", "troll"];
     const results: { level: number; bed: TileIndex; hp: number }[] = [];
     for (const kind of kinds) {
       const world = createWorld(1);
@@ -262,9 +279,12 @@ describe("creature portal", () => {
     }
     expect(results[0]?.level).toBe(1);
     expect(results[1]?.level).toBe(1);
+    expect(results[2]?.level).toBe(1);
     expect(results[0]?.bed).toBe(bed);
     expect(results[1]?.bed).toBe(bed);
+    expect(results[2]?.bed).toBe(bed);
     expect(results[1]?.hp).toBe(WARLOCK_HP + 1);
+    expect(results[2]?.hp).toBe(TROLL_HP + 1);
   });
 
   it("walks to its bed and sleeps there", () => {
