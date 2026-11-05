@@ -43,9 +43,10 @@ export function heightForKind(kind: TileKind): number {
       return 0.2;
     case "earth":
     case "goldSeam":
+      return 1;
     case "taggedEarth":
     case "taggedGold":
-      return 1;
+      return 1.18;
     case "rock":
       return 1.4;
     default: {

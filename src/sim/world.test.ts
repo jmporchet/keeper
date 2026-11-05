@@ -9,7 +9,10 @@ import {
   hashWorld,
   MAP_HEIGHT,
   MAP_WIDTH,
+  PORTAL_X,
+  PORTAL_Y,
   run,
+  setTile,
   TILE_KIND,
   TILE_KIND_COUNT,
   TILE_KINDS,
@@ -183,6 +186,26 @@ describe("tile grid", () => {
       }
       expect(TILE_KIND[kind]).toBe(i);
     }
+  });
+
+  it("keeps walkableTileCount exact when the portal is rewritten", () => {
+    const world = createWorld(1);
+    let walkable = 0;
+    for (let i = 0; i < world.tiles.length; i += 1) {
+      const kind = tileKindAt(world.tiles, i);
+      if (kind === "claimed" || kind === "dirt" || kind === "room" || kind === "portal") {
+        walkable += 1;
+      }
+    }
+    expect(world.walkableTileCount).toBe(walkable);
+    const portal = asTileIndex(PORTAL_Y * MAP_WIDTH + PORTAL_X);
+    expect(tileKindAt(world.tiles, portal)).toBe("portal");
+    setTile(world, portal, TILE_KIND.room);
+    expect(world.walkableTileCount).toBe(walkable);
+    setTile(world, portal, TILE_KIND.earth);
+    expect(world.walkableTileCount).toBe(walkable - 1);
+    setTile(world, portal, TILE_KIND.portal);
+    expect(world.walkableTileCount).toBe(walkable);
   });
 });
 

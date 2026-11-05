@@ -23,6 +23,8 @@ import {
   countTagged,
   createWorld,
   hashWorld,
+  HEART_X,
+  HEART_Y,
   liveImpCount,
   isWalkableCode,
   MAP_HALF,
@@ -51,11 +53,11 @@ import {
   type RoomTool,
   type Save,
 } from "./sim";
-import { createHud } from "./ui/hud";
+import { createHud, hudGold } from "./ui/hud";
 import { createSandboxPanel } from "./ui/sandboxPanel";
 import { max, median, percentile } from "./perf/stats";
 
-type JobDebug = { tileX: number; tileY: number; kind: string; state: string };
+type JobDebug = { tileX: number; tileY: number; kind: string; state: string; holder: number | null };
 type ImpDebug = { id: number; tileX: number; tileY: number; state: string; boost: number; job: JobDebug | null };
 type CreatureDebug = {
   id: number;
@@ -88,6 +90,7 @@ declare global {
       painting: boolean;
       treasuryTileCount: number;
       treasuryStockTotal: number;
+      maxImpsPerTile: number;
       camera: { targetX: number; targetZ: number; yaw: number; pitch: number; distance: number };
       canvasPointForTile(tx: number, ty: number): { x: number; y: number } | null;
       tileKind(tx: number, ty: number): string | null;
@@ -101,7 +104,7 @@ declare global {
       saveNow(): Save;
       loadFromStorage(): boolean;
       benchSim(batches: number, ticksPerBatch: number): BenchResult;
-      benchFrame(frames: number): BenchResult;
+      benchFrame(frames: number): Promise<BenchResult>;
     };
   }
 }
@@ -136,9 +139,9 @@ const goldPiles = createGoldPileMeshes(scene);
 const map = createMapMeshes(scene);
 const impsVisual = createImpMeshes(scene);
 const creaturesVisual = createCreatureMeshes(scene);
-syncMap(world, map);
+syncMap(world, map, world.tick);
 syncGoldPiles(world, goldPiles);
-syncImps(world.imps, world.hand, 1, undefined, impsVisual);
+syncImps(world.imps, world.hand, 1, undefined, impsVisual, world.tick);
 syncCreatures(world.creatures, 1, creaturesVisual);
 addTorchLighting(scene);
 const screenPoint = new Vector3();
@@ -187,9 +190,9 @@ function loadSave(save: Save): void {
     world = replayed;
     commands = save.commands.slice();
     commandLog = asCommandLog(commands);
-    syncMap(world, map);
+    syncMap(world, map, world.tick);
     syncGoldPiles(world, goldPiles);
-    syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual);
+    syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual, world.tick);
     syncCreatures(world.creatures, 1, creaturesVisual);
     placeCamera();
     actor.send({ type: "REPLAY_DONE" });
@@ -224,7 +227,7 @@ function hudText(): string {
 }
 
 function syncHud(): void {
-  hud.update(world.goldStored, liveImpCount(world.imps), world.tick);
+  hud.update(hudGold(world.goldStored, treasuryStockTotal(world)), liveImpCount(world.imps), world.tick);
   const snapshot = actor.getSnapshot();
   const paused = isPaused(snapshot);
   sandboxPanel.setPaused(paused);
@@ -333,7 +336,8 @@ function canvasPointForTile(tx: number, ty: number): { x: number; y: number } | 
 function jobDebug(job: Job): JobDebug {
   const tileY = (job.tile / world.width) | 0;
   const tileX = job.tile - tileY * world.width;
-  return { tileX, tileY, kind: job.jobKind, state: job.lifecycle.kind };
+  const holder = job.lifecycle.kind === "reserved" ? job.lifecycle.worker : null;
+  return { tileX, tileY, kind: job.jobKind, state: job.lifecycle.kind, holder };
 }
 
 function tileKindDebug(tx: number, ty: number): string | null {
@@ -349,6 +353,45 @@ function jobSnapshotDebug(tx: number, ty: number): JobDebug | null {
   }
   const job = jobAtTile(world.jobs, asTileIndex(ty * world.width + tx));
   return job === undefined ? null : jobDebug(job);
+}
+
+function hasAdjacentJob(tx: number, ty: number): boolean {
+  const north = ty > 0 ? jobAtTile(world.jobs, asTileIndex((ty - 1) * world.width + tx)) : undefined;
+  if (north !== undefined) {
+    return true;
+  }
+  const east = tx + 1 < world.width ? jobAtTile(world.jobs, asTileIndex(ty * world.width + tx + 1)) : undefined;
+  if (east !== undefined) {
+    return true;
+  }
+  const south = ty + 1 < world.height ? jobAtTile(world.jobs, asTileIndex((ty + 1) * world.width + tx)) : undefined;
+  if (south !== undefined) {
+    return true;
+  }
+  const west = tx > 0 ? jobAtTile(world.jobs, asTileIndex(ty * world.width + tx - 1)) : undefined;
+  return west !== undefined;
+}
+
+function maxImpsPerTile(): number {
+  const occupancy = world.imps.occupancy;
+  const heart = HEART_Y * world.width + HEART_X;
+  let best = 0;
+  for (let i = 0; i < occupancy.length; i += 1) {
+    const count = occupancy[i];
+    if (count === undefined || count <= best || i === heart) {
+      continue;
+    }
+    if (world.rooms[i] === ROOM_KIND.treasury) {
+      continue;
+    }
+    const y = (i / world.width) | 0;
+    const x = i - y * world.width;
+    if (hasAdjacentJob(x, y)) {
+      continue;
+    }
+    best = count;
+  }
+  return best;
 }
 
 if (proof) {
@@ -369,6 +412,9 @@ if (proof) {
     },
     get heldCount() {
       return world.hand.count;
+    },
+    get maxImpsPerTile() {
+      return maxImpsPerTile();
     },
     get camera() {
       return cameraSnapshot();
@@ -529,9 +575,9 @@ if (proof) {
         step(world, commandLog);
         cameraInput.tickHeldKeys();
       }
-      syncMap(world, map);
+      syncMap(world, map, world.tick);
       syncGoldPiles(world, goldPiles);
-      syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual);
+      syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual, world.tick);
       syncCreatures(world.creatures, 1, creaturesVisual);
       placeCamera();
       syncHud();
@@ -577,23 +623,29 @@ if (proof) {
         max: max(perTickMs),
       };
     },
-    benchFrame(frames: number) {
+    async benchFrame(frames: number) {
       const gl = renderer.getContext();
       const pixel = new Uint8Array(4);
       const perFrameMs: number[] = [];
       const startFrame = renderer.info.render.frame;
       for (let f = 0; f < frames; f += 1) {
-        const start = performance.now();
-        syncMap(world, map);
-        syncGoldPiles(world, goldPiles);
-        syncImps(world.imps, world.hand, 1, undefined, impsVisual);
-        syncCreatures(world.creatures, 1, creaturesVisual);
-        placeCamera();
-        syncHud();
-        renderer.render(scene, camera);
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        const elapsed = performance.now() - start;
-        perFrameMs.push(elapsed);
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            const start = performance.now();
+            syncMap(world, map, world.tick);
+            syncGoldPiles(world, goldPiles);
+            syncImps(world.imps, world.hand, 1, undefined, impsVisual, world.tick);
+            syncCreatures(world.creatures, 1, creaturesVisual);
+            placeCamera();
+            syncHud();
+            renderer.render(scene, camera);
+            gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+            const elapsed = performance.now() - start;
+            perFrameMs.push(elapsed);
+            step(world, commandLog);
+            resolve();
+          });
+        });
       }
       const advanced = renderer.info.render.frame - startFrame;
       if (advanced !== frames) {
@@ -632,9 +684,9 @@ if (proof) {
       accumulator = 0;
     }
     cameraInput.tickHeldKeys();
-    syncMap(world, map);
+    syncMap(world, map, now / 1000);
     syncGoldPiles(world, goldPiles);
-    syncImps(world.imps, world.hand, accumulator / TICK_DT, cameraInput.cursorTile(), impsVisual);
+    syncImps(world.imps, world.hand, accumulator / TICK_DT, cameraInput.cursorTile(), impsVisual, now / 1000);
     syncCreatures(world.creatures, accumulator / TICK_DT, creaturesVisual);
     placeCamera();
     syncHud();

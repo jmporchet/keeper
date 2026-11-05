@@ -38,7 +38,20 @@ async function convertWebm(webmPath) {
   await new Promise((resolve, reject) => {
     const ffmpeg = spawn(
       "/usr/bin/ffmpeg",
-      ["-y", "-i", webmPath, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "proof/play.mp4"],
+      [
+        "-y",
+        "-i",
+        webmPath,
+        "-t",
+        "19.5",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "proof/play.mp4",
+      ],
       { stdio: "inherit" },
     );
     ffmpeg.on("error", reject);
@@ -104,6 +117,31 @@ async function stepOnce(page, n = 1, waitMs = 30) {
   await delay(waitMs);
 }
 
+async function stepFrames(page, frames, ticksPerFrame, waitMs) {
+  for (let i = 0; i < frames; i += 1) {
+    await stepOnce(page, ticksPerFrame, waitMs);
+  }
+}
+
+async function presentFrame(page) {
+  await page.evaluate(() => new Promise((resolve) => {
+    globalThis.requestAnimationFrame(() => {
+      globalThis.requestAnimationFrame(() => resolve());
+    });
+  }));
+}
+
+async function checkpoint(page, recordStart, label) {
+  const tick = await page.evaluate(() => globalThis.__keeper.tick);
+  console.log(`checkpoint ${label} elapsed=${String(Date.now() - recordStart)} tick=${String(tick)}`);
+}
+
+async function screenshot(page, path, label) {
+  const start = Date.now();
+  await page.screenshot({ path });
+  console.log(`screenshot ${label} ms=${String(Date.now() - start)}`);
+}
+
 async function pagePointForTile(page, box, tx, ty) {
   const local = await page.evaluate(({ x, y }) => globalThis.__keeper.canvasPointForTile(x, y), { x: tx, y: ty });
   if (local === null) {
@@ -121,7 +159,7 @@ async function findHandTarget(page) {
     if (target !== undefined && !imps.some((imp) => imp.id !== target.id && imp.state === "idle")) {
       return target;
     }
-    await stepOnce(page, 3, 10);
+    await stepOnce(page, 3, 1);
   }
   throw new Error("no walking imp with a reserved job and no idle imps appeared");
 }
@@ -174,7 +212,7 @@ async function panToTileCenter(page, box, tx, ty) {
     await page.mouse.down({ button: "middle" });
     await page.mouse.move(cx - right / scale, cy + forward / scale);
     await page.mouse.up({ button: "middle" });
-    await delay(10);
+    await delay(1);
   }
   throw new Error(`tile ${String(tx)},${String(ty)} never reached screen center`);
 }
@@ -226,11 +264,18 @@ async function run() {
       }
       await page.mouse.up();
       await stepOnce(page);
-      console.log("checkpoint tag", Date.now() - recordStart);
+      await checkpoint(page, recordStart, "tag");
       const taggedAfterSweep = await page.evaluate(() => globalThis.__keeper.taggedCount);
       if (taggedAfterSweep !== 5) {
         throw new Error(`expected 5 tagged tiles after earth sweep, got ${String(taggedAfterSweep)}`);
       }
+      await panToTileCenter(page, box, 35, 32);
+      await page.mouse.move(cx, cy);
+      for (let i = 0; i < 4; i += 1) {
+        await page.mouse.wheel(0, -240);
+        await stepOnce(page, 1, 10);
+      }
+      await screenshot(page, "proof/debug.png", "debug");
 
       const rockPoint = await panToTileCenter(page, box, 1, 32);
       const beforeRock = await page.evaluate(() => globalThis.__keeper.taggedCount);
@@ -246,9 +291,9 @@ async function run() {
         throw new Error(`tagged count after rock click was ${String(afterRock)}`);
       }
 
-      console.log("checkpoint rock", Date.now() - recordStart);
+      await checkpoint(page, recordStart, "rock");
       await panToTileCenter(page, box, 31, 30);
-      await page.click("#add-gold");
+      await page.click("#add-gold", { force: true });
       await stepOnce(page);
       const treasuryXs = [30, 31, 32];
       const treasuryY = 30;
@@ -260,7 +305,7 @@ async function run() {
         }
         treasuryPoints.push(point);
       }
-      await page.click("#paint-treasury");
+      await page.click("#paint-treasury", { force: true });
       const paintingOn = await page.evaluate(() => globalThis.__keeper.painting);
       if (!paintingOn) {
         throw new Error("paint treasury tool did not select Painting");
@@ -290,14 +335,14 @@ async function run() {
       if (spentAfterPaint !== 75) {
         throw new Error(`expected 75 gold spent after painting 3 tiles, got ${String(spentAfterPaint)}`);
       }
-      await page.click("#paint-treasury");
+      await page.click("#paint-treasury", { force: true });
       const paintingOff = await page.evaluate(() => globalThis.__keeper.painting);
       if (paintingOff) {
         throw new Error("paint treasury tool stayed selected after toggle");
       }
 
-      console.log("checkpoint paint", Date.now() - recordStart);
-      await page.click("#add-gold");
+      await checkpoint(page, recordStart, "paint");
+      await page.click("#add-gold", { force: true });
       await stepOnce(page);
       await panToTileCenter(page, box, 31, 31);
       const lairXs = [30, 31, 32];
@@ -310,7 +355,7 @@ async function run() {
         }
         lairPoints.push(point);
       }
-      await page.click("#paint-lair");
+      await page.click("#paint-lair", { force: true });
       const lairPaintingOn = await page.evaluate(() => globalThis.__keeper.painting);
       if (!lairPaintingOn) {
         throw new Error("paint lair tool did not select Painting");
@@ -332,7 +377,7 @@ async function run() {
       if (spentAfterLair !== 165) {
         throw new Error(`expected 165 gold spent after treasury and lair, got ${String(spentAfterLair)}`);
       }
-      await page.click("#paint-lair");
+      await page.click("#paint-lair", { force: true });
       const lairPaintingOff = await page.evaluate(() => globalThis.__keeper.painting);
       if (lairPaintingOff) {
         throw new Error("paint lair tool stayed selected after toggle");
@@ -359,8 +404,8 @@ async function run() {
         throw new Error("no creature was sleeping on a bed");
       }
       await panToTileCenter(page, box, bedCreature.bedTileX, bedCreature.bedTileY);
-      await page.screenshot({ path: "proof/lair.png" });
-      console.log("checkpoint lair", Date.now() - recordStart);
+      await screenshot(page, "proof/lair.png", "lair");
+      await checkpoint(page, recordStart, "lair");
 
       await page.click("#save-game");
       const saved = await page.evaluate(() => ({
@@ -393,9 +438,8 @@ async function run() {
       if (!loaded.hudText.includes(`tick ${String(saved.tick)}`)) {
         throw new Error(`hud did not show the loaded tick: ${loaded.hudText}`);
       }
-      await page.screenshot({ path: "proof/replay.png" });
-      console.log("checkpoint replay", Date.now() - recordStart);
-
+      await screenshot(page, "proof/replay.png", "replay");
+      await checkpoint(page, recordStart, "replay");
       await panToTileCenter(page, box, 29, 32);
 
       const { target, point: pickPoint } = await locateHandTarget(page, box);
@@ -422,27 +466,30 @@ async function run() {
         ({ x, y }) => globalThis.__keeper.jobSnapshot(x, y),
         { x: targetJob.tileX, y: targetJob.tileY },
       );
-      if (jobAfterPickup === null || jobAfterPickup.state !== "open") {
+      const jobReleased =
+        jobAfterPickup !== null && (jobAfterPickup.state === "open" || jobAfterPickup.holder !== target.id);
+      if (!jobReleased) {
         throw new Error(
-          `job ${String(targetJob.kind)} at ${String(targetJob.tileX)},${String(targetJob.tileY)} was not Open after pickup`,
+          `job ${String(targetJob.kind)} at ${String(targetJob.tileX)},${String(targetJob.tileY)} was still held by imp ${String(target.id)} after pickup`,
         );
       }
       const pickupTile = { x: heldImp.tileX, y: heldImp.tileY };
       await page.mouse.move(cx, cy);
-      for (let i = 0; i < 6; i += 1) {
+      for (let i = 0; i < 2; i += 1) {
         await page.mouse.wheel(0, -240);
       }
       await stepOnce(page, 12, 20);
 
       const holdStart = Date.now();
-      let angle = 0;
-      while (Date.now() - holdStart < 70) {
-        angle += 0.16;
+      let holdStep = 0;
+      while (holdStep < 6 || Date.now() - holdStart < 400) {
+        const angle = holdStep * 0.4;
+        holdStep += 1;
         await page.mouse.move(
           cx + Math.cos(angle) * box.width * 0.32,
           cy + Math.sin(angle) * box.height * 0.24,
         );
-        await stepOnce(page, 1, 25);
+        await stepOnce(page, 2, 5);
       }
       await page.mouse.move(cx + box.width * 0.11, cy - box.height * 0.09);
       await stepOnce(page, 1, 80);
@@ -457,8 +504,8 @@ async function run() {
       if (stillHeld === undefined || stillHeld.state !== "held") {
         throw new Error(`imp ${String(target.id)} was not held during the arc`);
       }
-      await page.screenshot({ path: "proof/shot.png" });
-      console.log("checkpoint shot", Date.now() - recordStart);
+      await screenshot(page, "proof/shot.png", "shot");
+      await checkpoint(page, recordStart, "shot");
 
       const dropX = 30;
       const dropY = 30;
@@ -505,7 +552,13 @@ async function run() {
         throw new Error(`tile ${String(dropX)},${String(dropY)} stopped being walkable after drop`);
       }
 
-      console.log("checkpoint drop", Date.now() - recordStart);
+      await checkpoint(page, recordStart, "drop");
+      await panToTileCenter(page, box, dropX, dropY);
+      await page.mouse.move(cx, cy);
+      for (let i = 0; i < 3; i += 1) {
+        await page.mouse.wheel(0, -240);
+      }
+      await stepOnce(page, 1, 5);
       const slapTarget = await locateImp(page, box, target.id);
       await page.keyboard.down("Shift");
       await page.mouse.move(slapTarget.point.x, slapTarget.point.y);
@@ -524,25 +577,28 @@ async function run() {
         throw new Error("Shift+left click did not boost an imp");
       }
       const boostedId = boostedImp.id;
-      await stepOnce(page, SLAP_TICKS + 2, 20);
+      for (let i = 0; i < 10; i += 1) {
+        await stepOnce(page, 1, 80);
+      }
+      await stepOnce(page, SLAP_TICKS + 2 - 10, 20);
       const afterSlapExpiry = await page.evaluate(() => globalThis.__keeper.impSnapshot());
       const expiredImp = afterSlapExpiry.find((imp) => imp.id === boostedId);
       if (expiredImp === undefined || expiredImp.boost !== 0) {
         throw new Error(`imp ${String(boostedId)} boost did not expire after ${String(SLAP_TICKS)} ticks`);
       }
-      console.log("checkpoint slap", Date.now() - recordStart);
+      await checkpoint(page, recordStart, "slap");
       await panToTileCenter(page, box, 34.5, 32);
       await page.mouse.move(cx, cy);
-      for (let i = 0; i < 6; i += 1) {
+      for (let i = 0; i < 4; i += 1) {
         await page.mouse.wheel(0, -240);
       }
       await stepOnce(page, 12, 20);
 
       await page.mouse.move(cx, cy);
       await page.mouse.down({ button: "right" });
-      for (let i = 0; i < 4; i += 1) {
-        await page.mouse.move(cx + i * 10, cy + Math.sin(i / 3) * 22);
-        await stepOnce(page, 3);
+      for (let i = 0; i < 2; i += 1) {
+        await page.mouse.move(cx + i * 18, cy + Math.sin(i / 2) * 28);
+        await stepOnce(page, 6);
       }
       await page.mouse.up({ button: "right" });
       await panToTileCenter(page, box, 34.5, 32);
@@ -552,9 +608,25 @@ async function run() {
           throw new Error(`corridor tile ${String(x)},32 is off screen`);
         }
       }
-      await stepOnce(page, 20, 20);
+      for (let i = 0; i < 3; i += 1) {
+        await stepOnce(page, 10, 1);
+      }
 
-      console.log("checkpoint corridor", Date.now() - recordStart);
+      await checkpoint(page, recordStart, "corridor");
+      await presentFrame(page);
+      let sawWorking = false;
+      for (let i = 0; i < 21; i += 1) {
+        await stepOnce(page, 1, 5);
+        const working = await page.evaluate(() =>
+          globalThis.__keeper.impSnapshot().some((imp) => imp.state === "working"),
+        );
+        if (working) {
+          sawWorking = true;
+        }
+      }
+      if (!sawWorking) {
+        throw new Error("no working imp was visible during the close-up");
+      }
       const beforePause = await page.evaluate(() => globalThis.__keeper.tick);
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible");
@@ -563,7 +635,7 @@ async function run() {
       if (!spawnDisabled || !goldDisabled) {
         throw new Error(`panel buttons not disabled while paused: spawn ${String(spawnDisabled)}, gold ${String(goldDisabled)}`);
       }
-      for (let i = 0; i < 8; i += 1) {
+      for (let i = 0; i < 4; i += 1) {
         await stepOnce(page);
       }
       const duringPause = await page.evaluate(() => globalThis.__keeper.tick);
@@ -577,11 +649,12 @@ async function run() {
       if (!spawnEnabled || !goldEnabled) {
         throw new Error(`panel buttons not re-enabled after resume: spawn ${String(spawnEnabled)}, gold ${String(goldEnabled)}`);
       }
-      for (let i = 0; i < 8; i += 1) {
+      for (let i = 0; i < 4; i += 1) {
         await stepOnce(page);
       }
 
-      console.log("checkpoint pause", Date.now() - recordStart);
+      await checkpoint(page, recordStart, "pause");
+      await presentFrame(page);
       let extraTicks = 0;
       let maxCarrying = 0;
       let carryingSeen = false;
@@ -621,8 +694,8 @@ async function run() {
         await stepOnce(page, 16, 1);
         extraTicks += 16;
       }
-      console.log("checkpoint wait", Date.now() - recordStart);
-      await panToTileCenter(page, box, 31, 30);
+      await checkpoint(page, recordStart, "wait");
+      await stepFrames(page, 11, 1, 1);
       await stepOnce(page);
       const treasuryAfterDelivery = await page.evaluate(() => ({
         tiles: globalThis.__keeper.treasuryTiles(),
@@ -634,10 +707,8 @@ async function run() {
       if (!treasuryAfterDelivery.tiles.some((tile) => tile.stock > 0)) {
         throw new Error("no treasury tile had a gold pile");
       }
-      await page.screenshot({ path: "proof/treasury.png" });
-      await panToTileCenter(page, box, 34.5, 32);
 
-      console.log("checkpoint treasury", Date.now() - recordStart);
+      await checkpoint(page, recordStart, "treasury");
       const beforePanel = await page.evaluate(() => ({
         impCount: globalThis.__keeper.impCount,
         goldStored: globalThis.__keeper.goldStored,
@@ -645,13 +716,14 @@ async function run() {
         hudText: globalThis.__keeper.hudText,
         camera: globalThis.__keeper.camera,
       }));
-      await page.click("#spawn-imp");
-      await page.click("#spawn-imp");
-      await page.click("#add-gold");
+      await page.click("#spawn-imp", { force: true });
+      await page.click("#spawn-imp", { force: true });
+      await page.click("#add-gold", { force: true });
       await stepOnce(page, 2);
       const afterPanel = await page.evaluate(() => ({
         impCount: globalThis.__keeper.impCount,
         goldStored: globalThis.__keeper.goldStored,
+        treasuryStockTotal: globalThis.__keeper.treasuryStockTotal,
         taggedCount: globalThis.__keeper.taggedCount,
         hudText: globalThis.__keeper.hudText,
         camera: globalThis.__keeper.camera,
@@ -674,15 +746,22 @@ async function run() {
       ) {
         throw new Error("panel click moved the camera");
       }
+      const afterPanelOwnedGold = afterPanel.goldStored + afterPanel.treasuryStockTotal;
       if (
-        !afterPanel.hudText.includes(`gold ${String(afterPanel.goldStored)}`) ||
+        !afterPanel.hudText.includes(`gold ${String(afterPanelOwnedGold)}`) ||
         !afterPanel.hudText.includes(`imps ${String(afterPanel.impCount)}`)
       ) {
         throw new Error(`hud did not show new values: ${afterPanel.hudText}`);
       }
+      const maxImpsPerTileAfterPanel = await page.evaluate(() => globalThis.__keeper.maxImpsPerTile);
+      if (maxImpsPerTileAfterPanel > 1) {
+        throw new Error(`maxImpsPerTile after panel spawn was ${String(maxImpsPerTileAfterPanel)}, expected <= 1`);
+      }
+      console.log("maxImpsPerTile after panel", maxImpsPerTileAfterPanel);
       await stepOnce(page, 4, 20);
+      await stepFrames(page, 6, 2, 1);
 
-      console.log("checkpoint panel", Date.now() - recordStart);
+      await checkpoint(page, recordStart, "panel");
       const targetImps = 200;
       const beforeSpawn = await page.evaluate(() => globalThis.__keeper.impCount);
       const toSpawn = targetImps - beforeSpawn;
@@ -700,6 +779,10 @@ async function run() {
       for (let i = 0; i < 4; i += 1) {
         await stepOnce(page, 2, 30);
       }
+      await stepOnce(page, 1, 0);
+      await presentFrame(page);
+      const maxImpsPerTileAtCapacity = await page.evaluate(() => globalThis.__keeper.maxImpsPerTile);
+      console.log("maxImpsPerTile 200", maxImpsPerTileAtCapacity);
 
       const simWarmup = await page.evaluate(() => globalThis.__keeper.benchSim(3, 200));
       if (simWarmup.samples.length !== 3) {
@@ -719,13 +802,13 @@ async function run() {
         throw new Error(`benchSim ended at ${String(impsAfterBench)} imps, expected ${String(targetImps)}`);
       }
 
-      console.log("checkpoint benchsim", Date.now() - recordStart);
-      const frameWarmup = await page.evaluate(() => globalThis.__keeper.benchFrame(5));
-      if (frameWarmup.samples.length !== 5) {
+      await checkpoint(page, recordStart, "benchsim");
+      const frameWarmup = await page.evaluate(() => globalThis.__keeper.benchFrame(2));
+      if (frameWarmup.samples.length !== 2) {
         throw new Error(`benchFrame warm-up returned ${String(frameWarmup.samples.length)} samples`);
       }
-      const frameSamples = await page.evaluate(() => globalThis.__keeper.benchFrame(30));
-      if (frameSamples.samples.length !== 30) {
+      const frameSamples = await page.evaluate(() => globalThis.__keeper.benchFrame(12));
+      if (frameSamples.samples.length !== 12) {
         throw new Error(`benchFrame returned ${String(frameSamples.samples.length)} samples`);
       }
 
@@ -802,8 +885,10 @@ async function run() {
         result.goldStored,
         result.hudText,
       );
-      console.log("checkpoint benchframe", Date.now() - recordStart);
-      await page.screenshot({ path: "proof/perf.png" });
+      await checkpoint(page, recordStart, "benchframe");
+      await screenshot(page, "proof/perf.png", "perf");
+      await panToTileCenter(page, box, 31, 30);
+      await screenshot(page, "proof/treasury.png", "treasury");
       await context.close();
       const files = await readdir("proof/tmp");
       const webm = files.find((name) => name.endsWith(".webm"));

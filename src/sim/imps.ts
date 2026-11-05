@@ -1,7 +1,16 @@
 import { openClaimJobsAround } from "./claims";
 import { asImpId, asTileIndex, asWorkerId, type ImpId, type TileIndex, type WorkerId } from "./ids";
 import { betterJob, completeJob, jobForFilledSlot, jobHeldBy, releaseWorker, reserveJob, type Job } from "./jobs";
-import { HEART_X, HEART_Y, MAP_WIDTH, ROOM_KIND, TILE_KIND, TREASURY_CAPACITY, type TileRead } from "./map";
+import {
+  HEART_X,
+  HEART_Y,
+  MAP_HEIGHT,
+  MAP_WIDTH,
+  ROOM_KIND,
+  TILE_KIND,
+  TREASURY_CAPACITY,
+  type TileRead,
+} from "./map";
 import { bumpPathGen, isWalkableCode, PATH_CELL_COUNT, type PathScratch } from "./path";
 import { bfsToGoal, floodWalkable, reconstructPath } from "./path.hot";
 import { advanceRng } from "./rng";
@@ -22,6 +31,7 @@ export type ImpWandering = {
   pathStep: number;
   pathLength: number;
   progress: number;
+  blockedTicks: number;
 };
 export type ImpWalking = {
   kind: "walking";
@@ -29,6 +39,7 @@ export type ImpWalking = {
   pathStep: number;
   pathLength: number;
   progress: number;
+  blockedTicks: number;
 };
 export type ImpDelivering = {
   kind: "delivering";
@@ -36,6 +47,7 @@ export type ImpDelivering = {
   pathStep: number;
   pathLength: number;
   progress: number;
+  blockedTicks: number;
 };
 export type WorkKind = "dig" | "claim" | "mine";
 export type ImpWorking = {
@@ -83,20 +95,58 @@ export type ImpSlot = { kind: "empty" } | { kind: "live"; imp: Imp };
 
 export type ImpBoard = {
   slots: ImpSlot[];
+  occupancy: Uint16Array;
+  liveCount: number;
+  heldCount: number;
 };
+
+export const BLOCK_TICKS = 12;
+export const HEART_TILE = HEART_Y * MAP_WIDTH + HEART_X;
 
 const SPAWN_X = [31, 32, 33, 32];
 const SPAWN_Y = [31, 31, 31, 32];
 
+export function occupancyAt(board: ImpBoard, tile: number): number {
+  const count = board.occupancy[tile];
+  return count === undefined ? 0 : count;
+}
+
+export function addOccupancy(board: ImpBoard, tile: number): void {
+  const count = board.occupancy[tile];
+  if (count === undefined) {
+    return;
+  }
+  board.occupancy[tile] = count + 1;
+}
+
+export function removeOccupancy(board: ImpBoard, tile: number): void {
+  const count = board.occupancy[tile];
+  if (count === undefined || count === 0) {
+    return;
+  }
+  board.occupancy[tile] = count - 1;
+}
+
+export function impTileIndex(imp: Imp, width: number): number {
+  return imp.tileY * width + imp.tileX;
+}
+
 export function createImp(index: number, tileX: number, tileY: number): Imp {
   const idle: ImpIdle = { kind: "idle" };
-  const wandering: ImpWandering = { kind: "wandering", pathStep: 0, pathLength: 0, progress: 0 };
+  const wandering: ImpWandering = {
+    kind: "wandering",
+    pathStep: 0,
+    pathLength: 0,
+    progress: 0,
+    blockedTicks: 0,
+  };
   const walking: ImpWalking = {
     kind: "walking",
     tile: asTileIndex(tileY * MAP_WIDTH + tileX),
     pathStep: 0,
     pathLength: 0,
     progress: 0,
+    blockedTicks: 0,
   };
   const working: ImpWorking = {
     kind: "working",
@@ -110,6 +160,7 @@ export function createImp(index: number, tileX: number, tileY: number): Imp {
     pathStep: 0,
     pathLength: 0,
     progress: 0,
+    blockedTicks: 0,
   };
   const carryEmpty: ImpCarryEmpty = { kind: "empty" };
   const carryGold: ImpCarryGold = { kind: "gold", amount: 0 };
@@ -148,7 +199,7 @@ export function createImpBoard(): ImpBoard {
   for (let i = 0; i < IMP_CAPACITY; i += 1) {
     slots.push({ kind: "empty" });
   }
-  return { slots };
+  return { slots, occupancy: new Uint16Array(MAP_WIDTH * MAP_HEIGHT), liveCount: 0, heldCount: 0 };
 }
 
 export function spawnImp(board: ImpBoard, tileX: number, tileY: number): boolean {
@@ -160,6 +211,8 @@ export function spawnImp(board: ImpBoard, tileX: number, tileY: number): boolean
     switch (slot.kind) {
       case "empty":
         board.slots[i] = { kind: "live", imp: createImp(i, tileX, tileY) };
+        board.liveCount += 1;
+        addOccupancy(board, tileY * MAP_WIDTH + tileX);
         return true;
       case "live":
         break;
@@ -180,6 +233,8 @@ export function spawnStartingImps(board: ImpBoard): void {
       continue;
     }
     board.slots[i] = { kind: "live", imp: createImp(i, sx, sy) };
+    board.liveCount += 1;
+    addOccupancy(board, sy * MAP_WIDTH + sx);
   }
 }
 
@@ -240,9 +295,39 @@ export function beginWander(world: ImpWorld, imp: Imp): void {
     imp.state = imp.idle;
     return;
   }
+  let freeCount = 0;
+  for (let i = 0; i < count; i += 1) {
+    const tile = world.pathScratch.reachable[i];
+    if (tile === undefined || tile === start) {
+      continue;
+    }
+    if (occupancyAt(world.imps, tile) === 0) {
+      freeCount += 1;
+    }
+  }
   advanceRng(world);
-  const slot = (world.rng % (count - 1)) + 1;
-  const dest = world.pathScratch.reachable[slot];
+  let dest: number | undefined;
+  if (freeCount > 0) {
+    const pick = world.rng % freeCount;
+    let seen = 0;
+    for (let i = 0; i < count; i += 1) {
+      const tile = world.pathScratch.reachable[i];
+      if (tile === undefined || tile === start) {
+        continue;
+      }
+      if (occupancyAt(world.imps, tile) !== 0) {
+        continue;
+      }
+      if (seen === pick) {
+        dest = tile;
+        break;
+      }
+      seen += 1;
+    }
+  } else {
+    const slot = (world.rng % (count - 1)) + 1;
+    dest = world.pathScratch.reachable[slot];
+  }
   if (dest === undefined) {
     imp.state = imp.idle;
     return;
@@ -255,6 +340,7 @@ export function beginWander(world: ImpWorld, imp: Imp): void {
   imp.wandering.pathStep = 0;
   imp.wandering.pathLength = length;
   imp.wandering.progress = 0;
+  imp.wandering.blockedTicks = 0;
   imp.state = imp.wandering;
   setHeading(imp, world.width);
 }
@@ -309,6 +395,50 @@ function targetForJob(world: ImpWorld, job: Job, gen: number): number | undefine
       return never;
     }
   }
+}
+
+export type MovingImpState = ImpWandering | ImpWalking | ImpDelivering;
+
+export function canEnterNextTile(
+  world: ImpWorld,
+  imp: Imp,
+  state: MovingImpState,
+  nextIndex: number,
+): boolean {
+  const nextTile = imp.path[nextIndex];
+  if (nextTile === undefined) {
+    return true;
+  }
+  if (nextTile === HEART_TILE) {
+    return true;
+  }
+  if (state.kind === "delivering" && nextTile === state.tile) {
+    return true;
+  }
+  switch (state.kind) {
+    case "walking":
+    case "delivering":
+      if (nextIndex + 1 >= state.pathLength) {
+        return true;
+      }
+      break;
+    case "wandering":
+      break;
+    default: {
+      const never: never = state;
+      return never;
+    }
+  }
+  if (occupancyAt(world.imps, nextTile) === 0) {
+    return true;
+  }
+  if (world.walkableSaturated) {
+    return true;
+  }
+  if (state.kind === "wandering") {
+    return false;
+  }
+  return state.blockedTicks >= BLOCK_TICKS;
 }
 
 function bestReachableJob(world: ImpWorld, imp: Imp): Job | undefined {
@@ -375,6 +505,7 @@ export function reserveBestReachableJob(world: ImpWorld, imp: Imp): Job | undefi
   imp.walking.pathStep = 0;
   imp.walking.pathLength = length;
   imp.walking.progress = 0;
+  imp.walking.blockedTicks = 0;
   imp.state = imp.walking;
   setHeading(imp, world.width);
   return job;
@@ -546,6 +677,7 @@ export function beginDelivering(world: ImpWorld, imp: Imp): void {
   imp.delivering.pathStep = 0;
   imp.delivering.pathLength = length;
   imp.delivering.progress = 0;
+  imp.delivering.blockedTicks = 0;
   imp.state = imp.delivering;
   setHeading(imp, world.width);
 }
@@ -839,6 +971,7 @@ export function hashImps(board: ImpBoard): number {
             h = mix(h, moving.pathStep);
             h = mix(h, moving.pathLength);
             h = mix(h, moving.progress);
+            h = mix(h, moving.blockedTicks);
             h = mixPath(h, imp.path, moving.pathLength);
             break;
           case "walking":
@@ -846,6 +979,7 @@ export function hashImps(board: ImpBoard): number {
             h = mix(h, moving.pathStep);
             h = mix(h, moving.pathLength);
             h = mix(h, moving.progress);
+            h = mix(h, moving.blockedTicks);
             h = mixPath(h, imp.path, moving.pathLength);
             break;
           case "working":
@@ -858,6 +992,7 @@ export function hashImps(board: ImpBoard): number {
             h = mix(h, moving.pathStep);
             h = mix(h, moving.pathLength);
             h = mix(h, moving.progress);
+            h = mix(h, moving.blockedTicks);
             h = mixPath(h, imp.path, moving.pathLength);
             break;
           case "held":

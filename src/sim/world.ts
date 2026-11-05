@@ -2,7 +2,18 @@ import { createCreatureBoard, hashCreatures } from "./creatures";
 import { stepCreatures } from "./creatures.hot";
 import { addHeld, createHand, hashHand, isHeld, removeHeld } from "./hand";
 import { asTick, asTileIndex, type ImpId, type Tick, type TileIndex } from "./ids";
-import { boostImp, clearBoost, createImpBoard, hashImps, spawnImp, spawnStartingImps, workerOf, type Imp } from "./imps";
+import {
+  addOccupancy,
+  boostImp,
+  clearBoost,
+  createImpBoard,
+  hashImps,
+  removeOccupancy,
+  spawnImp,
+  spawnStartingImps,
+  workerOf,
+  type Imp,
+} from "./imps";
 import { stepImps } from "./imps.hot";
 import { cancelJobAtTile, createJobBoard, hashJobs, openJob, releaseWorker } from "./jobs";
 import {
@@ -170,9 +181,17 @@ export function createWorld(seed: number): World {
   const treasuryStock = new Uint16Array(width * height);
   const treasuryCache = new Int32Array(width * height);
   const lairCache = new Int32Array(width * height);
+  let walkableTileCount = 0;
   for (let i = 0; i < tiles.length; i += 1) {
-    if (tiles[i] === TILE_KIND.goldSeam) {
+    const code = tiles[i];
+    if (code === undefined) {
+      continue;
+    }
+    if (code === TILE_KIND.goldSeam) {
       goldStock[i] = GOLD_PER_TILE;
+    }
+    if (isWalkableCode(code)) {
+      walkableTileCount += 1;
     }
   }
   const imps = createImpBoard();
@@ -204,6 +223,8 @@ export function createWorld(seed: number): World {
     creatures: createCreatureBoard(),
     hand: createHand(),
     pathScratch: createPathScratch(),
+    walkableSaturated: false,
+    walkableTileCount,
   };
   attachTiles(world, tiles);
   return world;
@@ -411,10 +432,12 @@ function applyPickUp(world: World, impId: ImpId): void {
         return;
       }
       releaseWorker(world.jobs, workerOf(imp));
+      removeOccupancy(world.imps, imp.tileY * world.width + imp.tileX);
       clearBoost(imp);
       imp.headingX = 0;
       imp.headingY = 0;
       imp.state = imp.held;
+      world.imps.heldCount += 1;
       return;
     }
     default: {
@@ -466,6 +489,10 @@ function applyDrop(world: World, impId: ImpId, tileX: number, tileY: number): vo
       imp.headingX = 0;
       imp.headingY = 0;
       imp.state = imp.idle;
+      addOccupancy(world.imps, tileY * world.width + tileX);
+      if (world.imps.heldCount > 0) {
+        world.imps.heldCount -= 1;
+      }
       return;
     }
     case "idle":

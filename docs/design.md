@@ -31,7 +31,7 @@ In scope:
 - Creatures: one fly kind arrives through the portal every `ARRIVE_TICKS`, claims the smallest free lair tile and walks there to sleep.
 - Hand of Evil: pick up and drop imps, slap.
 - A sandbox panel to spawn imps and add gold.
-- HUD: gold, imp count, sim tick.
+- HUD: owned gold (stored plus treasury stock), imp count, sim tick.
 
 Out of scope for milestone 1: combat, enemy keepers, creature kinds other than the fly, hatcheries, training, spells, traps, doors, possession, sound, saving, multiplayer, localization.
 
@@ -147,8 +147,11 @@ stateDiagram-v2
     Idle --> Wandering: no job
     Idle --> Carrying: already carrying gold
     Wandering --> Idle: wander done
+    Wandering --> Wandering: blocked > 12 ticks (new wander)
     Walking --> Working: reached dig neighbour, seam neighbour or claim tile
+    Walking --> Walking: next tile occupied (wait)
     Walking --> Idle: job gone or path lost
+    Delivering --> Delivering: next tile occupied (wait)
     Working --> Idle: dug (earth becomes dirt, claim jobs open)
     Working --> Idle: claimed (dirt becomes claimed, claim jobs open)
     Working --> Idle: job gone
@@ -167,7 +170,7 @@ Each state carries only the data it needs, for example `{ kind: "walking", tile,
 
 Carrying imps choose the nearest reachable treasury tile with free capacity from the single walkability flood, then fall back to the heart. Delivery deposits up to `TREASURY_CAPACITY` into that tile; excess stays carried and the imp retargets. The treasury tile list is cached by `tilesVersion`, so delivery never rescans the map. Gold conservation counts seams, carried gold (including held imps), `goldStored`, treasury stock and `goldSpent` exactly.
 
-Walkable tiles: claimed floor, dirt, rooms and the portal. Earth, gold seams, tagged earth, tagged gold and rock are not walkable. Idle imps first try to reserve an open `dig` job. If one is reserved, they BFS to a reachable walkable tile 4-adjacent to the job tile and walk there; if no neighbour is reachable they release the job and wander. Working imps count down `DIG_TICKS = 40`, then turn the tagged earth into dirt and free the job. If the job disappears mid-walk or mid-work, the imp returns to idle immediately. Idle imps with no job wander: pick a random reachable walkable tile with the seeded RNG, then follow a 4-neighbour grid path (BFS) one tile at a time. The sandbox starts with four imps on the heart's claimed patch. The Hand of Evil holds at most eight imps: `pickUp` releases any reserved job back to `Open` and takes the imp off the grid in the `held` state, keeping any carried gold unchanged; `drop` is accepted only on a walkable tile and returns the imp to idle there with its carry intact, so a dropped carrier walks its gold to the heart, while a refused drop leaves it held. Both commands apply at tick boundaries like every other command. `slap` is refused for held imps and empty slots, costs nothing, and applies the speed boost; `pickUp` clears any boost. Hand capacity, job release, boost bounds and the held-never-boosted rule are checked in `specs/HandOfEvil.tla`.
+Walkable tiles: claimed floor, dirt, rooms and the portal. Earth, gold seams, tagged earth, tagged gold and rock are not walkable. Idle imps first try to reserve an open `dig` job. If one is reserved, they BFS to a reachable walkable tile 4-adjacent to the job tile and walk there; if no neighbour is reachable they release the job and wander. Working imps count down `DIG_TICKS = 40`, then turn the tagged earth into dirt and free the job. If the job disappears mid-walk or mid-work, the imp returns to idle immediately. Idle imps with no job wander: pick a random reachable walkable tile with the seeded RNG, then follow a 4-neighbour grid path (BFS) one tile at a time. The sandbox starts with four imps on the heart's claimed patch. The Hand of Evil holds at most eight imps: `pickUp` releases any reserved job back to `Open` and takes the imp off the grid in the `held` state, keeping any carried gold unchanged; `drop` is accepted only on a walkable tile and returns the imp to idle there with its carry intact, so a dropped carrier walks its gold to the heart, while a refused drop leaves it held. Both commands apply at tick boundaries like every other command. `slap` is refused for held imps and empty slots, costs nothing, and applies the speed boost; `pickUp` clears any boost. Hand capacity, job release, boost bounds and the held-never-boosted rule are checked in `specs/HandOfEvil.tla`. Each imp board carries a preallocated per-tile occupancy count that spawn, move, pick-up and drop keep exact; imps wait at tile boundaries for occupied tiles except the heart, a delivery target tile, the final tile of a walking or delivering path, and maps where live imps outnumber walkable tiles, while wanderers prefer unoccupied destinations and re-pick after more than 12 blocked ticks. Creatures are not part of the imp occupancy grid: only live imps are counted.
 
 ### Chart 5: job lifecycle (hand-rolled, sim)
 
@@ -233,9 +236,9 @@ stateDiagram-v2
 ### Rendering
 
 - Tile drawing lives in `src/render/`. It reads the sim `Uint8Array` grid and never writes sim state.
-- Five grouped `InstancedMesh` draws cover all nine tile kinds: terrain (earth, dirt, tagged earth), gold (seam, tagged gold), rock, claimed, and room (treasury, lair, portal). Per-instance colours tint tagged tiles, treasury floors, lair beds and the portal. `syncMap` packs live tiles densely, sets `mesh.count` per group, and skips when `world.tilesVersion` and `world.roomsVersion` match the last packed versions. Picking maps a camera ray to the ground plane, then to a tile index.
+- Five grouped `InstancedMesh` draws cover all nine tile kinds: terrain (earth, dirt, tagged earth), gold (seam, tagged gold), rock, claimed, and room (treasury, lair, portal). Per-instance colours tint tagged tiles, treasury floors, lair beds and the portal; tagged instances pulse brighter and sit slightly raised inside their existing group. `syncMap` packs live tiles densely, sets `mesh.count` per group, and skips repacking when `world.tilesVersion` and `world.roomsVersion` match the last packed versions, while still updating the tagged pulse from render time. Picking maps a camera ray to the ground plane, then to a tile index.
 - A later pass can switch to tile-index instances with scale 0 for removed blocks; counts must still match the grid.
-- Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Held imps are skipped on the grid and drawn floating near the cursor through the same imp mesh. Creatures are one separate `InstancedMesh` of flat green-cyan octahedra, also interpolated between ticks. Treasury gold piles are one additional `InstancedMesh`, dirty-synced by `treasuryVersion`, with one instance per stocked treasury tile scaled by `stock / TREASURY_CAPACITY`. The grouped tile meshes plus imps, creatures and gold piles stay within 8 draw calls; lair beds reuse the room group as a tint rather than adding a draw call.
+- Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Working imps bob and tilt toward their work tile using render time only, without writing sim state. Held imps are skipped on the grid and drawn floating near the cursor through the same imp mesh. Creatures are one separate `InstancedMesh` of flat green-cyan octahedra, also interpolated between ticks. Treasury gold piles are one additional `InstancedMesh`, dirty-synced by `treasuryVersion`, with one instance per stocked treasury tile scaled by `stock / TREASURY_CAPACITY`; treasury floors reuse the existing room group as a tint. The grouped tile meshes plus imps, creatures and gold piles stay within 8 draw calls.
 - Camera: perspective, orbit around a ground target. Pitch is clamped to `[0.2, 1.35]` rad, zoom (distance) to `[12, 90]`, and the ground target to the map rectangle `[-MAP_HALF, MAP_WIDTH - MAP_HALF]` × `[-MAP_HALF, MAP_HEIGHT - MAP_HALF]`. Modes follow chart 2 in `src/input`; pose math lives in `src/camera`.
 - Visual style: low-poly blocks, moody dungeon light (one heart point light plus dim hemisphere and ambient), darker per-kind materials, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
 

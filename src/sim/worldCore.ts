@@ -4,7 +4,7 @@ import type { Tick } from "./ids";
 import type { ImpBoard } from "./imps";
 import type { JobBoard } from "./jobs";
 import type { TileKindCode, TileRead } from "./map";
-import type { PathScratch } from "./path";
+import { isWalkableCode, type PathScratch } from "./path";
 
 export type World = {
   seed: number;
@@ -33,6 +33,8 @@ export type World = {
   creatures: CreatureBoard;
   hand: Hand;
   pathScratch: PathScratch;
+  walkableSaturated: boolean;
+  walkableTileCount: number;
 };
 
 const TILE_BUFFERS = new WeakMap<World, Uint8Array>();
@@ -54,9 +56,18 @@ export function setTile(world: World, index: number, code: TileKindCode): void {
   if (index < 0 || index >= tiles.length) {
     throw new Error("tile index out of range");
   }
-  if (tiles[index] === code) {
+  const before = tiles[index];
+  if (before === undefined) {
+    throw new Error("tile index out of range");
+  }
+  if (before === code) {
     return;
   }
+  const wasWalkable = isWalkableCode(before);
+  const isWalkable = isWalkableCode(code);
   tiles[index] = code;
+  if (wasWalkable !== isWalkable) {
+    world.walkableTileCount += isWalkable ? 1 : -1;
+  }
   world.tilesVersion += 1;
 }
