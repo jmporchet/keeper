@@ -148,7 +148,8 @@ stateDiagram-v2
     Idle --> Tagging: left press on a tile
     Tagging --> Idle: release (tag/untag commands for the sweep)
     Idle --> Painting: treasury, lair, hatchery, training, workshop, library, door or trap tool selected
-    Painting --> Idle: escape or tool cleared
+    Painting --> Painting: another paint tool selected
+    Painting --> Idle: escape or the active tool selected again
     Idle --> Holding: left press on imp (pickUp)
     Holding --> Holding: left press on imp (pickUp, hand not full)
     Holding --> Idle: drop on walkable tile (hand empty)
@@ -161,7 +162,7 @@ stateDiagram-v2
     Possessed --> Idle: EXIT_POSSESS / Escape
 ```
 
-`SELECT_PAINT_TOOL` carries the paint tool (`treasury`, `lair`, `hatchery`, `training`, `workshop`, `library`, `door` or `trap`) and the painter emits that tool with every tile: rooms emit `paintRoom`, doors emit `paintDoor` and traps emit `paintTrap`. Zoom (wheel) works in every state and does not change state. The hand holds at most eight imps; a left press on another imp while holding picks it up too. A right press while holding drops the most recently picked imp, or stays holding when the tile is not walkable. A Shift+left press on an imp while Idle queues `slap` and does not pick it up; Shift has no effect while Holding or Painting. A left click on a tile with an intact door while Idle queues a zero-cost `toggleDoor` that flips the door open or closed without changing its HP.
+`SELECT_PAINT_TOOL` carries the paint tool (`treasury`, `lair`, `hatchery`, `training`, `workshop`, `library`, `door` or `trap`) and the painter emits that tool with every tile: rooms emit `paintRoom`, doors emit `paintDoor` and traps emit `paintTrap`. Selecting a different tool while Painting switches to it without leaving Painting, and selecting the active tool again clears it. Zoom (wheel) works in every state and does not change state. The hand holds at most eight imps; a left press on another imp while holding picks it up too. A right press while holding drops the most recently picked imp, or stays holding when the tile is not walkable. A Shift+left press on an imp while Idle queues `slap` and does not pick it up; Shift has no effect while Holding or Painting. A left click on a tile with an intact door while Idle queues a zero-cost `toggleDoor` that flips the door open or closed without changing its HP.
 
 `POSSESS_CREATURE` carries a `creatureId` and is accepted from Idle for a live creature: double-clicking a live creature tile, or the panel Possess button picking the first sleeping or live creature, queues `possess` and enters Possessed. While Possessed, tagging, painting and hand pickup are disabled: `LEFT_DOWN_TILE`, `LEFT_DOWN_IMP`, `SELECT_ROOM_TOOL` and the camera gestures are ignored, and the panel paint buttons are disabled. WASD and arrow keys queue at most one `possessMove` for the possessed id per tick; the sim refuses diagonal, non-possessed, non-walkable and out-of-bounds moves. The camera follows the possessed creature and returns to the orbit pose on `EXIT_POSSESS` or Escape, which queue `releasePossess`. If the possessed creature dies, the sim clears possession and the input bind returns to Idle on its next tick.
 
