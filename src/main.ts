@@ -3,7 +3,7 @@ import { createActor } from "xstate";
 import { appMachine, isPaused, isSimStepping } from "./app/appMachine";
 import { createCameraPose, eyeFromPose } from "./camera/pose";
 import { bindCameraInput } from "./input/bindCamera";
-import { addTorchLighting } from "./render/lights";
+import { addTorchLighting, DUNGEON_EXPOSURE } from "./render/lights";
 import { createMapMeshes, syncMap } from "./render/map";
 import { createWorld, hashWorld, MAX_FRAME_DELTA, MAX_STEPS_PER_FRAME, step, TICK_DT } from "./sim";
 
@@ -32,7 +32,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.35;
+renderer.toneMappingExposure = DUNGEON_EXPOSURE;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1c1612);
@@ -42,7 +42,7 @@ const pose = createCameraPose();
 
 const world = createWorld(1);
 const map = createMapMeshes(scene);
-syncMap(world.tiles, world.width, map);
+syncMap(world.tiles, world.width, world.tilesVersion, map);
 addTorchLighting(scene);
 
 const tickHud = document.getElementById("tick");
@@ -171,7 +171,7 @@ if (proof) {
         step(world, []);
         cameraInput.tickHeldKeys();
       }
-      syncMap(world.tiles, world.width, map);
+      syncMap(world.tiles, world.width, world.tilesVersion, map);
       placeCamera();
       syncHud();
       render();
@@ -202,7 +202,7 @@ if (proof) {
       accumulator = 0;
     }
     cameraInput.tickHeldKeys();
-    syncMap(world.tiles, world.width, map);
+    syncMap(world.tiles, world.width, world.tilesVersion, map);
     placeCamera();
     syncHud();
     render();
