@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asTick, type RoomTool, type Save } from "../sim";
+import { asTick, type PaintTool, type Save } from "../sim";
 import { createHud, formatHud, hudGold, type HudElement } from "./hud";
 import { createSandboxPanel, sandboxCommand } from "./sandboxPanel";
 
@@ -55,7 +55,7 @@ describe("sandbox panel paint buttons", () => {
     const { root, buttons } = fakePanelRoot();
     const libraryButton = fakeButton();
     buttons.set("#paint-library", libraryButton);
-    const selected: RoomTool[] = [];
+    const selected: PaintTool[] = [];
     const panel = createSandboxPanel(
       root,
       () => asTick(0),
@@ -77,6 +77,44 @@ describe("sandbox panel paint buttons", () => {
     expect(libraryButton.pressed).toBe("true");
     panel.setPainting(false, "library");
     expect(libraryButton.pressed).toBe("false");
+  });
+});
+
+describe("sandbox panel door and trap tools", () => {
+  it("wires the door and trap buttons to their paint tools", () => {
+    const { root, buttons } = fakePanelRoot();
+    const doorButton = fakeButton();
+    const trapButton = fakeButton();
+    buttons.set("#paint-door", doorButton);
+    buttons.set("#paint-trap", trapButton);
+    const selected: PaintTool[] = [];
+    const panel = createSandboxPanel(
+      root,
+      () => asTick(0),
+      () => undefined,
+      (tool) => {
+        selected.push(tool);
+      },
+      () => emptySave,
+      () => undefined,
+      () => undefined,
+    );
+    const doorClick = doorButton.clicks[0];
+    const trapClick = trapButton.clicks[0];
+    if (doorClick === undefined || trapClick === undefined) {
+      throw new Error("door and trap click handlers were not registered");
+    }
+    doorClick();
+    trapClick();
+    expect(selected).toEqual(["door", "trap"]);
+    panel.setPainting(true, "door");
+    expect(doorButton.pressed).toBe("true");
+    expect(trapButton.pressed).toBe("false");
+    panel.setPainting(true, "trap");
+    expect(doorButton.pressed).toBe("false");
+    expect(trapButton.pressed).toBe("true");
+    panel.setPainting(false, "trap");
+    expect(trapButton.pressed).toBe("false");
   });
 });
 

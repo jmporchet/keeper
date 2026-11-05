@@ -26,6 +26,8 @@ import {
 import { stepImps } from "./imps.hot";
 import { cancelJobAtTile, createJobBoard, hashJobs, openJob, releaseWorker } from "./jobs";
 import {
+  DOOR_COST,
+  DOOR_HP,
   HATCHERY_COST,
   HEART_HP,
   HEART_X,
@@ -40,6 +42,9 @@ import {
   REPAIR_HEART_COST,
   ROOM_KIND,
   TILE_KIND,
+  TRAP_COST,
+  TRAP_GAS_LIVE,
+  TRAP_NONE,
   TRAINING_COST,
   TREASURY_COST,
   WORKSHOP_COST,
@@ -60,6 +65,9 @@ import { availableGold, drainTreasury, runPayday } from "./wages";
 import { attachTiles, setTile, type World } from "./worldCore";
 
 export {
+  DOOR_COST,
+  DOOR_DAMAGE_TICKS,
+  DOOR_HP,
   HATCHERY_COST,
   HEART_DAMAGE_TICKS,
   HEART_HP,
@@ -80,11 +88,17 @@ export {
   TILE_KIND,
   TILE_KIND_COUNT,
   TILE_KINDS,
+  TRAP_COST,
+  TRAP_DAMAGE,
+  TRAP_GAS_LIVE,
+  TRAP_GAS_SPENT,
+  TRAP_NONE,
   TRAINING_COST,
   TREASURY_CAPACITY,
   TREASURY_COST,
   WORKSHOP_COST,
   tileKindAt,
+  type PaintTool,
   type RoomKind,
   type RoomKindCode,
   type RoomTool,
@@ -126,6 +140,8 @@ export type Command =
   | { kind: "tag"; tick: Tick; tile: TileIndex }
   | { kind: "untag"; tick: Tick; tile: TileIndex }
   | { kind: "paintRoom"; tick: Tick; tile: TileIndex; room: RoomTool }
+  | { kind: "paintDoor"; tick: Tick; tile: TileIndex }
+  | { kind: "paintTrap"; tick: Tick; tile: TileIndex }
   | { kind: "spawnImp"; tick: Tick }
   | { kind: "pickUp"; tick: Tick; impId: ImpId }
   | { kind: "drop"; tick: Tick; impId: ImpId; tileX: number; tileY: number }
@@ -223,6 +239,8 @@ export function createWorld(seed: number): World {
   fillStartingMap(tiles, width, height);
   const goldStock = new Uint32Array(width * height);
   const rooms = new Uint8Array(width * height);
+  const doorHp = new Uint8Array(width * height);
+  const trapState = new Uint8Array(width * height);
   const treasuryStock = new Uint16Array(width * height);
   const treasuryCache = new Int32Array(width * height);
   const lairCache = new Int32Array(width * height);
@@ -254,6 +272,8 @@ export function createWorld(seed: number): World {
     height,
     tiles,
     rooms,
+    doorHp,
+    trapState,
     treasuryStock,
     treasuryCache,
     treasuryCacheCount: 0,
@@ -278,6 +298,8 @@ export function createWorld(seed: number): World {
     chickensVersion: 0,
     tilesVersion: 1,
     roomsVersion: 0,
+    doorVersion: 0,
+    trapVersion: 0,
     treasuryVersion: 0,
     goldStored: 0,
     goldSpent: 0,
@@ -334,6 +356,20 @@ export function hashWorld(world: World): number {
       continue;
     }
     h = mix(h, room);
+  }
+  for (let i = 0; i < world.doorHp.length; i += 1) {
+    const hp = world.doorHp[i];
+    if (hp === undefined) {
+      continue;
+    }
+    h = mix(h, hp);
+  }
+  for (let i = 0; i < world.trapState.length; i += 1) {
+    const state = world.trapState[i];
+    if (state === undefined) {
+      continue;
+    }
+    h = mix(h, state);
   }
   for (let i = 0; i < world.treasuryStock.length; i += 1) {
     const stock = world.treasuryStock[i];
@@ -422,6 +458,14 @@ function applyPaintRoom(world: World, tile: TileIndex, room: RoomTool): void {
   if (current === undefined || current !== ROOM_KIND.none) {
     return;
   }
+  const door = world.doorHp[tile];
+  if (door !== undefined && door > 0) {
+    return;
+  }
+  const trap = world.trapState[tile];
+  if (trap !== undefined && trap !== TRAP_NONE) {
+    return;
+  }
   switch (room) {
     case "treasury": {
       if (world.goldStored < TREASURY_COST) {
@@ -496,6 +540,80 @@ function applyPaintRoom(world: World, tile: TileIndex, room: RoomTool): void {
       return never;
     }
   }
+}
+
+function applyPaintDoor(world: World, tile: TileIndex): void {
+  const kind = tileKindAt(world.tiles, tile);
+  if (kind !== "claimed") {
+    return;
+  }
+  const room = world.rooms[tile];
+  if (room === undefined || room !== ROOM_KIND.none) {
+    return;
+  }
+  const hp = world.doorHp[tile];
+  if (hp === undefined || hp > 0) {
+    return;
+  }
+  const trap = world.trapState[tile];
+  if (trap === undefined || trap !== TRAP_NONE) {
+    return;
+  }
+  if (world.goldStored < DOOR_COST) {
+    return;
+  }
+  world.goldStored -= DOOR_COST;
+  world.goldSpent += DOOR_COST;
+  world.doorHp[tile] = DOOR_HP;
+  world.doorVersion += 1;
+}
+
+function applyPaintTrap(world: World, tile: TileIndex): void {
+  const kind = tileKindAt(world.tiles, tile);
+  if (kind !== "claimed") {
+    return;
+  }
+  const room = world.rooms[tile];
+  if (room === undefined || room !== ROOM_KIND.none) {
+    return;
+  }
+  const state = world.trapState[tile];
+  if (state === undefined || state !== TRAP_NONE) {
+    return;
+  }
+  const hp = world.doorHp[tile];
+  if (hp === undefined || hp > 0) {
+    return;
+  }
+  if (world.goldStored < TRAP_COST) {
+    return;
+  }
+  world.goldStored -= TRAP_COST;
+  world.goldSpent += TRAP_COST;
+  world.trapState[tile] = TRAP_GAS_LIVE;
+  world.trapVersion += 1;
+}
+
+export function doorCount(world: World): number {
+  let total = 0;
+  for (let i = 0; i < world.doorHp.length; i += 1) {
+    const hp = world.doorHp[i];
+    if (hp !== undefined && hp > 0) {
+      total += 1;
+    }
+  }
+  return total;
+}
+
+export function trapCount(world: World): number {
+  let total = 0;
+  for (let i = 0; i < world.trapState.length; i += 1) {
+    const state = world.trapState[i];
+    if (state === TRAP_GAS_LIVE) {
+      total += 1;
+    }
+  }
+  return total;
 }
 
 export function treasuryStockTotal(world: World): number {
@@ -746,6 +864,12 @@ function applyCommand(world: World, command: Command): void {
       return;
     case "paintRoom":
       applyPaintRoom(world, command.tile, command.room);
+      return;
+    case "paintDoor":
+      applyPaintDoor(world, command.tile);
+      return;
+    case "paintTrap":
+      applyPaintTrap(world, command.tile);
       return;
     case "spawnImp":
       spawnImp(world.imps, HEART_X, HEART_Y);

@@ -74,41 +74,41 @@ describe("input and camera chart", () => {
 
   it("paints until the tool is cleared and carries the selected room", () => {
     const actor = startInput();
-    actor.send({ type: "SELECT_ROOM_TOOL", room: "treasury" });
+    actor.send({ type: "SELECT_PAINT_TOOL", tool: "treasury" });
     expect(actor.getSnapshot().value).toBe("Painting");
-    expect(actor.getSnapshot().context.room).toBe("treasury");
+    expect(actor.getSnapshot().context.tool).toBe("treasury");
     actor.send({ type: "ESCAPE" });
     expect(actor.getSnapshot().value).toBe("Idle");
-    actor.send({ type: "SELECT_ROOM_TOOL", room: "lair" });
+    actor.send({ type: "SELECT_PAINT_TOOL", tool: "lair" });
     expect(actor.getSnapshot().value).toBe("Painting");
-    expect(actor.getSnapshot().context.room).toBe("lair");
+    expect(actor.getSnapshot().context.tool).toBe("lair");
     actor.send({ type: "CLEAR_TOOL" });
     expect(actor.getSnapshot().value).toBe("Idle");
-    actor.send({ type: "SELECT_ROOM_TOOL", room: "hatchery" });
+    actor.send({ type: "SELECT_PAINT_TOOL", tool: "hatchery" });
     expect(actor.getSnapshot().value).toBe("Painting");
-    expect(actor.getSnapshot().context.room).toBe("hatchery");
+    expect(actor.getSnapshot().context.tool).toBe("hatchery");
     actor.send({ type: "ESCAPE" });
     expect(actor.getSnapshot().value).toBe("Idle");
-    actor.send({ type: "SELECT_ROOM_TOOL", room: "training" });
+    actor.send({ type: "SELECT_PAINT_TOOL", tool: "training" });
     expect(actor.getSnapshot().value).toBe("Painting");
-    expect(actor.getSnapshot().context.room).toBe("training");
+    expect(actor.getSnapshot().context.tool).toBe("training");
     actor.send({ type: "CLEAR_TOOL" });
     expect(actor.getSnapshot().value).toBe("Idle");
-    actor.send({ type: "SELECT_ROOM_TOOL", room: "workshop" });
+    actor.send({ type: "SELECT_PAINT_TOOL", tool: "workshop" });
     expect(actor.getSnapshot().value).toBe("Painting");
-    expect(actor.getSnapshot().context.room).toBe("workshop");
+    expect(actor.getSnapshot().context.tool).toBe("workshop");
     actor.send({ type: "CLEAR_TOOL" });
     expect(actor.getSnapshot().value).toBe("Idle");
-    actor.send({ type: "SELECT_ROOM_TOOL", room: "library" });
+    actor.send({ type: "SELECT_PAINT_TOOL", tool: "library" });
     expect(actor.getSnapshot().value).toBe("Painting");
-    expect(actor.getSnapshot().context.room).toBe("library");
+    expect(actor.getSnapshot().context.tool).toBe("library");
     actor.send({ type: "CLEAR_TOOL" });
     expect(actor.getSnapshot().value).toBe("Idle");
   });
 
   it("paints alongside holding and only picks up imps when not painting", () => {
     const actor = startInput();
-    actor.send({ type: "SELECT_ROOM_TOOL", room: "lair" });
+    actor.send({ type: "SELECT_PAINT_TOOL", tool: "lair" });
     actor.send({ type: "LEFT_DOWN_IMP" });
     expect(actor.getSnapshot().value).toBe("Painting");
     expect(actor.getSnapshot().context.heldCount).toBe(0);
@@ -218,7 +218,7 @@ describe("possession input", () => {
     expect(actor.getSnapshot().value).toBe("Possessed");
     actor.send({ type: "LEFT_DOWN_IMP" });
     expect(actor.getSnapshot().value).toBe("Possessed");
-    actor.send({ type: "SELECT_ROOM_TOOL", room: "lair" });
+    actor.send({ type: "SELECT_PAINT_TOOL", tool: "lair" });
     expect(actor.getSnapshot().value).toBe("Possessed");
     actor.send({ type: "POSSESS_MOVE", dx: 0, dy: 1 });
     expect(actor.getSnapshot().value).toBe("Possessed");

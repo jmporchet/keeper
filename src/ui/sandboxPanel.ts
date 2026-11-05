@@ -1,4 +1,4 @@
-import type { Command, RoomTool, Tick } from "../sim";
+import type { Command, PaintTool, Tick } from "../sim";
 import {
   parseSave,
   SAVE_STORAGE_KEY,
@@ -26,7 +26,7 @@ export function sandboxCommand(action: SandboxAction, tick: Tick): Command {
 export type SandboxPanel = {
   setPaused(paused: boolean): void;
   setReplaying(replaying: boolean): void;
-  setPainting(painting: boolean, room: RoomTool): void;
+  setPainting(painting: boolean, tool: PaintTool): void;
   setPossessed(possessed: boolean): void;
 };
 
@@ -34,7 +34,7 @@ export function createSandboxPanel(
   root: HTMLElement | null,
   getTick: () => Tick,
   enqueue: (command: Command) => void,
-  togglePaint: (room: RoomTool) => void,
+  togglePaint: (tool: PaintTool) => void,
   getSave: () => Save,
   onLoad: (save: Save) => void,
   onPossess: () => void,
@@ -48,6 +48,8 @@ export function createSandboxPanel(
   const paintTrainingButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-training");
   const paintWorkshopButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-workshop");
   const paintLibraryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-library");
+  const paintDoorButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-door");
+  const paintTrapButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-trap");
   const possessButton = root === null ? null : root.querySelector<HTMLButtonElement>("#possess");
   const saveButton = root === null ? null : root.querySelector<HTMLButtonElement>("#save-game");
   const loadButton = root === null ? null : root.querySelector<HTMLButtonElement>("#load-game");
@@ -83,6 +85,12 @@ export function createSandboxPanel(
     }
     if (paintLibraryButton !== null) {
       paintLibraryButton.disabled = paused || replaying || possessed;
+    }
+    if (paintDoorButton !== null) {
+      paintDoorButton.disabled = paused || replaying || possessed;
+    }
+    if (paintTrapButton !== null) {
+      paintTrapButton.disabled = paused || replaying || possessed;
     }
     if (possessButton !== null) {
       possessButton.disabled = paused || replaying || possessed;
@@ -167,6 +175,22 @@ export function createSandboxPanel(
       togglePaint("library");
     });
   }
+  if (paintDoorButton !== null) {
+    paintDoorButton.addEventListener("click", () => {
+      if (paused || replaying) {
+        return;
+      }
+      togglePaint("door");
+    });
+  }
+  if (paintTrapButton !== null) {
+    paintTrapButton.addEventListener("click", () => {
+      if (paused || replaying) {
+        return;
+      }
+      togglePaint("trap");
+    });
+  }
   if (possessButton !== null) {
     possessButton.addEventListener("click", () => {
       if (paused || replaying || possessed) {
@@ -242,24 +266,30 @@ export function createSandboxPanel(
     syncDisabled();
   }
 
-  function setPainting(painting: boolean, room: RoomTool): void {
+  function setPainting(painting: boolean, tool: PaintTool): void {
     if (paintTreasuryButton !== null) {
-      paintTreasuryButton.setAttribute("aria-pressed", painting && room === "treasury" ? "true" : "false");
+      paintTreasuryButton.setAttribute("aria-pressed", painting && tool === "treasury" ? "true" : "false");
     }
     if (paintLairButton !== null) {
-      paintLairButton.setAttribute("aria-pressed", painting && room === "lair" ? "true" : "false");
+      paintLairButton.setAttribute("aria-pressed", painting && tool === "lair" ? "true" : "false");
     }
     if (paintHatcheryButton !== null) {
-      paintHatcheryButton.setAttribute("aria-pressed", painting && room === "hatchery" ? "true" : "false");
+      paintHatcheryButton.setAttribute("aria-pressed", painting && tool === "hatchery" ? "true" : "false");
     }
     if (paintTrainingButton !== null) {
-      paintTrainingButton.setAttribute("aria-pressed", painting && room === "training" ? "true" : "false");
+      paintTrainingButton.setAttribute("aria-pressed", painting && tool === "training" ? "true" : "false");
     }
     if (paintWorkshopButton !== null) {
-      paintWorkshopButton.setAttribute("aria-pressed", painting && room === "workshop" ? "true" : "false");
+      paintWorkshopButton.setAttribute("aria-pressed", painting && tool === "workshop" ? "true" : "false");
     }
     if (paintLibraryButton !== null) {
-      paintLibraryButton.setAttribute("aria-pressed", painting && room === "library" ? "true" : "false");
+      paintLibraryButton.setAttribute("aria-pressed", painting && tool === "library" ? "true" : "false");
+    }
+    if (paintDoorButton !== null) {
+      paintDoorButton.setAttribute("aria-pressed", painting && tool === "door" ? "true" : "false");
+    }
+    if (paintTrapButton !== null) {
+      paintTrapButton.setAttribute("aria-pressed", painting && tool === "trap" ? "true" : "false");
     }
   }
 

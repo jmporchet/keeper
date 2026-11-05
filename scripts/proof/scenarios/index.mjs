@@ -9,6 +9,7 @@ import * as saveReplay from "./saveReplay.mjs";
 import * as possess from "./possess.mjs";
 import * as workshop from "./workshop.mjs";
 import * as library from "./library.mjs";
+import * as doors from "./doors.mjs";
 import * as panelPerf from "./panelPerf.mjs";
 
 export const scenarios = [
@@ -23,5 +24,6 @@ export const scenarios = [
   possess,
   workshop,
   library,
+  doors,
   panelPerf,
 ];
