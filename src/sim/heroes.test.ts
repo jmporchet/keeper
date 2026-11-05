@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { beginWander, freeBedTiles, liveCreatureCount, type Creature } from "./creatures";
 import {
+  COMBAT_DAMAGE,
   FIGHT_TICKS,
   HERO_ARRIVE_TICKS,
   HERO_PARTY_SIZE,
@@ -9,7 +10,17 @@ import {
 } from "./heroes";
 import { asTick, asTileIndex, type TileIndex } from "./ids";
 import { liveImpCount } from "./imps";
-import { sortCommands, hashWorld, MAP_WIDTH, run, step, type Command, type World } from "./world";
+import { HEART_HP, HEART_X, HEART_Y } from "./map";
+import {
+  createWorld,
+  sortCommands,
+  hashWorld,
+  MAP_WIDTH,
+  run,
+  step,
+  type Command,
+  type World,
+} from "./world";
 
 const LAIR_A = asTileIndex(30 * MAP_WIDTH + 30);
 
@@ -76,6 +87,22 @@ function heroSlotIsEmpty(world: World, index: number): boolean {
   }
 }
 
+function clearCreatures(world: World): void {
+  for (let i = 0; i < world.creatures.slots.length; i += 1) {
+    world.creatures.slots[i] = { kind: "empty" };
+  }
+}
+
+function clearImps(world: World): void {
+  for (let i = 0; i < world.imps.slots.length; i += 1) {
+    world.imps.slots[i] = { kind: "empty" };
+  }
+}
+
+function distanceToHeart(hero: Hero): number {
+  return Math.abs(hero.tileX - HEART_X) + Math.abs(hero.tileY - HEART_Y);
+}
+
 describe("hero invasion", () => {
   it("does not spawn without a live creature", () => {
     const world = run(1, sortCommands([]), HERO_ARRIVE_TICKS * 3 + 1);
@@ -96,15 +123,54 @@ describe("hero invasion", () => {
     expect(second.tileY).toBe(34);
   });
 
-  it("moves a hero toward the nearest creature", () => {
-    const world = run(1, sortCommands(lairSetup()), HERO_ARRIVE_TICKS + 1);
+  it("paths toward the heart when no adjacent foe exists", () => {
+    const commands = sortCommands(lairSetup());
+    const world = run(1, commands, HERO_ARRIVE_TICKS + 1);
     const hero = liveHero(world, 0);
-    const startX = hero.tileX;
-    const startY = hero.tileY;
-    for (let i = 0; i < 30; i += 1) {
-      step(world, sortCommands(lairSetup()));
+    expect(hero.state.kind).toBe("marching");
+    if (hero.state.kind !== "marching") {
+      throw new Error("hero did not start marching");
     }
-    expect(hero.tileX !== startX || hero.tileY !== startY).toBe(true);
+    expect(hero.state.goal).toBe("heart");
+    const startDistance = distanceToHeart(hero);
+    for (let i = 0; i < 12; i += 1) {
+      step(world, commands);
+    }
+    expect(distanceToHeart(hero)).toBeLessThan(startDistance);
+  });
+
+  it("fights an adjacent foe and then resumes marching to the heart", () => {
+    const commands = sortCommands(lairSetup());
+    const world = run(1, commands, HERO_ARRIVE_TICKS + 1);
+    const hero = liveHero(world, 0);
+    const creature = liveCreature(world, 0);
+    clearImps(world);
+    const bedY = (creature.bedTile / MAP_WIDTH) | 0;
+    const bedX = creature.bedTile - bedY * MAP_WIDTH;
+    creature.tileX = bedX;
+    creature.tileY = bedY;
+    creature.state = creature.sleeping;
+    creature.hp = 1;
+    creature.attackCooldown = FIGHT_TICKS;
+    hero.tileX = bedX + 1;
+    hero.tileY = bedY;
+    hero.state = hero.marching;
+    hero.marching.goal = "heart";
+    hero.attackCooldown = 0;
+    step(world, commands);
+    expect(liveCreatureCount(world.creatures)).toBe(0);
+    expect(hero.state.kind).toBe("fighting");
+    step(world, commands);
+    expect(hero.state.kind).toBe("marching");
+    if (hero.state.kind !== "marching") {
+      throw new Error("hero did not resume marching");
+    }
+    expect(hero.state.goal).toBe("heart");
+    const startDistance = distanceToHeart(hero);
+    for (let i = 0; i < 12; i += 1) {
+      step(world, commands);
+    }
+    expect(distanceToHeart(hero)).toBeLessThan(startDistance);
   });
 
   it("damages both sides when a hero and a creature fight", () => {
@@ -190,6 +256,63 @@ describe("hero invasion", () => {
     creature.attackCooldown = 0;
     step(world, sortCommands(lairSetup()));
     expect(heroSlotIsEmpty(world, 0)).toBe(true);
+  });
+
+  it("damages the heart when a hero is on it and breaches it at zero", () => {
+    const commands = sortCommands(lairSetup());
+    const world = run(1, commands, HERO_ARRIVE_TICKS + 1);
+    clearCreatures(world);
+    clearImps(world);
+    const hero = liveHero(world, 0);
+    hero.tileX = HEART_X;
+    hero.tileY = HEART_Y;
+    hero.state = hero.marching;
+    hero.marching.goal = "heart";
+    hero.attackCooldown = 0;
+    const before = world.heartHp;
+    step(world, commands);
+    expect(world.heartHp).toBe(before - COMBAT_DAMAGE);
+    world.heartHp = 1;
+    hero.attackCooldown = 0;
+    step(world, commands);
+    expect(world.heartHp).toBe(0);
+    expect(world.heartBreached).toBe(true);
+    expect(hero.state.kind).toBe("leaving");
+    for (let i = 0; i < 40; i += 1) {
+      step(world, commands);
+    }
+    expect(liveHeroCount(world.heroes)).toBe(0);
+  });
+
+  it("refuses new waves after the heart is breached while a creature lives", () => {
+    const commands = sortCommands(lairSetup());
+    const world = run(1, commands, HERO_ARRIVE_TICKS + 1);
+    clearImps(world);
+    const hero = liveHero(world, 0);
+    hero.tileX = HEART_X;
+    hero.tileY = HEART_Y;
+    hero.state = hero.marching;
+    hero.marching.goal = "heart";
+    hero.attackCooldown = 0;
+    world.heartHp = 1;
+    step(world, commands);
+    expect(world.heartBreached).toBe(true);
+    while (world.tick < HERO_ARRIVE_TICKS * 2 + 1) {
+      step(world, commands);
+    }
+    expect(liveCreatureCount(world.creatures)).toBeGreaterThan(0);
+    expect(liveHeroCount(world.heroes)).toBe(0);
+  });
+
+  it("includes heart hp and breach in the world hash", () => {
+    const world = createWorld(1);
+    const before = hashWorld(world);
+    world.heartHp = HEART_HP - 1;
+    const damaged = hashWorld(world);
+    expect(damaged).not.toBe(before);
+    world.heartHp = 0;
+    world.heartBreached = true;
+    expect(hashWorld(world)).not.toBe(damaged);
   });
 
   it("is deterministic after 10000 ticks with heroes, creatures and imps", () => {

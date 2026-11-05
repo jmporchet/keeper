@@ -43,6 +43,9 @@ export type World = {
   goldSpent: number;
   goldPaidOut: number;
   goldStock: Uint32Array;
+  heartHp: number;
+  heartMaxHp: number;
+  heartBreached: boolean;
   commandCursor: number;
   jobs: JobBoard;
   imps: ImpBoard;
