@@ -118,12 +118,57 @@ export async function run(ctx) {
   }
   await ctx.checkpoint("heroes-breach");
 
+  await page.click("#add-gold", { force: true });
+  await ctx.stepOnce();
+  await page.click("#repair-heart", { force: true });
+  await ctx.stepOnce();
+  const repaired = await page.evaluate(() => ({
+    heartHp: globalThis.__keeper.heartHp,
+    heartMaxHp: globalThis.__keeper.heartMaxHp,
+    heartBreached: globalThis.__keeper.heartBreached,
+    goldSpent: globalThis.__keeper.goldSpent,
+  }));
+  if (repaired.heartBreached || repaired.heartHp !== repaired.heartMaxHp) {
+    throw new Error(
+      `heart repair failed: hp=${String(repaired.heartHp)}/${String(repaired.heartMaxHp)} breached=${String(repaired.heartBreached)}`,
+    );
+  }
+  let leavingTicks = 0;
+  let heroCount = await page.evaluate(() => globalThis.__keeper.heroCount);
+  while (heroCount > 0) {
+    if (leavingTicks >= 200) {
+      throw new Error(`breached heroes did not leave within ${String(leavingTicks)} ticks`);
+    }
+    await ctx.stepOnce(4, 10);
+    leavingTicks += 4;
+    heroCount = await page.evaluate(() => globalThis.__keeper.heroCount);
+  }
+
+  let respawnTicks = 0;
+  let respawn = await page.evaluate(() => ({
+    heartHp: globalThis.__keeper.heartHp,
+    heartBreached: globalThis.__keeper.heartBreached,
+    heroCount: globalThis.__keeper.heroCount,
+  }));
+  while (respawn.heroCount < 1) {
+    if (respawnTicks >= 700) {
+      throw new Error(`no hero wave returned after repair within ${String(respawnTicks)} ticks`);
+    }
+    await ctx.stepOnce(12, 10);
+    respawnTicks += 12;
+    respawn = await page.evaluate(() => ({
+      heartHp: globalThis.__keeper.heartHp,
+      heartBreached: globalThis.__keeper.heartBreached,
+      heroCount: globalThis.__keeper.heroCount,
+    }));
+  }
+
   const drawCalls = await page.evaluate(() => globalThis.__keeper.drawCalls);
   if (drawCalls > 7) {
     throw new Error(`draw calls ${String(drawCalls)} exceed 7`);
   }
   console.log(
-    `heroes heroes=${String(initial.heroCount)} heartHp=${String(current.heartHp)} breached=${String(current.heartBreached)} heartTicks=${String(heartTicks)} breachTicks=${String(breachTicks)} drawCalls=${String(drawCalls)}`,
+    `heroes heroes=${String(initial.heroCount)} heartHp=${String(current.heartHp)} breached=${String(current.heartBreached)} heartTicks=${String(heartTicks)} breachTicks=${String(breachTicks)} repairedHp=${String(repaired.heartHp)} repairedSpent=${String(repaired.goldSpent)} leavingTicks=${String(leavingTicks)} respawnTicks=${String(respawnTicks)} respawnHeroes=${String(respawn.heroCount)} drawCalls=${String(drawCalls)}`,
   );
 
   for (let i = 0; i < 4; i += 1) {

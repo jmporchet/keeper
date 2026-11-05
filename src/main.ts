@@ -145,6 +145,7 @@ declare global {
       drainGold(): number;
       possess(creatureId: number): void;
       exitPossess(): void;
+      repairHeart(): void;
       step(n: number): void;
       spawnImps(n: number): void;
       saveNow(): Save;
@@ -826,6 +827,9 @@ if (proof) {
     },
     exitPossess() {
       exitPossess();
+    },
+    repairHeart() {
+      commands.push({ kind: "repairHeart", tick: world.tick });
     },
     step(n: number) {
       if (!isSimStepping(actor.getSnapshot())) {
