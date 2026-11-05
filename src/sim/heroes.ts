@@ -316,7 +316,7 @@ export function beginLeaving(world: World, hero: Hero): void {
   hero.leaving.progress = 0;
   const start = hero.tileY * world.width + hero.tileX;
   const portal = asTileIndex(PORTAL_Y * world.width + PORTAL_X);
-  const length = findPath(world.tiles, world.width, world.height, start, portal, world.pathScratch, hero.path);
+  const length = findPath(world.tiles, world.width, world.height, start, portal, world.pathScratch, hero.path, world.doorHp);
   if (length > 0) {
     hero.leaving.pathLength = length;
     if (length > 1) {
@@ -471,6 +471,7 @@ function heroTarget(world: World, hero: Hero): TileIndex | undefined {
     world.pathScratch.cameFrom,
     world.pathScratch.reachable,
     world.pathScratch.distance,
+    world.doorHp,
   );
   if (count === 0) {
     return undefined;
@@ -544,7 +545,7 @@ export function heroMarchStep(world: World, hero: Hero): void {
       return;
     }
     const start = hero.tileY * world.width + hero.tileX;
-    const length = findPath(world.tiles, world.width, world.height, start, target, world.pathScratch, hero.path);
+    const length = findPath(world.tiles, world.width, world.height, start, target, world.pathScratch, hero.path, world.doorHp);
     if (length <= 0) {
       hero.headingX = 0;
       hero.headingY = 0;

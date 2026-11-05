@@ -19,6 +19,8 @@ export type MapMeshes = {
   taggedCount: number;
   syncedVersion: number;
   syncedRoomsVersion: number;
+  syncedDoorVersion: number;
+  syncedTrapVersion: number;
 };
 
 const CAPACITY = MAP_WIDTH * MAP_HEIGHT;
@@ -84,6 +86,8 @@ export function createMapMeshes(scene: THREE.Scene): MapMeshes {
     taggedCount: 0,
     syncedVersion: -1,
     syncedRoomsVersion: -1,
+    syncedDoorVersion: -1,
+    syncedTrapVersion: -1,
   };
 }
 
@@ -116,14 +120,23 @@ export function updateTaggedPulse(map: MapMeshes, time: number): void {
 
 export function syncMap(world: World, map: MapMeshes, time: number): void {
   updateTaggedPulse(map, time);
-  if (map.syncedVersion === world.tilesVersion && map.syncedRoomsVersion === world.roomsVersion) {
+  if (
+    map.syncedVersion === world.tilesVersion &&
+    map.syncedRoomsVersion === world.roomsVersion &&
+    map.syncedDoorVersion === world.doorVersion &&
+    map.syncedTrapVersion === world.trapVersion
+  ) {
     return;
   }
   map.syncedVersion = world.tilesVersion;
   map.syncedRoomsVersion = world.roomsVersion;
+  map.syncedDoorVersion = world.doorVersion;
+  map.syncedTrapVersion = world.trapVersion;
   map.taggedCount = syncMapInstances(
     world.tiles,
     world.rooms,
+    world.doorHp,
+    world.trapState,
     world.width,
     map.meshes,
     map.dummy,

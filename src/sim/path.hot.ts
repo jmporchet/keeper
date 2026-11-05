@@ -12,6 +12,7 @@ export function bfsToGoal(
   gen: number,
   cameFrom: Int32Array,
   distance: Int32Array,
+  doorHp?: Uint8Array,
 ): boolean {
   const startCode = tiles[start];
   const goalCode = tiles[goal];
@@ -19,6 +20,9 @@ export function bfsToGoal(
     return false;
   }
   if (!isWalkableCode(startCode) || !isWalkableCode(goalCode)) {
+    return false;
+  }
+  if (start !== goal && doorBlocks(doorHp, goal)) {
     return false;
   }
   generation[start] = gen;
@@ -41,10 +45,10 @@ export function bfsToGoal(
     }
     const y = (i / width) | 0;
     const x = i - y * width;
-    tail = enqueue(tiles, width, height, x, y - 1, i, queue, generation, gen, cameFrom, distance, tail);
-    tail = enqueue(tiles, width, height, x + 1, y, i, queue, generation, gen, cameFrom, distance, tail);
-    tail = enqueue(tiles, width, height, x, y + 1, i, queue, generation, gen, cameFrom, distance, tail);
-    tail = enqueue(tiles, width, height, x - 1, y, i, queue, generation, gen, cameFrom, distance, tail);
+    tail = enqueue(tiles, width, height, x, y - 1, i, queue, generation, gen, cameFrom, distance, doorHp, tail);
+    tail = enqueue(tiles, width, height, x + 1, y, i, queue, generation, gen, cameFrom, distance, doorHp, tail);
+    tail = enqueue(tiles, width, height, x, y + 1, i, queue, generation, gen, cameFrom, distance, doorHp, tail);
+    tail = enqueue(tiles, width, height, x - 1, y, i, queue, generation, gen, cameFrom, distance, doorHp, tail);
   }
   const goalGen = generation[goal];
   return goalGen === gen;
@@ -61,6 +65,7 @@ export function floodWalkable(
   cameFrom: Int32Array,
   reachable: Int32Array,
   distance: Int32Array,
+  doorHp?: Uint8Array,
 ): number {
   const startCode = tiles[start];
   if (startCode === undefined || !isWalkableCode(startCode)) {
@@ -83,16 +88,16 @@ export function floodWalkable(
     const y = (i / width) | 0;
     const x = i - y * width;
     const beforeN = tail;
-    tail = enqueue(tiles, width, height, x, y - 1, i, queue, generation, gen, cameFrom, distance, tail);
+    tail = enqueue(tiles, width, height, x, y - 1, i, queue, generation, gen, cameFrom, distance, doorHp, tail);
     count = noteReachable(queue, reachable, count, beforeN, tail);
     const beforeE = tail;
-    tail = enqueue(tiles, width, height, x + 1, y, i, queue, generation, gen, cameFrom, distance, tail);
+    tail = enqueue(tiles, width, height, x + 1, y, i, queue, generation, gen, cameFrom, distance, doorHp, tail);
     count = noteReachable(queue, reachable, count, beforeE, tail);
     const beforeS = tail;
-    tail = enqueue(tiles, width, height, x, y + 1, i, queue, generation, gen, cameFrom, distance, tail);
+    tail = enqueue(tiles, width, height, x, y + 1, i, queue, generation, gen, cameFrom, distance, doorHp, tail);
     count = noteReachable(queue, reachable, count, beforeS, tail);
     const beforeW = tail;
-    tail = enqueue(tiles, width, height, x - 1, y, i, queue, generation, gen, cameFrom, distance, tail);
+    tail = enqueue(tiles, width, height, x - 1, y, i, queue, generation, gen, cameFrom, distance, doorHp, tail);
     count = noteReachable(queue, reachable, count, beforeW, tail);
   }
   return count;
@@ -149,6 +154,14 @@ function noteReachable(queue: Int32Array, reachable: Int32Array, count: number, 
   return count + 1;
 }
 
+function doorBlocks(doorHp: Uint8Array | undefined, index: number): boolean {
+  if (doorHp === undefined) {
+    return false;
+  }
+  const hp = doorHp[index];
+  return hp !== undefined && hp > 0;
+}
+
 function enqueue(
   tiles: TileRead,
   width: number,
@@ -161,6 +174,7 @@ function enqueue(
   gen: number,
   cameFrom: Int32Array,
   distance: Int32Array,
+  doorHp: Uint8Array | undefined,
   tail: number,
 ): number {
   if (x < 0 || y < 0 || x >= width || y >= height) {
@@ -179,6 +193,9 @@ function enqueue(
     return tail;
   }
   if (!isWalkableCode(code)) {
+    return tail;
+  }
+  if (doorBlocks(doorHp, n)) {
     return tail;
   }
   const fromDistance = distance[from];

@@ -1,5 +1,5 @@
 import { assign, setup, type SnapshotFrom } from "xstate";
-import { HAND_CAPACITY, type CreatureId, type Possession, type RoomTool } from "../sim";
+import { HAND_CAPACITY, type CreatureId, type PaintTool, type Possession } from "../sim";
 
 export type InputCameraEvent =
   | { type: "RIGHT_DOWN" }
@@ -9,7 +9,7 @@ export type InputCameraEvent =
   | { type: "PAN_KEY_UP" }
   | { type: "LEFT_DOWN_TILE" }
   | { type: "LEFT_DOWN_IMP" }
-  | { type: "SELECT_ROOM_TOOL"; room: RoomTool }
+  | { type: "SELECT_PAINT_TOOL"; tool: PaintTool }
   | { type: "CLEAR_TOOL" }
   | { type: "ESCAPE" }
   | { type: "DROP_WALKABLE" }
@@ -24,7 +24,7 @@ export type InputCameraContext = {
   panKeys: number;
   pointerPan: boolean;
   heldCount: number;
-  room: RoomTool;
+  tool: PaintTool;
   possession: Possession;
 };
 
@@ -44,7 +44,7 @@ export const inputCameraMachine = setup({
     clearPointerPan: assign({ pointerPan: false }),
     incPanKeys: assign({ panKeys: ({ context }) => context.panKeys + 1 }),
     decPanKeys: assign({ panKeys: ({ context }) => Math.max(0, context.panKeys - 1) }),
-    selectRoom: assign({ room: ({ event }) => (event.type === "SELECT_ROOM_TOOL" ? event.room : "treasury") }),
+    selectTool: assign({ tool: ({ event }) => (event.type === "SELECT_PAINT_TOOL" ? event.tool : "treasury") }),
     incHeld: assign({ heldCount: ({ context }) => context.heldCount + 1 }),
     decHeld: assign({ heldCount: ({ context }) => Math.max(0, context.heldCount - 1) }),
     setPossession: assign({
@@ -59,7 +59,7 @@ export const inputCameraMachine = setup({
 }).createMachine({
   id: "inputCamera",
   initial: "Idle",
-  context: { panKeys: 0, pointerPan: false, heldCount: 0, room: "treasury", possession: { kind: "none" } },
+  context: { panKeys: 0, pointerPan: false, heldCount: 0, tool: "treasury", possession: { kind: "none" } },
   states: {
     Idle: {
       on: {
@@ -67,7 +67,7 @@ export const inputCameraMachine = setup({
         MIDDLE_DOWN: { target: "Panning", actions: "markPointerPan" },
         PAN_KEY_DOWN: { target: "Panning", actions: "incPanKeys" },
         LEFT_DOWN_TILE: "Tagging",
-        SELECT_ROOM_TOOL: { target: "Painting", actions: "selectRoom" },
+        SELECT_PAINT_TOOL: { target: "Painting", actions: "selectTool" },
         LEFT_DOWN_IMP: { target: "Holding", guard: "handHasRoom", actions: "incHeld" },
         SLAP_IMP: {},
         POSSESS_CREATURE: { target: "Possessed", actions: ["setPossession", "resetPan"] },

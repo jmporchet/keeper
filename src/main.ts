@@ -22,6 +22,7 @@ import {
   carryingCount,
   countTagged,
   createWorld,
+  doorCount,
   hashWorld,
   HEART_X,
   HEART_Y,
@@ -47,6 +48,7 @@ import {
   lairTileCount,
   hatcheryTileCount,
   trainingTileCount,
+  trapCount,
   workshopTileCount,
   libraryTileCount,
   liveCreatureCount,
@@ -63,8 +65,8 @@ import {
   type CreatureId,
   type Hero,
   type Job,
+  type PaintTool,
   type Possession,
-  type RoomTool,
   type Save,
 } from "./sim";
 import { createHud, hudGold } from "./ui/hud";
@@ -114,6 +116,8 @@ declare global {
       heartBreached: boolean;
       repairsDone: number;
       waveIndex: number;
+      doorCount: number;
+      trapCount: number;
       liveCreatureCount: number;
       impCount: number;
       creatureCount: number;
@@ -141,6 +145,7 @@ declare global {
       impSnapshot(): ImpDebug[];
       heroCount: number;
       heroSnapshot(): HeroDebug[];
+      doorSnapshot(): { x: number; y: number; hp: number }[];
       creatureSnapshot(): CreatureDebug[];
       freeBeds(): { x: number; y: number }[];
       dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
@@ -293,13 +298,13 @@ function possessFirstCreature(): void {
   }
 }
 
-function togglePaint(room: RoomTool): void {
+function togglePaint(tool: PaintTool): void {
   const snapshot = cameraInput.actor.getSnapshot();
   if (isPainting(snapshot)) {
     cameraInput.actor.send({ type: "CLEAR_TOOL" });
     return;
   }
-  cameraInput.actor.send({ type: "SELECT_ROOM_TOOL", room });
+  cameraInput.actor.send({ type: "SELECT_PAINT_TOOL", tool });
 }
 
 function loadSave(save: Save): void {
@@ -337,7 +342,7 @@ const sandboxPanel = createSandboxPanel(
 
 function syncPaintMode(): void {
   const snapshot = cameraInput.actor.getSnapshot();
-  sandboxPanel.setPainting(isPainting(snapshot), snapshot.context.room);
+  sandboxPanel.setPainting(isPainting(snapshot), snapshot.context.tool);
   sandboxPanel.setPossessed(isPossessed(snapshot));
 }
 
@@ -621,6 +626,12 @@ if (proof) {
     get waveIndex() {
       return world.repairsDone + 1;
     },
+    get doorCount() {
+      return doorCount(world);
+    },
+    get trapCount() {
+      return trapCount(world);
+    },
     get painting() {
       return isPainting(cameraInput.actor.getSnapshot());
     },
@@ -737,6 +748,19 @@ if (proof) {
         }
       }
       return creatures;
+    },
+    doorSnapshot() {
+      const doors: { x: number; y: number; hp: number }[] = [];
+      for (let i = 0; i < world.doorHp.length; i += 1) {
+        const hp = world.doorHp[i];
+        if (hp === undefined || hp <= 0) {
+          continue;
+        }
+        const y = (i / world.width) | 0;
+        const x = i - y * world.width;
+        doors.push({ x, y, hp });
+      }
+      return doors;
     },
     heroSnapshot() {
       const heroes: HeroDebug[] = [];

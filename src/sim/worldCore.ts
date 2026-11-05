@@ -17,6 +17,8 @@ export type World = {
   height: number;
   readonly tiles: TileRead;
   readonly rooms: Uint8Array;
+  readonly doorHp: Uint8Array;
+  readonly trapState: Uint8Array;
   readonly treasuryStock: Uint16Array;
   readonly treasuryCache: Int32Array;
   treasuryCacheCount: number;
@@ -41,6 +43,8 @@ export type World = {
   chickensVersion: number;
   tilesVersion: number;
   roomsVersion: number;
+  doorVersion: number;
+  trapVersion: number;
   treasuryVersion: number;
   goldStored: number;
   goldSpent: number;

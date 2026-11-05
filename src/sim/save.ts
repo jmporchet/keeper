@@ -113,6 +113,13 @@ function parseCommand(value: unknown): CommandResult {
       }
       return { ok: true, command: { kind: "paintRoom", tick, tile: asTileIndex(value.tile), room } };
     }
+    case "paintDoor":
+    case "paintTrap": {
+      if (!isIntegerInRange(value.tile, 0, MAP_WIDTH * MAP_HEIGHT - 1)) {
+        return { ok: false, reason: "invalidTile" };
+      }
+      return { ok: true, command: { kind, tick, tile: asTileIndex(value.tile) } };
+    }
     case "spawnImp":
       return { ok: true, command: { kind: "spawnImp", tick } };
     case "possess": {

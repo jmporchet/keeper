@@ -167,12 +167,27 @@ export function bindCameraInput(
     }
     painted[tile] = 1;
     const world = getWorld();
-    enqueue({
-      kind: "paintRoom",
-      tick: world.tick,
-      tile: asTileIndex(tile),
-      room: actor.getSnapshot().context.room,
-    });
+    const tool = actor.getSnapshot().context.tool;
+    switch (tool) {
+      case "door":
+        enqueue({ kind: "paintDoor", tick: world.tick, tile: asTileIndex(tile) });
+        return;
+      case "trap":
+        enqueue({ kind: "paintTrap", tick: world.tick, tile: asTileIndex(tile) });
+        return;
+      case "treasury":
+      case "lair":
+      case "hatchery":
+      case "training":
+      case "workshop":
+      case "library":
+        enqueue({ kind: "paintRoom", tick: world.tick, tile: asTileIndex(tile), room: tool });
+        return;
+      default: {
+        const never: never = tool;
+        return never;
+      }
+    }
   }
 
   function applySweepTile(tile: TileIndex): void {

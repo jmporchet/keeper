@@ -78,11 +78,21 @@ export const HATCHERY_COST = 50;
 export const TRAINING_COST = 40;
 export const WORKSHOP_COST = 45;
 export const LIBRARY_COST = 55;
+export const DOOR_COST = 50;
+export const DOOR_HP = 8;
+export const DOOR_DAMAGE_TICKS = 4;
+export const TRAP_COST = 40;
+export const TRAP_DAMAGE = 2;
+export const TRAP_NONE = 0;
+export const TRAP_GAS_LIVE = 1;
+export const TRAP_GAS_SPENT = 2;
 
 export const PORTAL_X = 32;
 export const PORTAL_Y = 35;
 
 export type RoomTool = "treasury" | "lair" | "hatchery" | "training" | "workshop" | "library";
+
+export type PaintTool = RoomTool | "door" | "trap";
 
 export type TileRead = {
   readonly length: number;

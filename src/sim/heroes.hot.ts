@@ -16,7 +16,15 @@ import {
 } from "./heroes";
 import { removeOccupancy, workerOf, type Imp } from "./imps";
 import { releaseWorker } from "./jobs";
-import { HEART_DAMAGE_TICKS, HEART_X, HEART_Y } from "./map";
+import {
+  DOOR_DAMAGE_TICKS,
+  HEART_DAMAGE_TICKS,
+  HEART_X,
+  HEART_Y,
+  TRAP_DAMAGE,
+  TRAP_GAS_LIVE,
+  TRAP_GAS_SPENT,
+} from "./map";
 import type { World } from "./worldCore";
 
 export function stepHeroes(world: World): void {
@@ -30,9 +38,13 @@ export function stepHeroes(world: World): void {
     switch (slot.kind) {
       case "empty":
         break;
-      case "live":
-        stepLiveHero(world, slot.hero);
+      case "live": {
+        const alive = stepLiveHero(world, slot.hero);
+        if (!alive) {
+          world.heroes.slots[i] = EMPTY_HERO_SLOT;
+        }
         break;
+      }
       default: {
         const never: never = slot;
         throw never;
@@ -41,7 +53,7 @@ export function stepHeroes(world: World): void {
   }
 }
 
-function stepLiveHero(world: World, hero: Hero): void {
+function stepLiveHero(world: World, hero: Hero): boolean {
   captureHeroPrev(hero);
   const state = hero.state;
   switch (state.kind) {
@@ -60,7 +72,7 @@ function stepLiveHero(world: World, hero: Hero): void {
     case "leaving":
       if (heroAdvanceAlongPath(hero, world.width)) {
         world.heroes.slots[hero.id] = EMPTY_HERO_SLOT;
-        return;
+        return false;
       }
       break;
     default: {
@@ -69,6 +81,19 @@ function stepLiveHero(world: World, hero: Hero): void {
     }
   }
   captureHeroCurr(hero);
+  return triggerTrap(world, hero);
+}
+
+function triggerTrap(world: World, hero: Hero): boolean {
+  const tile = hero.tileY * world.width + hero.tileX;
+  const state = world.trapState[tile];
+  if (state !== TRAP_GAS_LIVE) {
+    return hero.hp > 0;
+  }
+  world.trapState[tile] = TRAP_GAS_SPENT;
+  world.trapVersion += 1;
+  hero.hp -= TRAP_DAMAGE;
+  return hero.hp > 0;
 }
 
 function isAdjacent(ax: number, ay: number, bx: number, by: number): boolean {
@@ -171,6 +196,47 @@ function heroHasAdjacentEnemy(world: World, hero: Hero): boolean {
   return adjacentImpIndex(world, hero) >= 0;
 }
 
+function doorTileAt(world: World, x: number, y: number): number {
+  if (x < 0 || y < 0 || x >= world.width || y >= world.height) {
+    return -1;
+  }
+  const tile = y * world.width + x;
+  const hp = world.doorHp[tile];
+  if (hp === undefined || hp <= 0) {
+    return -1;
+  }
+  return tile;
+}
+
+function adjacentDoorTile(world: World, hero: Hero): number {
+  const north = doorTileAt(world, hero.tileX, hero.tileY - 1);
+  if (north >= 0) {
+    return north;
+  }
+  const east = doorTileAt(world, hero.tileX + 1, hero.tileY);
+  if (east >= 0) {
+    return east;
+  }
+  const south = doorTileAt(world, hero.tileX, hero.tileY + 1);
+  if (south >= 0) {
+    return south;
+  }
+  return doorTileAt(world, hero.tileX - 1, hero.tileY);
+}
+
+function damageDoor(world: World, hero: Hero, tile: number): void {
+  const hp = world.doorHp[tile];
+  if (hp === undefined || hp <= 0) {
+    return;
+  }
+  const next = hp - COMBAT_DAMAGE;
+  world.doorHp[tile] = next > 0 ? next : 0;
+  if (next <= 0) {
+    world.doorVersion += 1;
+  }
+  hero.attackCooldown = DOOR_DAMAGE_TICKS;
+}
+
 function killImp(world: World, index: number, imp: Imp): void {
   releaseWorker(world.jobs, workerOf(imp));
   removeOccupancy(world.imps, imp.tileY * world.width + imp.tileX);
@@ -233,7 +299,12 @@ function resolveHeroAttacks(world: World): void {
           }
           break;
         }
+        const heartDoor = doorTileAt(world, HEART_X, HEART_Y);
         if (!world.heartBreached && isAdjacent(hero.tileX, hero.tileY, HEART_X, HEART_Y)) {
+          if (heartDoor >= 0) {
+            damageDoor(world, hero, heartDoor);
+            break;
+          }
           world.heartHp -= COMBAT_DAMAGE;
           hero.attackCooldown = HEART_DAMAGE_TICKS;
           if (world.heartHp <= 0) {
@@ -241,6 +312,11 @@ function resolveHeroAttacks(world: World): void {
             world.heartBreached = true;
             beginAllLeaving(world);
           }
+          break;
+        }
+        const doorTile = adjacentDoorTile(world, hero);
+        if (doorTile >= 0) {
+          damageDoor(world, hero, doorTile);
         }
         break;
       }
