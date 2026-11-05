@@ -21,6 +21,7 @@ import {
   WANDER_ROLL,
   type Creature,
 } from "./creatures";
+import { isPossessedCreature } from "./possession";
 import { advanceRng } from "./rng";
 import type { World } from "./worldCore";
 
@@ -35,7 +36,11 @@ export function stepCreatures(world: World): void {
       case "empty":
         break;
       case "live":
-        stepLiveCreature(world, slot.creature);
+        if (isPossessedCreature(world, slot.creature.id)) {
+          stepPossessedCreature(slot.creature);
+        } else {
+          stepLiveCreature(world, slot.creature);
+        }
         break;
       default: {
         const never: never = slot;
@@ -44,6 +49,12 @@ export function stepCreatures(world: World): void {
     }
   }
   tryArrival(world);
+}
+
+function stepPossessedCreature(creature: Creature): void {
+  captureCreaturePrev(creature);
+  creature.currX = creature.tileX;
+  creature.currZ = creature.tileY;
 }
 
 function stepLiveCreature(world: World, creature: Creature): void {

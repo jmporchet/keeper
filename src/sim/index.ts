@@ -193,6 +193,17 @@ export {
 } from "./heroes";
 export { CREATURE_WAGE, PAY_TICKS, ticksUntilPayday } from "./wages";
 export {
+  applyPossess,
+  applyPossessMove,
+  applyReleasePossess,
+  findCreature,
+  hashPossession,
+  isPossessedCreature,
+  noPossession,
+  syncPossession,
+  type Possession,
+} from "./possession";
+export {
   buildSave,
   MAX_GOLD_AMOUNT,
   MAX_SAVE_COMMANDS,

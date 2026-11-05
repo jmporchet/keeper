@@ -10,7 +10,7 @@ import { createHeroBoard, hashHeroes } from "./heroes";
 import { resolveCombat, stepHeroes } from "./heroes.hot";
 import { stepCreatures } from "./creatures.hot";
 import { addHeld, createHand, hashHand, isHeld, removeHeld } from "./hand";
-import { asTick, asTileIndex, type ImpId, type Tick, type TileIndex } from "./ids";
+import { asTick, asTileIndex, type CreatureId, type ImpId, type Tick, type TileIndex } from "./ids";
 import {
   addOccupancy,
   boostImp,
@@ -43,6 +43,14 @@ import {
   type RoomTool,
 } from "./map";
 import { createPathScratch, isWalkableCode } from "./path";
+import {
+  applyPossess,
+  applyPossessMove,
+  applyReleasePossess,
+  hashPossession,
+  noPossession,
+  syncPossession,
+} from "./possession";
 import { advanceRng } from "./rng";
 import { runPayday } from "./wages";
 import { attachTiles, setTile, type World } from "./worldCore";
@@ -110,7 +118,10 @@ export type Command =
   | { kind: "spawnImp"; tick: Tick }
   | { kind: "pickUp"; tick: Tick; impId: ImpId }
   | { kind: "drop"; tick: Tick; impId: ImpId; tileX: number; tileY: number }
-  | { kind: "slap"; tick: Tick; impId: ImpId };
+  | { kind: "slap"; tick: Tick; impId: ImpId }
+  | { kind: "possess"; tick: Tick; creatureId: CreatureId }
+  | { kind: "releasePossess"; tick: Tick }
+  | { kind: "possessMove"; tick: Tick; creatureId: CreatureId; dx: number; dy: number };
 
 export type CommandLog = readonly Command[] & { readonly __brand: "CommandLog" };
 
@@ -258,6 +269,7 @@ export function createWorld(seed: number): World {
     creatures: createCreatureBoard(),
     heroes: createHeroBoard(),
     hand: createHand(),
+    possession: noPossession(),
     pathScratch: createPathScratch(),
     walkableSaturated: false,
     walkableTileCount,
@@ -305,6 +317,7 @@ export function hashWorld(world: World): number {
   h = mix(h, world.tilesVersion);
   h = mix(h, hashJobs(world.jobs));
   h = mix(h, hashHand(world.hand));
+  h = mix(h, hashPossession(world.possession));
   const tiles = world.tiles;
   for (let i = 0; i < tiles.length; i += 1) {
     const cell = tiles[i];
@@ -658,6 +671,15 @@ function applyCommand(world: World, command: Command): void {
     case "slap":
       applySlap(world, command.impId);
       return;
+    case "possess":
+      applyPossess(world, command.creatureId);
+      return;
+    case "releasePossess":
+      applyReleasePossess(world);
+      return;
+    case "possessMove":
+      applyPossessMove(world, command.creatureId, command.dx, command.dy);
+      return;
     default: {
       const never: never = command;
       return never;
@@ -699,6 +721,7 @@ export function step(world: World, commands: CommandLog): void {
   stepCreatures(world);
   stepHeroes(world);
   resolveCombat(world);
+  syncPossession(world);
   advanceRng(world);
   world.tick = asTick(world.tick + 1);
 }

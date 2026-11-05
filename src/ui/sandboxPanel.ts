@@ -25,6 +25,7 @@ export type SandboxPanel = {
   setPaused(paused: boolean): void;
   setReplaying(replaying: boolean): void;
   setPainting(painting: boolean, room: RoomTool): void;
+  setPossessed(possessed: boolean): void;
 };
 
 export function createSandboxPanel(
@@ -34,6 +35,7 @@ export function createSandboxPanel(
   togglePaint: (room: RoomTool) => void,
   getSave: () => Save,
   onLoad: (save: Save) => void,
+  onPossess: () => void,
 ): SandboxPanel {
   const spawnButton = root === null ? null : root.querySelector<HTMLButtonElement>("#spawn-imp");
   const goldButton = root === null ? null : root.querySelector<HTMLButtonElement>("#add-gold");
@@ -41,11 +43,13 @@ export function createSandboxPanel(
   const paintLairButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-lair");
   const paintHatcheryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-hatchery");
   const paintTrainingButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-training");
+  const possessButton = root === null ? null : root.querySelector<HTMLButtonElement>("#possess");
   const saveButton = root === null ? null : root.querySelector<HTMLButtonElement>("#save-game");
   const loadButton = root === null ? null : root.querySelector<HTMLButtonElement>("#load-game");
   const fileInput = root === null ? null : root.querySelector<HTMLInputElement>("#load-file");
   let paused = false;
   let replaying = false;
+  let possessed = false;
 
   function syncDisabled(): void {
     if (spawnButton !== null) {
@@ -55,16 +59,19 @@ export function createSandboxPanel(
       goldButton.disabled = paused || replaying;
     }
     if (paintTreasuryButton !== null) {
-      paintTreasuryButton.disabled = paused || replaying;
+      paintTreasuryButton.disabled = paused || replaying || possessed;
     }
     if (paintLairButton !== null) {
-      paintLairButton.disabled = paused || replaying;
+      paintLairButton.disabled = paused || replaying || possessed;
     }
     if (paintHatcheryButton !== null) {
-      paintHatcheryButton.disabled = paused || replaying;
+      paintHatcheryButton.disabled = paused || replaying || possessed;
     }
     if (paintTrainingButton !== null) {
-      paintTrainingButton.disabled = paused || replaying;
+      paintTrainingButton.disabled = paused || replaying || possessed;
+    }
+    if (possessButton !== null) {
+      possessButton.disabled = paused || replaying || possessed;
     }
     if (saveButton !== null) {
       saveButton.disabled = replaying;
@@ -120,6 +127,14 @@ export function createSandboxPanel(
         return;
       }
       togglePaint("training");
+    });
+  }
+  if (possessButton !== null) {
+    possessButton.addEventListener("click", () => {
+      if (paused || replaying || possessed) {
+        return;
+      }
+      onPossess();
     });
   }
   if (saveButton !== null) {
@@ -204,5 +219,13 @@ export function createSandboxPanel(
     }
   }
 
-  return { setPaused, setReplaying, setPainting };
+  function setPossessed(next: boolean): void {
+    if (possessed === next) {
+      return;
+    }
+    possessed = next;
+    syncDisabled();
+  }
+
+  return { setPaused, setReplaying, setPainting, setPossessed };
 }

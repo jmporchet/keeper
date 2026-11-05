@@ -10,7 +10,7 @@ import { createActor } from "xstate";
 import { appMachine, appStateName, isPaused, isReplaying, isSimStepping } from "./app/appMachine";
 import { createCameraPose, eyeFromPose } from "./camera/pose";
 import { bindCameraInput } from "./input/bindCamera";
-import { isPainting } from "./input/inputCameraMachine";
+import { isPainting, isPossessed } from "./input/inputCameraMachine";
 import { createCreatureMeshes, syncCreatures } from "./render/creatures";
 import { createPropMeshes, syncProps } from "./render/props";
 import { createImpMeshes, syncImps } from "./render/imps";
@@ -54,9 +54,13 @@ import {
   ticksUntilPayday,
   PAY_TICKS,
   workerOf,
+  asCreatureId,
+  findCreature,
   type Command,
   type CommandLog,
+  type CreatureId,
   type Job,
+  type Possession,
   type RoomTool,
   type Save,
 } from "./sim";
@@ -113,6 +117,7 @@ declare global {
       drawCalls: number;
       heldCount: number;
       painting: boolean;
+      possession: Possession;
       appState: string;
       treasuryTileCount: number;
       treasuryStockTotal: number;
@@ -129,6 +134,8 @@ declare global {
       freeBeds(): { x: number; y: number }[];
       dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
       drainGold(): number;
+      possess(creatureId: number): void;
+      exitPossess(): void;
       step(n: number): void;
       spawnImps(n: number): void;
       saveNow(): Save;
@@ -179,7 +186,26 @@ const screenPoint = new Vector3();
 const pauseOverlay = document.getElementById("pause-overlay");
 const proof = new URLSearchParams(window.location.search).has("proof");
 
-function placeCamera(): void {
+function placeCamera(alpha = 1): void {
+  if (world.possession.kind === "creature") {
+    const creature = findCreature(world, world.possession.id);
+    if (creature !== undefined) {
+      const x = creature.prevX + (creature.currX - creature.prevX) * alpha;
+      const z = creature.prevZ + (creature.currZ - creature.prevZ) * alpha;
+      let forwardX = creature.headingX;
+      let forwardZ = creature.headingY;
+      if (forwardX === 0 && forwardZ === 0) {
+        forwardX = Math.sin(pose.yaw);
+        forwardZ = Math.cos(pose.yaw);
+      }
+      const length = Math.hypot(forwardX, forwardZ);
+      const nx = forwardX / length;
+      const nz = forwardZ / length;
+      camera.position.set(x - MAP_HALF - nx * 1.8, 1.4, z - MAP_HALF - nz * 1.8);
+      camera.lookAt(x - MAP_HALF + nx * 3, 0.9, z - MAP_HALF + nz * 3);
+      return;
+    }
+  }
   const eye = eyeFromPose(pose);
   camera.position.set(eye.x, eye.y, eye.z);
   camera.lookAt(pose.targetX, 0, pose.targetZ);
@@ -200,6 +226,60 @@ const cameraInput = bindCameraInput(
     }
   },
 );
+
+function possessCreature(creatureId: CreatureId): void {
+  const snapshot = cameraInput.actor.getSnapshot();
+  if (!snapshot.matches("Idle") && !isPossessed(snapshot)) {
+    return;
+  }
+  commands.push({ kind: "possess", tick: world.tick, creatureId });
+  cameraInput.actor.send({ type: "POSSESS_CREATURE", creatureId });
+}
+
+function exitPossess(): void {
+  const snapshot = cameraInput.actor.getSnapshot();
+  if (!isPossessed(snapshot)) {
+    return;
+  }
+  commands.push({ kind: "releasePossess", tick: world.tick });
+  cameraInput.actor.send({ type: "EXIT_POSSESS" });
+}
+
+function firstPossessableCreature(): CreatureId | undefined {
+  let fallback: CreatureId | undefined;
+  for (let i = 0; i < world.creatures.slots.length; i += 1) {
+    const slot = world.creatures.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "live": {
+        const creature = slot.creature;
+        if (creature.state.kind === "sleeping") {
+          return creature.id;
+        }
+        if (fallback === undefined) {
+          fallback = creature.id;
+        }
+        break;
+      }
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+  return fallback;
+}
+
+function possessFirstCreature(): void {
+  const target = firstPossessableCreature();
+  if (target !== undefined) {
+    possessCreature(target);
+  }
+}
 
 function togglePaint(room: RoomTool): void {
   const snapshot = cameraInput.actor.getSnapshot();
@@ -240,11 +320,13 @@ const sandboxPanel = createSandboxPanel(
   togglePaint,
   () => buildSave(world, commands),
   loadSave,
+  possessFirstCreature,
 );
 
 function syncPaintMode(): void {
   const snapshot = cameraInput.actor.getSnapshot();
   sandboxPanel.setPainting(isPainting(snapshot), snapshot.context.room);
+  sandboxPanel.setPossessed(isPossessed(snapshot));
 }
 
 cameraInput.actor.subscribe(() => {
@@ -300,6 +382,10 @@ function togglePause(): void {
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    if (isPossessed(cameraInput.actor.getSnapshot())) {
+      exitPossess();
+      return;
+    }
     if (isPainting(cameraInput.actor.getSnapshot())) {
       cameraInput.actor.send({ type: "ESCAPE" });
       return;
@@ -492,6 +578,9 @@ if (proof) {
     },
     get painting() {
       return isPainting(cameraInput.actor.getSnapshot());
+    },
+    get possession() {
+      return world.possession;
     },
     get appState() {
       return appStateName(actor.getSnapshot());
@@ -690,6 +779,12 @@ if (proof) {
       return tiles;
     },
     jobSnapshot: jobSnapshotDebug,
+    possess(creatureId: number) {
+      possessCreature(asCreatureId(creatureId));
+    },
+    exitPossess() {
+      exitPossess();
+    },
     step(n: number) {
       if (!isSimStepping(actor.getSnapshot())) {
         syncHud();
@@ -812,7 +907,7 @@ if (proof) {
     syncProps(world, props);
     syncImps(world.imps, world.hand, accumulator / TICK_DT, cameraInput.cursorTile(), impsVisual, now / 1000);
     syncCreatures(world.creatures, world.heroes, accumulator / TICK_DT, creaturesVisual);
-    placeCamera();
+    placeCamera(accumulator / TICK_DT);
     syncHud();
     render();
   };

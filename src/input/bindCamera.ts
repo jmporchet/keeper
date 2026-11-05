@@ -13,18 +13,31 @@ import {
   isWalkableCode,
   tileKindAt,
   type Command,
+  type CreatureId,
   type ImpId,
   type TileIndex,
   type TileKind,
   type World,
 } from "../sim";
 import { walkGridLine } from "./gridLine";
-import { inputCameraMachine, isHolding, isOrbiting, isPainting, isPanning, isTagging } from "./inputCameraMachine";
+import {
+  inputCameraMachine,
+  isHolding,
+  isOrbiting,
+  isPainting,
+  isPanning,
+  isPossessed,
+  isTagging,
+} from "./inputCameraMachine";
 import { pickTileIndex } from "./pick";
 
 export type HeldKeys = { w: boolean; a: boolean; s: boolean; d: boolean };
 
+export type HeldArrows = { up: boolean; down: boolean; left: boolean; right: boolean };
+
 export type SweepMode = "tag" | "untag" | undefined;
+
+const DOUBLE_CLICK_MS = 350;
 
 function panKeyFromCode(code: string): keyof HeldKeys | undefined {
   switch (code) {
@@ -36,6 +49,40 @@ function panKeyFromCode(code: string): keyof HeldKeys | undefined {
       return "s";
     case "KeyD":
       return "d";
+    default:
+      return undefined;
+  }
+}
+
+function arrowKeyFromCode(code: string): keyof HeldArrows | undefined {
+  switch (code) {
+    case "ArrowUp":
+      return "up";
+    case "ArrowDown":
+      return "down";
+    case "ArrowLeft":
+      return "left";
+    case "ArrowRight":
+      return "right";
+    default:
+      return undefined;
+  }
+}
+
+function moveDeltaFromCode(code: string): { dx: number; dy: number } | undefined {
+  switch (code) {
+    case "KeyW":
+    case "ArrowUp":
+      return { dx: 0, dy: -1 };
+    case "KeyS":
+    case "ArrowDown":
+      return { dx: 0, dy: 1 };
+    case "KeyA":
+    case "ArrowLeft":
+      return { dx: -1, dy: 0 };
+    case "KeyD":
+    case "ArrowRight":
+      return { dx: 1, dy: 0 };
     default:
       return undefined;
   }
@@ -90,12 +137,16 @@ export function bindCameraInput(
   const actor = createActor(inputCameraMachine);
   actor.start();
   const held: HeldKeys = { w: false, a: false, s: false, d: false };
+  const heldArrows: HeldArrows = { up: false, down: false, left: false, right: false };
   const heldStack: ImpId[] = [];
   let lastX = 0;
   let lastY = 0;
   let sweepMode: SweepMode;
   let lastSweepTile: TileIndex | undefined;
   let lastPaintTile: TileIndex | undefined;
+  let lastCreatureClickTile: TileIndex | undefined;
+  let lastCreatureClickTime = 0;
+  let lastPossessMoveTick = -1;
   const swept = new Uint8Array(getWorld().width * getWorld().height);
   const painted = new Uint8Array(getWorld().width * getWorld().height);
 
@@ -225,6 +276,68 @@ export function bindCameraInput(
     return undefined;
   }
 
+  function creatureAtTile(tile: TileIndex): CreatureId | undefined {
+    const world = getWorld();
+    const y = (tile / world.width) | 0;
+    const x = tile - y * world.width;
+    for (let i = 0; i < world.creatures.slots.length; i += 1) {
+      const slot = world.creatures.slots[i];
+      if (slot === undefined) {
+        continue;
+      }
+      switch (slot.kind) {
+        case "empty":
+          break;
+        case "live": {
+          const creature = slot.creature;
+          if (creature.tileX === x && creature.tileY === y) {
+            return creature.id;
+          }
+          break;
+        }
+        default: {
+          const never: never = slot;
+          return never;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  function heldDirection(): { dx: number; dy: number } | undefined {
+    if (held.w || heldArrows.up) {
+      return { dx: 0, dy: -1 };
+    }
+    if (held.s || heldArrows.down) {
+      return { dx: 0, dy: 1 };
+    }
+    if (held.a || heldArrows.left) {
+      return { dx: -1, dy: 0 };
+    }
+    if (held.d || heldArrows.right) {
+      return { dx: 1, dy: 0 };
+    }
+    return undefined;
+  }
+
+  function enqueuePossessMove(dx: number, dy: number): void {
+    const snapshot = actor.getSnapshot();
+    if (!isPossessed(snapshot)) {
+      return;
+    }
+    const possession = snapshot.context.possession;
+    if (possession.kind !== "creature") {
+      return;
+    }
+    const world = getWorld();
+    if (lastPossessMoveTick === world.tick) {
+      return;
+    }
+    lastPossessMoveTick = world.tick;
+    enqueue({ kind: "possessMove", tick: world.tick, creatureId: possession.id, dx, dy });
+    actor.send({ type: "POSSESS_MOVE", dx, dy });
+  }
+
   function cursorTile(): TileIndex | undefined {
     return pickTileIndex(camera, canvas, lastX, lastY);
   }
@@ -249,6 +362,9 @@ export function bindCameraInput(
     canvas.setPointerCapture(event.pointerId);
     const world = getWorld();
     const snapshot = actor.getSnapshot();
+    if (isPossessed(snapshot)) {
+      return;
+    }
     if (event.button === 2) {
       if (isHolding(snapshot)) {
         const tile = pickFromEvent(event);
@@ -282,6 +398,29 @@ export function bindCameraInput(
     }
     if (event.button !== 0) {
       return;
+    }
+    if (snapshot.matches("Idle")) {
+      const tile = pickFromEvent(event);
+      if (tile === undefined) {
+        lastCreatureClickTile = undefined;
+        lastCreatureClickTime = 0;
+      } else {
+        const creatureId = creatureAtTile(tile);
+        if (creatureId !== undefined) {
+          if (lastCreatureClickTile === tile && event.timeStamp - lastCreatureClickTime <= DOUBLE_CLICK_MS) {
+            lastCreatureClickTile = undefined;
+            lastCreatureClickTime = 0;
+            enqueue({ kind: "possess", tick: world.tick, creatureId });
+            actor.send({ type: "POSSESS_CREATURE", creatureId });
+          } else {
+            lastCreatureClickTile = tile;
+            lastCreatureClickTime = event.timeStamp;
+          }
+          return;
+        }
+        lastCreatureClickTile = undefined;
+        lastCreatureClickTime = 0;
+      }
     }
     if (isTagging(snapshot)) {
       const tile = pickFromEvent(event);
@@ -335,6 +474,9 @@ export function bindCameraInput(
     lastX = event.clientX;
     lastY = event.clientY;
     const snapshot = actor.getSnapshot();
+    if (isPossessed(snapshot)) {
+      return;
+    }
     if (isOrbiting(snapshot)) {
       applyOrbit(pose, dx, dy);
       onChange();
@@ -385,6 +527,34 @@ export function bindCameraInput(
   );
 
   window.addEventListener("keydown", (event) => {
+    const snapshot = actor.getSnapshot();
+    if (isPossessed(snapshot)) {
+      const arrow = arrowKeyFromCode(event.code);
+      if (arrow !== undefined) {
+        if (heldArrows[arrow]) {
+          return;
+        }
+        heldArrows[arrow] = true;
+        const delta = moveDeltaFromCode(event.code);
+        if (delta !== undefined) {
+          enqueuePossessMove(delta.dx, delta.dy);
+        }
+        return;
+      }
+      const key = panKeyFromCode(event.code);
+      if (key === undefined) {
+        return;
+      }
+      if (held[key]) {
+        return;
+      }
+      held[key] = true;
+      const delta = moveDeltaFromCode(event.code);
+      if (delta !== undefined) {
+        enqueuePossessMove(delta.dx, delta.dy);
+      }
+      return;
+    }
     const key = panKeyFromCode(event.code);
     if (key === undefined) {
       return;
@@ -397,6 +567,11 @@ export function bindCameraInput(
   });
 
   window.addEventListener("keyup", (event) => {
+    const arrow = arrowKeyFromCode(event.code);
+    if (arrow !== undefined) {
+      heldArrows[arrow] = false;
+      return;
+    }
     const key = panKeyFromCode(event.code);
     if (key === undefined) {
       return;
@@ -405,11 +580,25 @@ export function bindCameraInput(
       return;
     }
     held[key] = false;
-    actor.send({ type: "PAN_KEY_UP" });
+    if (!isPossessed(actor.getSnapshot())) {
+      actor.send({ type: "PAN_KEY_UP" });
+    }
   });
 
   function tickHeldKeys(): void {
-    if (!isPanning(actor.getSnapshot())) {
+    const snapshot = actor.getSnapshot();
+    if (isPossessed(snapshot)) {
+      if (getWorld().possession.kind === "none") {
+        actor.send({ type: "EXIT_POSSESS" });
+        return;
+      }
+      const direction = heldDirection();
+      if (direction !== undefined) {
+        enqueuePossessMove(direction.dx, direction.dy);
+      }
+      return;
+    }
+    if (!isPanning(snapshot)) {
       return;
     }
     applyHeldKeys(pose, held);
