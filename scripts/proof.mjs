@@ -47,6 +47,33 @@ async function convertWebm(webmPath) {
   });
 }
 
+function ffprobeDuration() {
+  return new Promise((resolve, reject) => {
+    let out = "";
+    const probe = spawn("/usr/bin/ffprobe", [
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
+      "proof/play.mp4",
+    ]);
+    probe.stdout.on("data", (data) => {
+      out += String(data);
+    });
+    probe.on("error", reject);
+    probe.on("exit", (code) => {
+      if (code !== 0) {
+        reject(new Error(`ffprobe exited ${String(code)}`));
+        return;
+      }
+      const duration = Number.parseFloat(out.trim());
+      resolve(duration);
+    });
+  });
+}
+
 function startPreview() {
   const preview = spawn(
     "node_modules/.bin/vite",
@@ -70,6 +97,27 @@ async function stepOnce(page) {
     globalThis.__keeper.step(1);
   });
   await delay(80);
+}
+
+async function pagePointForTile(page, box, tx, ty) {
+  const local = await page.evaluate(({ x, y }) => globalThis.__keeper.canvasPointForTile(x, y), { x: tx, y: ty });
+  if (local === null) {
+    return null;
+  }
+  return { x: box.x + local.x, y: box.y + local.y };
+}
+
+async function panUntilTileVisible(page, box, tx, ty) {
+  for (let i = 0; i < 80; i += 1) {
+    const point = await pagePointForTile(page, box, tx, ty);
+    if (point !== null) {
+      return point;
+    }
+    await page.keyboard.down("KeyA");
+    await stepOnce(page);
+  }
+  await page.keyboard.up("KeyA");
+  throw new Error(`tile ${String(tx)},${String(ty)} stayed off screen`);
 }
 
 async function run() {
@@ -98,51 +146,92 @@ async function run() {
       const cy = box.y + box.height / 2;
       await page.mouse.move(cx, cy);
 
+      const sweepXs = [24, 25, 26, 27, 28];
+      const sweepPts = [];
+      for (const tx of sweepXs) {
+        const point = await pagePointForTile(page, box, tx, 32);
+        if (point === null) {
+          throw new Error(`earth tile ${String(tx)},32 is off screen`);
+        }
+        sweepPts.push(point);
+      }
+      const first = sweepPts[0];
+      await page.mouse.move(first.x, first.y);
+      await page.mouse.down();
+      await stepOnce(page);
+      for (let i = 1; i < sweepPts.length; i += 1) {
+        const point = sweepPts[i];
+        await page.mouse.move(point.x, point.y);
+        await stepOnce(page);
+      }
+      await page.mouse.up();
+      await stepOnce(page);
+      const taggedAfterSweep = await page.evaluate(() => globalThis.__keeper.taggedCount);
+      if (taggedAfterSweep !== 5) {
+        throw new Error(`expected 5 tagged tiles after earth sweep, got ${String(taggedAfterSweep)}`);
+      }
+
       await page.mouse.down({ button: "right" });
-      for (let i = 0; i < 18; i += 1) {
+      for (let i = 0; i < 10; i += 1) {
         await page.mouse.move(cx + i * 12, cy + Math.sin(i / 5) * 45);
         await stepOnce(page);
       }
       await page.mouse.up({ button: "right" });
 
       await page.keyboard.down("KeyW");
-      for (let i = 0; i < 12; i += 1) {
+      for (let i = 0; i < 8; i += 1) {
         await stepOnce(page);
       }
       await page.keyboard.down("KeyD");
-      for (let i = 0; i < 8; i += 1) {
+      for (let i = 0; i < 6; i += 1) {
         await stepOnce(page);
       }
       await page.keyboard.up("KeyW");
       await page.keyboard.up("KeyD");
       await page.keyboard.down("KeyA");
-      for (let i = 0; i < 8; i += 1) {
+      for (let i = 0; i < 6; i += 1) {
         await stepOnce(page);
       }
       await page.keyboard.up("KeyA");
 
       await page.mouse.move(cx, cy);
-      for (let i = 0; i < 6; i += 1) {
+      for (let i = 0; i < 4; i += 1) {
         await page.mouse.wheel(0, -140);
         await stepOnce(page);
       }
-      for (let i = 0; i < 6; i += 1) {
+      for (let i = 0; i < 4; i += 1) {
         await page.mouse.wheel(0, 180);
         await stepOnce(page);
       }
 
       await page.mouse.move(cx, cy);
       await page.mouse.down({ button: "middle" });
-      for (let i = 0; i < 12; i += 1) {
+      for (let i = 0; i < 8; i += 1) {
         await page.mouse.move(cx - i * 14, cy + i * 7);
         await stepOnce(page);
       }
       await page.mouse.up({ button: "middle" });
 
+      const rockPoint = await panUntilTileVisible(page, box, 1, 32);
+      await page.keyboard.up("KeyA");
+      const beforeRock = await page.evaluate(() => globalThis.__keeper.taggedCount);
+      await page.mouse.move(rockPoint.x, rockPoint.y);
+      await page.mouse.down();
+      await stepOnce(page);
+      await page.mouse.up();
+      await stepOnce(page);
+      const afterRock = await page.evaluate(() => globalThis.__keeper.taggedCount);
+      if (afterRock !== beforeRock) {
+        throw new Error(`rock click changed tagged count ${String(beforeRock)} -> ${String(afterRock)}`);
+      }
+      if (afterRock !== 5) {
+        throw new Error(`tagged count after rock click was ${String(afterRock)}`);
+      }
+
       const beforePause = await page.evaluate(() => globalThis.__keeper.tick);
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible");
-      for (let i = 0; i < 20; i += 1) {
+      for (let i = 0; i < 8; i += 1) {
         await stepOnce(page);
       }
       const duringPause = await page.evaluate(() => globalThis.__keeper.tick);
@@ -151,13 +240,14 @@ async function run() {
       }
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible", { state: "hidden" });
-      for (let i = 0; i < 10; i += 1) {
+      for (let i = 0; i < 8; i += 1) {
         await stepOnce(page);
       }
 
       const result = await page.evaluate(() => ({
         tick: globalThis.__keeper.tick,
         hash: globalThis.__keeper.hash,
+        taggedCount: globalThis.__keeper.taggedCount,
         drawCalls: globalThis.__keeper.drawCalls,
         camera: globalThis.__keeper.camera,
       }));
@@ -167,7 +257,20 @@ async function run() {
       if (result.drawCalls > 8) {
         throw new Error(`tile draw calls ${String(result.drawCalls)} exceed 8`);
       }
-      console.log(beforePause, duringPause, result.tick, result.hash, result.drawCalls, result.camera.targetX, result.camera.targetZ, result.camera.distance);
+      if (result.taggedCount !== 5) {
+        throw new Error(`tagged count ended at ${String(result.taggedCount)}`);
+      }
+      console.log(
+        beforePause,
+        duringPause,
+        result.tick,
+        result.hash,
+        result.drawCalls,
+        result.taggedCount,
+        result.camera.targetX,
+        result.camera.targetZ,
+        result.camera.distance,
+      );
       await page.screenshot({ path: "proof/shot.png" });
       await context.close();
       const files = await readdir("proof/tmp");
@@ -177,6 +280,11 @@ async function run() {
       }
       await convertWebm(path.join("proof/tmp", webm));
       await rm("proof/tmp", { recursive: true, force: true });
+      const duration = await ffprobeDuration();
+      if (!(duration >= 10 && duration <= 20)) {
+        throw new Error(`play.mp4 duration ${String(duration)} s is outside 10-20 s`);
+      }
+      console.log("play.mp4 duration", duration);
     } finally {
       await browser.close();
     }

@@ -1,9 +1,9 @@
 import type { InstancedMesh, Object3D } from "three";
-import { MAP_HALF } from "../sim";
+import { MAP_HALF, type TileRead } from "../sim";
 import { TILE_HEIGHT } from "./tileLookups";
 
 export function syncMapInstances(
-  tiles: Uint8Array,
+  tiles: TileRead,
   width: number,
   meshes: InstancedMesh[],
   dummy: Object3D,

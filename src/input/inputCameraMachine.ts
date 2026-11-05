@@ -6,7 +6,7 @@ export type InputCameraEvent =
   | { type: "PAN_KEY_DOWN" }
   | { type: "POINTER_UP" }
   | { type: "PAN_KEY_UP" }
-  | { type: "LEFT_DOWN_ROCK" }
+  | { type: "LEFT_DOWN_TILE" }
   | { type: "LEFT_DOWN_IMP" }
   | { type: "SELECT_ROOM_TOOL" }
   | { type: "CLEAR_TOOL" }
@@ -45,7 +45,7 @@ export const inputCameraMachine = setup({
         RIGHT_DOWN: "Orbiting",
         MIDDLE_DOWN: { target: "Panning", actions: "markPointerPan" },
         PAN_KEY_DOWN: { target: "Panning", actions: "incPanKeys" },
-        LEFT_DOWN_ROCK: "Tagging",
+        LEFT_DOWN_TILE: "Tagging",
         SELECT_ROOM_TOOL: "Painting",
         LEFT_DOWN_IMP: "Holding",
       },
@@ -98,4 +98,8 @@ export function isOrbiting(snapshot: InputCameraSnapshot): boolean {
 
 export function isPanning(snapshot: InputCameraSnapshot): boolean {
   return snapshot.matches("Panning");
+}
+
+export function isTagging(snapshot: InputCameraSnapshot): boolean {
+  return snapshot.matches("Tagging");
 }

@@ -1,13 +1,16 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { asTick } from "./ids";
+import { asTick, asTileIndex } from "./ids";
 import {
+  countTagged,
   createWorld,
   hashWorld,
   MAP_HEIGHT,
   MAP_WIDTH,
   run,
   TILE_KIND,
+  TILE_KIND_COUNT,
+  TILE_KINDS,
   tileKindAt,
   type Command,
   type TileKind,
@@ -37,6 +40,10 @@ function asciiChar(kind: TileKind): string {
       return "+";
     case "room":
       return "R";
+    case "taggedEarth":
+      return "*";
+    case "taggedGold":
+      return "S";
     default: {
       const never: never = kind;
       return never;
@@ -137,6 +144,9 @@ describe("tile grid", () => {
           case "room":
             room += 1;
             break;
+          case "taggedEarth":
+          case "taggedGold":
+            throw new Error("starting map must not be tagged");
           default: {
             const never: never = kind;
             expect(never).toBeUndefined();
@@ -157,17 +167,97 @@ describe("tile grid", () => {
     expect(TILE_KIND.dirt).toBe(3);
     expect(TILE_KIND.claimed).toBe(4);
     expect(TILE_KIND.room).toBe(5);
+    expect(TILE_KIND.taggedEarth).toBe(6);
+    expect(TILE_KIND.taggedGold).toBe(7);
+  });
+
+  it("TILE_KIND codes match TILE_KINDS order", () => {
+    expect(TILE_KINDS.length).toBe(TILE_KIND_COUNT);
+    expect(TILE_KIND_COUNT).toBe(8);
+    for (let i = 0; i < TILE_KINDS.length; i += 1) {
+      const kind = TILE_KINDS[i];
+      if (kind === undefined) {
+        throw new Error("missing kind");
+      }
+      expect(TILE_KIND[kind]).toBe(i);
+    }
+  });
+});
+
+describe("tag tiles", () => {
+  it("sweep tags exactly the swept diggable tiles and refuses rock", () => {
+    const y = 10;
+    const commands: Command[] = [];
+    for (let x = 0; x <= 5; x += 1) {
+      commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(y * MAP_WIDTH + x) });
+    }
+    commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(31 * MAP_WIDTH + 38) });
+    const world = run(1, commands, 1);
+    expect(tileKindAt(world.tiles, y * MAP_WIDTH + 0)).toBe("rock");
+    expect(tileKindAt(world.tiles, y * MAP_WIDTH + 1)).toBe("rock");
+    expect(tileKindAt(world.tiles, y * MAP_WIDTH + 2)).toBe("taggedEarth");
+    expect(tileKindAt(world.tiles, y * MAP_WIDTH + 3)).toBe("taggedEarth");
+    expect(tileKindAt(world.tiles, y * MAP_WIDTH + 4)).toBe("taggedEarth");
+    expect(tileKindAt(world.tiles, y * MAP_WIDTH + 5)).toBe("taggedEarth");
+    expect(tileKindAt(world.tiles, 31 * MAP_WIDTH + 38)).toBe("taggedGold");
+    expect(countTagged(world)).toBe(5);
+    let row = "";
+    for (let x = 0; x <= 5; x += 1) {
+      row += asciiChar(tileKindAt(world.tiles, y * MAP_WIDTH + x));
+    }
+    expect(row).toBe("##****");
+  });
+
+  it("untag restores earth and gold", () => {
+    const earth = asTileIndex(10 * MAP_WIDTH + 4);
+    const gold = asTileIndex(31 * MAP_WIDTH + 38);
+    const world = run(
+      1,
+      [
+        { kind: "tag", tick: asTick(0), tile: earth },
+        { kind: "tag", tick: asTick(0), tile: gold },
+        { kind: "untag", tick: asTick(1), tile: earth },
+        { kind: "untag", tick: asTick(1), tile: gold },
+      ],
+      2,
+    );
+    expect(tileKindAt(world.tiles, earth)).toBe("earth");
+    expect(tileKindAt(world.tiles, gold)).toBe("goldSeam");
+    expect(countTagged(world)).toBe(0);
+  });
+
+  it("tagging is included in the world hash", () => {
+    const tile = asTileIndex(10 * MAP_WIDTH + 4);
+    const tagged = hashWorld(run(1, [{ kind: "tag", tick: asTick(0), tile }], 4));
+    const plain = hashWorld(run(1, [], 4));
+    expect(tagged).not.toBe(plain);
+    const a = hashWorld(run(7, [{ kind: "tag", tick: asTick(0), tile }], 20));
+    const b = hashWorld(run(7, [{ kind: "tag", tick: asTick(0), tile }], 20));
+    expect(a).toBe(b);
   });
 });
 
 function commandList(): fc.Arbitrary<Command[]> {
   return fc.array(
-    fc.tuple(fc.integer({ min: 0, max: TICKS - 1 }), fc.integer({ min: 1, max: 8 }), fc.boolean()).map(([tick, amount, isNoop]) => {
-      if (isNoop) {
-        return noop(tick);
-      }
-      return addGold(tick, amount);
-    }),
+    fc
+      .tuple(
+        fc.integer({ min: 0, max: TICKS - 1 }),
+        fc.integer({ min: 1, max: 8 }),
+        fc.integer({ min: 0, max: MAP_WIDTH * MAP_HEIGHT - 1 }),
+        fc.integer({ min: 0, max: 3 }),
+      )
+      .map(([tick, amount, tile, kind]) => {
+        switch (kind) {
+          case 0:
+            return noop(tick);
+          case 1:
+            return addGold(tick, amount);
+          case 2:
+            return { kind: "tag", tick: asTick(tick), tile: asTileIndex(tile) };
+          default:
+            return { kind: "untag", tick: asTick(tick), tile: asTileIndex(tile) };
+        }
+      }),
     { maxLength: 16 },
   );
 }
