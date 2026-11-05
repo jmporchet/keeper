@@ -1,4 +1,5 @@
 import { setup, type SnapshotFrom } from "xstate";
+import type { Save } from "../sim/save";
 
 export type AppEvent =
   | { type: "ASSETS_REQUESTED" }
@@ -8,7 +9,10 @@ export type AppEvent =
   | { type: "PAUSE" }
   | { type: "RESUME" }
   | { type: "CONTEXT_LOST" }
-  | { type: "CONTEXT_RESTORED" };
+  | { type: "CONTEXT_RESTORED" }
+  | { type: "LOAD_SAVE"; save: Save }
+  | { type: "REPLAY_DONE" }
+  | { type: "REPLAY_ERROR" };
 
 export const appMachine = setup({
   types: {
@@ -38,6 +42,7 @@ export const appMachine = setup({
       initial: "Running",
       on: {
         CONTEXT_LOST: "ContextLost",
+        LOAD_SAVE: ".Replaying",
       },
       states: {
         Running: {
@@ -48,6 +53,12 @@ export const appMachine = setup({
         Paused: {
           on: {
             RESUME: "Running",
+          },
+        },
+        Replaying: {
+          on: {
+            REPLAY_DONE: "Running",
+            REPLAY_ERROR: "Paused",
           },
         },
       },
@@ -68,4 +79,8 @@ export function isSimStepping(snapshot: AppSnapshot): boolean {
 
 export function isPaused(snapshot: AppSnapshot): boolean {
   return snapshot.matches({ Sandbox: "Paused" });
+}
+
+export function isReplaying(snapshot: AppSnapshot): boolean {
+  return snapshot.matches({ Sandbox: "Replaying" });
 }

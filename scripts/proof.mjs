@@ -188,6 +188,7 @@ async function run() {
       args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
     });
     try {
+      await rm("proof/tmp", { recursive: true, force: true });
       const context = await browser.newContext({
         viewport: { width: 1280, height: 720 },
         recordVideo: { dir: "proof/tmp", size: { width: 1280, height: 720 } },
@@ -360,6 +361,41 @@ async function run() {
       await panToTileCenter(page, box, bedCreature.bedTileX, bedCreature.bedTileY);
       await page.screenshot({ path: "proof/lair.png" });
       console.log("checkpoint lair", Date.now() - recordStart);
+
+      await page.click("#save-game");
+      const saved = await page.evaluate(() => ({
+        hash: globalThis.__keeper.worldHash,
+        tick: globalThis.__keeper.tick,
+      }));
+      await page.click("#add-gold");
+      await stepOnce(page, 40, 20);
+      const diverged = await page.evaluate(() => globalThis.__keeper.worldHash);
+      if (diverged === saved.hash) {
+        throw new Error(`world hash did not change after playing past the save: ${String(diverged)}`);
+      }
+      await page.click("#load-game");
+      await page.waitForFunction(
+        ({ hash, tick }) => globalThis.__keeper.worldHash === hash && globalThis.__keeper.tick === tick,
+        saved,
+        { timeout: 5000 },
+      );
+      const loaded = await page.evaluate(() => ({
+        hash: globalThis.__keeper.worldHash,
+        tick: globalThis.__keeper.tick,
+        hudText: globalThis.__keeper.hudText,
+      }));
+      if (loaded.hash !== saved.hash) {
+        throw new Error(`loaded hash ${String(loaded.hash)} does not match saved hash ${String(saved.hash)}`);
+      }
+      if (loaded.tick !== saved.tick) {
+        throw new Error(`loaded tick ${String(loaded.tick)} does not match saved tick ${String(saved.tick)}`);
+      }
+      if (!loaded.hudText.includes(`tick ${String(saved.tick)}`)) {
+        throw new Error(`hud did not show the loaded tick: ${loaded.hudText}`);
+      }
+      await page.screenshot({ path: "proof/replay.png" });
+      console.log("checkpoint replay", Date.now() - recordStart);
+
       await panToTileCenter(page, box, 29, 32);
 
       const { target, point: pickPoint } = await locateHandTarget(page, box);
@@ -400,7 +436,7 @@ async function run() {
 
       const holdStart = Date.now();
       let angle = 0;
-      while (Date.now() - holdStart < 200) {
+      while (Date.now() - holdStart < 70) {
         angle += 0.16;
         await page.mouse.move(
           cx + Math.cos(angle) * box.width * 0.32,
@@ -516,7 +552,7 @@ async function run() {
           throw new Error(`corridor tile ${String(x)},32 is off screen`);
         }
       }
-      await stepOnce(page, 30, 20);
+      await stepOnce(page, 20, 20);
 
       console.log("checkpoint corridor", Date.now() - recordStart);
       const beforePause = await page.evaluate(() => globalThis.__keeper.tick);

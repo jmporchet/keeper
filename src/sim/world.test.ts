@@ -1,7 +1,9 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { asImpId, asTick, asTileIndex } from "./ids";
+import { asTick, asTileIndex } from "./ids";
+import { commandList, extraGold } from "./commandArbitrary";
 import {
+  asCommandLog,
   countTagged,
   createWorld,
   hashWorld,
@@ -17,14 +19,6 @@ import {
 } from "./world";
 
 const TICKS = 10_000;
-
-function addGold(tick: number, amount: number): Command {
-  return { kind: "addGold", tick: asTick(tick), amount };
-}
-
-function noop(tick: number): Command {
-  return { kind: "noop", tick: asTick(tick) };
-}
 
 function asciiChar(kind: TileKind): string {
   switch (kind) {
@@ -68,9 +62,9 @@ function mapAscii(world: ReturnType<typeof createWorld>): string {
 describe("sim core", () => {
   it("same seed and command log give the same state hash after 10000 ticks", () => {
     fc.assert(
-      fc.property(fc.integer({ min: 0, max: 0xffffffff }), commandList(), (seed, commands) => {
-        const a = hashWorld(run(seed, commands, TICKS));
-        const b = hashWorld(run(seed, commands, TICKS));
+      fc.property(fc.integer({ min: 0, max: 0xffffffff }), commandList(TICKS), (seed, commands) => {
+        const a = hashWorld(run(seed, asCommandLog(commands), TICKS));
+        const b = hashWorld(run(seed, asCommandLog(commands), TICKS));
         expect(a).toBe(b);
       }),
       { numRuns: 20 },
@@ -81,17 +75,17 @@ describe("sim core", () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 0xffffffff }), fc.integer({ min: 1, max: 0xffffffff }), (seed, delta) => {
         const other = (seed + delta) >>> 0;
-        const a = hashWorld(run(seed, [], TICKS));
-        const b = hashWorld(run(other, [], TICKS));
+        const a = hashWorld(run(seed, asCommandLog([]), TICKS));
+        const b = hashWorld(run(other, asCommandLog([]), TICKS));
         expect(a).not.toBe(b);
       }),
       { numRuns: 20 },
     );
     fc.assert(
-      fc.property(fc.integer({ min: 0, max: 0xffffffff }), commandList(), extraGold(), (seed, commands, extra) => {
+      fc.property(fc.integer({ min: 0, max: 0xffffffff }), commandList(TICKS), extraGold(TICKS), (seed, commands, extra) => {
         const withExtra = commands.concat([extra]);
-        const a = hashWorld(run(seed, commands, TICKS));
-        const b = hashWorld(run(seed, withExtra, TICKS));
+        const a = hashWorld(run(seed, asCommandLog(commands), TICKS));
+        const b = hashWorld(run(seed, asCommandLog(withExtra), TICKS));
         expect(a).not.toBe(b);
       }),
       { numRuns: 20 },
@@ -200,7 +194,7 @@ describe("tag tiles", () => {
       commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(y * MAP_WIDTH + x) });
     }
     commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(31 * MAP_WIDTH + 38) });
-    const world = run(1, commands, 1);
+    const world = run(1, asCommandLog(commands), 1);
     expect(tileKindAt(world.tiles, y * MAP_WIDTH + 0)).toBe("rock");
     expect(tileKindAt(world.tiles, y * MAP_WIDTH + 1)).toBe("rock");
     expect(tileKindAt(world.tiles, y * MAP_WIDTH + 2)).toBe("taggedEarth");
@@ -221,12 +215,12 @@ describe("tag tiles", () => {
     const gold = asTileIndex(31 * MAP_WIDTH + 38);
     const world = run(
       1,
-      [
+      asCommandLog([
         { kind: "tag", tick: asTick(0), tile: earth },
         { kind: "tag", tick: asTick(0), tile: gold },
         { kind: "untag", tick: asTick(1), tile: earth },
         { kind: "untag", tick: asTick(1), tile: gold },
-      ],
+      ]),
       2,
     );
     expect(tileKindAt(world.tiles, earth)).toBe("earth");
@@ -236,71 +230,11 @@ describe("tag tiles", () => {
 
   it("tagging is included in the world hash", () => {
     const tile = asTileIndex(10 * MAP_WIDTH + 4);
-    const tagged = hashWorld(run(1, [{ kind: "tag", tick: asTick(0), tile }], 4));
-    const plain = hashWorld(run(1, [], 4));
+    const tagged = hashWorld(run(1, asCommandLog([{ kind: "tag", tick: asTick(0), tile }]), 4));
+    const plain = hashWorld(run(1, asCommandLog([]), 4));
     expect(tagged).not.toBe(plain);
-    const a = hashWorld(run(7, [{ kind: "tag", tick: asTick(0), tile }], 20));
-    const b = hashWorld(run(7, [{ kind: "tag", tick: asTick(0), tile }], 20));
+    const a = hashWorld(run(7, asCommandLog([{ kind: "tag", tick: asTick(0), tile }]), 20));
+    const b = hashWorld(run(7, asCommandLog([{ kind: "tag", tick: asTick(0), tile }]), 20));
     expect(a).toBe(b);
   });
 });
-
-function commandList(): fc.Arbitrary<Command[]> {
-  return fc.array(
-    fc
-      .tuple(
-        fc.integer({ min: 0, max: TICKS - 1 }),
-        fc.integer({ min: 1, max: 8 }),
-        fc.integer({ min: 0, max: MAP_WIDTH * MAP_HEIGHT - 1 }),
-        fc.integer({ min: 0, max: 8 }),
-      )
-      .map(([tick, amount, tile, kind]) => {
-        switch (kind) {
-          case 0:
-            return noop(tick);
-          case 1:
-            return addGold(tick, amount);
-          case 2:
-            return { kind: "tag", tick: asTick(tick), tile: asTileIndex(tile) };
-          case 3:
-            return { kind: "untag", tick: asTick(tick), tile: asTileIndex(tile) };
-          case 4:
-            return { kind: "pickUp", tick: asTick(tick), impId: asImpId(tile % 4) };
-          case 5: {
-            const tileX = tile % MAP_WIDTH;
-            const tileY = (tile / MAP_WIDTH) | 0;
-            return { kind: "drop", tick: asTick(tick), impId: asImpId(tile % 4), tileX, tileY };
-          }
-          case 6: {
-            const tileX = 30 + (tile % 5);
-            const tileY = 30 + ((tile >> 3) % 5);
-            return {
-              kind: "paintRoom",
-              tick: asTick(tick),
-              tile: asTileIndex(tileY * MAP_WIDTH + tileX),
-              room: "treasury",
-            };
-          }
-          case 7: {
-            const tileX = 30 + (tile % 5);
-            const tileY = 30 + ((tile >> 3) % 5);
-            return {
-              kind: "paintRoom",
-              tick: asTick(tick),
-              tile: asTileIndex(tileY * MAP_WIDTH + tileX),
-              room: "lair",
-            };
-          }
-          default:
-            return { kind: "slap", tick: asTick(tick), impId: asImpId(tile % 4) };
-        }
-      }),
-    { maxLength: 16 },
-  );
-}
-
-function extraGold(): fc.Arbitrary<Command> {
-  return fc.tuple(fc.integer({ min: 0, max: TICKS - 1 }), fc.integer({ min: 1, max: 50 })).map(([tick, amount]) => {
-    return addGold(tick, amount + 1000);
-  });
-}

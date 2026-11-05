@@ -71,6 +71,26 @@ export type Command =
   | { kind: "drop"; tick: Tick; impId: ImpId; tileX: number; tileY: number }
   | { kind: "slap"; tick: Tick; impId: ImpId };
 
+export type CommandLog = readonly Command[] & { readonly __brand: "CommandLog" };
+
+export function asCommandLog(commands: readonly Command[]): CommandLog {
+  return commands as CommandLog;
+}
+
+export function requireSorted(commands: readonly Command[]): CommandLog {
+  for (let i = 1; i < commands.length; i += 1) {
+    const previous = commands[i - 1];
+    const current = commands[i];
+    if (previous === undefined || current === undefined) {
+      throw new Error("missing command");
+    }
+    if (previous.tick > current.tick) {
+      throw new Error("commands are not sorted by tick");
+    }
+  }
+  return asCommandLog(commands);
+}
+
 export function tileIndexFromWorld(x: number, z: number): TileIndex | undefined {
   const tx = Math.floor(x + MAP_HALF + 0.5);
   const ty = Math.floor(z + MAP_HALF + 0.5);
@@ -496,7 +516,7 @@ function applyCommand(world: World, command: Command): void {
   }
 }
 
-export function sortCommands(commands: readonly Command[]): Command[] {
+export function sortCommands(commands: readonly Command[]): CommandLog {
   const indexed = commands.map((command, index) => ({ command, index }));
   indexed.sort((a, b) => {
     if (a.command.tick !== b.command.tick) {
@@ -504,10 +524,10 @@ export function sortCommands(commands: readonly Command[]): Command[] {
     }
     return a.index - b.index;
   });
-  return indexed.map((entry) => entry.command);
+  return asCommandLog(indexed.map((entry) => entry.command));
 }
 
-export function step(world: World, commands: readonly Command[]): void {
+export function step(world: World, commands: CommandLog): void {
   const tick = world.tick;
   let i = world.commandCursor;
   while (i < commands.length) {
@@ -529,7 +549,7 @@ export function step(world: World, commands: readonly Command[]): void {
   world.tick = asTick(world.tick + 1);
 }
 
-export function run(seed: number, commands: readonly Command[], ticks: number): World {
+export function run(seed: number, commands: CommandLog, ticks: number): World {
   const world = createWorld(seed);
   const sorted = sortCommands(commands);
   for (let i = 0; i < ticks; i += 1) {
