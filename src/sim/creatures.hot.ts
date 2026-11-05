@@ -94,7 +94,7 @@ function stepLiveCreature(world: World, creature: Creature): void {
       break;
     case "toTraining":
       if (advanceAlongPath(creature, state, world.width, 1)) {
-        beginTraining(creature, state.tile);
+        beginTraining(world, creature, state.tile);
       }
       break;
     case "training":

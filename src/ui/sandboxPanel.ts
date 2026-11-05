@@ -44,6 +44,7 @@ export function createSandboxPanel(
   const paintHatcheryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-hatchery");
   const paintTrainingButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-training");
   const paintWorkshopButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-workshop");
+  const paintLibraryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-library");
   const possessButton = root === null ? null : root.querySelector<HTMLButtonElement>("#possess");
   const saveButton = root === null ? null : root.querySelector<HTMLButtonElement>("#save-game");
   const loadButton = root === null ? null : root.querySelector<HTMLButtonElement>("#load-game");
@@ -73,6 +74,9 @@ export function createSandboxPanel(
     }
     if (paintWorkshopButton !== null) {
       paintWorkshopButton.disabled = paused || replaying || possessed;
+    }
+    if (paintLibraryButton !== null) {
+      paintLibraryButton.disabled = paused || replaying || possessed;
     }
     if (possessButton !== null) {
       possessButton.disabled = paused || replaying || possessed;
@@ -139,6 +143,14 @@ export function createSandboxPanel(
         return;
       }
       togglePaint("workshop");
+    });
+  }
+  if (paintLibraryButton !== null) {
+    paintLibraryButton.addEventListener("click", () => {
+      if (paused || replaying) {
+        return;
+      }
+      togglePaint("library");
     });
   }
   if (possessButton !== null) {
@@ -231,6 +243,9 @@ export function createSandboxPanel(
     }
     if (paintWorkshopButton !== null) {
       paintWorkshopButton.setAttribute("aria-pressed", painting && room === "workshop" ? "true" : "false");
+    }
+    if (paintLibraryButton !== null) {
+      paintLibraryButton.setAttribute("aria-pressed", painting && room === "library" ? "true" : "false");
     }
   }
 

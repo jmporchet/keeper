@@ -14,6 +14,7 @@ export const HUNGER_TICKS = 300;
 export const HUNGER_RETRY_TICKS = 40;
 export const EAT_TICKS = 20;
 export const TRAIN_TICKS = 80;
+export const LIBRARY_TRAIN_TICKS = 40;
 export const WANDER_PERIOD = 40;
 export const WANDER_CHANCE = 1;
 export const WANDER_ROLL = 2;
@@ -225,6 +226,44 @@ function refreshTrainingCache(world: World): void {
     count += 1;
   }
   world.trainingCacheCount = count;
+}
+
+function refreshLibraryCache(world: World): void {
+  if (world.libraryCacheVersion === world.roomsVersion) {
+    return;
+  }
+  world.libraryCacheVersion = world.roomsVersion;
+  let count = 0;
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room !== ROOM_KIND.library) {
+      continue;
+    }
+    world.libraryCache[count] = i;
+    count += 1;
+  }
+  world.libraryCacheCount = count;
+}
+
+export function trainingBoostedByLibrary(world: World, trainingTile: TileIndex): boolean {
+  refreshLibraryCache(world);
+  if (world.libraryCacheCount === 0) {
+    return false;
+  }
+  const trainingY = (trainingTile / world.width) | 0;
+  const trainingX = trainingTile - trainingY * world.width;
+  for (let i = 0; i < world.libraryCacheCount; i += 1) {
+    const tile = world.libraryCache[i];
+    if (tile === undefined) {
+      continue;
+    }
+    const tileY = (tile / world.width) | 0;
+    const tileX = tile - tileY * world.width;
+    if (Math.max(Math.abs(trainingX - tileX), Math.abs(trainingY - tileY)) <= 1) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function trainingTileClaimed(world: World, tile: TileIndex): boolean {
@@ -455,11 +494,11 @@ export function beginWander(world: World, creature: Creature): boolean {
   return true;
 }
 
-export function beginTraining(creature: Creature, tile: TileIndex): void {
+export function beginTraining(world: World, creature: Creature, tile: TileIndex): void {
   creature.headingX = 0;
   creature.headingY = 0;
   creature.training.tile = tile;
-  creature.training.remaining = TRAIN_TICKS;
+  creature.training.remaining = trainingBoostedByLibrary(world, tile) ? LIBRARY_TRAIN_TICKS : TRAIN_TICKS;
   creature.state = creature.training;
 }
 
@@ -517,7 +556,7 @@ export function beginToTraining(world: World, creature: Creature): boolean {
       continue;
     }
     if (length <= 1) {
-      beginTraining(creature, goal);
+      beginTraining(world, creature, goal);
       return true;
     }
     creature.toTraining.tile = goal;

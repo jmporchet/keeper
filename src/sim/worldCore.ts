@@ -33,6 +33,9 @@ export type World = {
   readonly workshopCache: Int32Array;
   workshopCacheCount: number;
   workshopCacheVersion: number;
+  readonly libraryCache: Int32Array;
+  libraryCacheCount: number;
+  libraryCacheVersion: number;
   readonly chickenTileCount: Uint16Array;
   chickens: ChickenBoard;
   chickensVersion: number;
