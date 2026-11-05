@@ -12,7 +12,17 @@ import {
   step,
 } from "../sim";
 import {
+  AMBIENT_LIGHT_COLOR,
+  AMBIENT_LIGHT_INTENSITY,
   createTorchLighting,
+  DUNGEON_EXPOSURE,
+  FOG_COLOR,
+  FOG_DENSITY,
+  FOG_ENABLED,
+  HEART_LIGHT_DISTANCE,
+  HEMISPHERE_GROUND_COLOR,
+  HEMISPHERE_LIGHT_INTENSITY,
+  HEMISPHERE_SKY_COLOR,
   syncTorchLights,
   TORCH_LIGHT_COLOR,
   TORCH_LIGHT_COUNT,
@@ -111,5 +121,42 @@ describe("torch light pool", () => {
       expect(lightAt(pool, i)).toBe(lights[i]);
     }
     expect(lightAt(pool, 1).intensity).toBe(TORCH_LIGHT_INTENSITY);
+  });
+
+  it("exports the tuned fill, fog and light constants", () => {
+    expect(DUNGEON_EXPOSURE).toBe(1.5);
+    expect(HEMISPHERE_LIGHT_INTENSITY).toBe(2.4);
+    expect(AMBIENT_LIGHT_INTENSITY).toBe(8.5);
+    expect(FOG_ENABLED).toBe(true);
+    expect(FOG_COLOR).toBe(0x2a221c);
+    expect(FOG_DENSITY).toBe(0.002);
+    expect(TORCH_LIGHT_INTENSITY).toBe(16);
+    expect(TORCH_LIGHT_DISTANCE).toBe(20);
+    expect(HEART_LIGHT_DISTANCE).toBe(30);
+    expect(AMBIENT_LIGHT_COLOR).toBe(0x8a7a6a);
+    expect(HEMISPHERE_SKY_COLOR).toBe(0x8a7a6a);
+    expect(HEMISPHERE_GROUND_COLOR).toBe(0x2a2018);
+  });
+
+  it("configures scene fog and fill lights from the exported constants", () => {
+    const scene = new THREE.Scene();
+    createTorchLighting(scene);
+    expect(FOG_ENABLED).toBe(true);
+    if (FOG_ENABLED) {
+      expect(scene.fog).toBeInstanceOf(THREE.FogExp2);
+      expect((scene.fog as THREE.FogExp2).density).toBe(FOG_DENSITY);
+      expect((scene.fog as THREE.FogExp2).color.getHex()).toBe(FOG_COLOR);
+    } else {
+      expect(scene.fog).toBeNull();
+    }
+    const hemisphere = scene.children.find((child) => child instanceof THREE.HemisphereLight);
+    const ambient = scene.children.find((child) => child instanceof THREE.AmbientLight);
+    expect(hemisphere).toBeInstanceOf(THREE.HemisphereLight);
+    expect(ambient).toBeInstanceOf(THREE.AmbientLight);
+    expect((hemisphere as THREE.HemisphereLight).intensity).toBe(HEMISPHERE_LIGHT_INTENSITY);
+    expect((hemisphere as THREE.HemisphereLight).color.getHex()).toBe(HEMISPHERE_SKY_COLOR);
+    expect((hemisphere as THREE.HemisphereLight).groundColor.getHex()).toBe(HEMISPHERE_GROUND_COLOR);
+    expect((ambient as THREE.AmbientLight).intensity).toBe(AMBIENT_LIGHT_INTENSITY);
+    expect((ambient as THREE.AmbientLight).color.getHex()).toBe(AMBIENT_LIGHT_COLOR);
   });
 });
