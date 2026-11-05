@@ -11,6 +11,16 @@ export {
   type WorkerId,
 } from "./ids";
 export {
+  addHeld,
+  createHand,
+  HAND_CAPACITY,
+  hashHand,
+  isHeld,
+  removeHeld,
+  type Hand,
+  type HandSlot,
+} from "./hand";
+export {
   carryingCount,
   CLAIM_TICKS,
   DIG_TICKS,
@@ -29,6 +39,7 @@ export {
   type Imp,
   type ImpBoard,
   type ImpCarry,
+  type ImpHeld,
   type ImpSlot,
   type ImpState,
   type ImpWorking,

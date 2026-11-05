@@ -100,12 +100,14 @@ stateDiagram-v2
     Tagging --> Idle: release (tag/untag commands for the sweep)
     Idle --> Painting: room tool selected
     Painting --> Idle: escape or tool cleared
-    Idle --> Holding: left press on imp
-    Holding --> Idle: drop on walkable tile
+    Idle --> Holding: left press on imp (pickUp)
+    Holding --> Holding: left press on imp (pickUp, hand not full)
+    Holding --> Idle: drop on walkable tile (hand empty)
+    Holding --> Holding: drop on walkable tile (hand not empty)
     Holding --> Holding: drop refused (not walkable)
 ```
 
-Zoom (wheel) works in every state and does not change state.
+Zoom (wheel) works in every state and does not change state. The hand holds at most eight imps; a left press on another imp while holding picks it up too. A right press while holding drops the most recently picked imp, or stays holding when the tile is not walkable.
 
 ### Chart 3: tile lifecycle (hand-rolled, sim)
 
@@ -147,13 +149,14 @@ stateDiagram-v2
     Idle --> HeldByHand: picked up
     Walking --> HeldByHand: picked up
     Working --> HeldByHand: picked up
-    Carrying --> HeldByHand: picked up (gold dropped)
-    HeldByHand --> Idle: dropped
+    Carrying --> HeldByHand: picked up (gold kept)
+    HeldByHand --> HeldByHand: drop refused (not walkable)
+    HeldByHand --> Idle: dropped on walkable tile
 ```
 
 Each state carries only the data it needs, for example `{ kind: "walking", tile, path, step }` and `{ kind: "working", tile, remaining }`. A slap is an effect (a speed boost timer), not a state. Imps never store a `JobId`: walking and working keep the job tile and re-check `jobHeldBy` every tick.
 
-Walkable tiles: claimed floor, dirt, and rooms. Earth, gold seams, tagged earth, tagged gold and rock are not walkable. Idle imps first try to reserve an open `dig` job. If one is reserved, they BFS to a reachable walkable tile 4-adjacent to the job tile and walk there; if no neighbour is reachable they release the job and wander. Working imps count down `DIG_TICKS = 40`, then turn the tagged earth into dirt and free the job. If the job disappears mid-walk or mid-work, the imp returns to idle immediately. Idle imps with no job wander: pick a random reachable walkable tile with the seeded RNG, then follow a 4-neighbour grid path (BFS) one tile at a time. The sandbox starts with four imps on the heart's claimed patch. Gold mining, claiming and the Hand of Evil are later.
+Walkable tiles: claimed floor, dirt, and rooms. Earth, gold seams, tagged earth, tagged gold and rock are not walkable. Idle imps first try to reserve an open `dig` job. If one is reserved, they BFS to a reachable walkable tile 4-adjacent to the job tile and walk there; if no neighbour is reachable they release the job and wander. Working imps count down `DIG_TICKS = 40`, then turn the tagged earth into dirt and free the job. If the job disappears mid-walk or mid-work, the imp returns to idle immediately. Idle imps with no job wander: pick a random reachable walkable tile with the seeded RNG, then follow a 4-neighbour grid path (BFS) one tile at a time. The sandbox starts with four imps on the heart's claimed patch. The Hand of Evil holds at most eight imps: `pickUp` releases any reserved job back to `Open` and takes the imp off the grid in the `held` state, keeping any carried gold unchanged; `drop` is accepted only on a walkable tile and returns the imp to idle there with its carry intact, so a dropped carrier walks its gold to the heart, while a refused drop leaves it held. Both commands apply at tick boundaries like every other command. Hand capacity and job release are checked in `specs/HandOfEvil.tla`. Slap is later.
 
 ### Chart 5: job lifecycle (hand-rolled, sim)
 
@@ -173,14 +176,15 @@ Job priority follows KeeperFX's digger stack in spirit: dig tagged tiles, then m
 ### Data shapes (summary)
 
 - `TileGrid`: `Uint8Array` kind plus `Uint16Array` gold left, indexed `y * width + x`. No per-tile objects.
-- `Imp`: discriminated union on `state.kind`. The pool is empty or live slots (`{ kind: "empty" } | { kind: "live", imp }`), same shape as the job board.
+- `Imp`: discriminated union on `state.kind`, including `held`. The pool is empty or live slots (`{ kind: "empty" } | { kind: "live", imp }`), same shape as the job board.
 - `JobBoard`: fixed-size pool of empty or filled slots plus a per-tile slot index; jobs referenced by `JobId` (slot index), never by object identity.
+- `Hand`: fixed-size pool of empty or held slots carrying an `ImpId`, capped at eight; `hashWorld` includes it.
 - `Command`: discriminated union (`tag`, `untag`, `paintRoom`, `pickUp`, `drop`, `slap`, `spawnImp`, `addGold`), each with `tick`. Tag and untag update tiles and the job board together.
 - Branded ids: `TileIndex`, `ImpId`, `JobId`, `WorkerId`, `Tick`. A raw number cannot be passed where an id is expected.
 
 ### Chart 0: sim step and render loop
 
-The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step imps, step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a command log; `hashWorld` is stable for that pair and includes jobs and live imps. Sim core currently applies `noop`, `addGold`, `tag`, `untag` and `spawnImp`. The sandbox panel queues `spawnImp` and `addGold` commands through the same command list as the input layer; `spawnImp` fills the first empty imp slot at the heart and is refused at `IMP_CAPACITY`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. Reserve and release are job-board operations, not commands yet. Pathfinding reads the grid through `TileRead`.
+The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step imps, step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a command log; `hashWorld` is stable for that pair and includes jobs, live imps and the hand. Sim core currently applies `noop`, `addGold`, `tag`, `untag`, `spawnImp`, `pickUp` and `drop`. The sandbox panel queues `spawnImp` and `addGold` commands through the same command list as the input layer; `spawnImp` fills the first empty imp slot at the heart and is refused at `IMP_CAPACITY`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. `pickUp` releases the imp's reserved job; `drop` writes no tile and only moves the imp onto a walkable tile. Reserve and release are job-board operations, not commands yet. Pathfinding reads the grid through `TileRead`.
 
 Live play uses a fixed-step accumulator (dt 1/20 s, frame delta clamped to 100 ms, at most 4 sim steps per frame). Proof mode (`?proof=1`) never reads real time: Playwright calls `window.__keeper.step(n)`, which advances n sim ticks and draws once.
 
@@ -203,7 +207,7 @@ stateDiagram-v2
 - Tile drawing lives in `src/render/`. It reads the sim `Uint8Array` grid and never writes sim state.
 - One `InstancedMesh` per tile kind (eight kinds, including tagged earth and tagged gold). Sync packs live tiles densely and sets `mesh.count` to the number of tiles of that kind, so tile draw calls stay at most 8. `syncMap` skips when `world.tilesVersion` matches the last packed version. Tagged kinds use a brighter emissive material. Picking maps a camera ray to the ground plane, then to a tile index.
 - A later pass can switch to tile-index instances with scale 0 for removed blocks; counts must still match the grid.
-- Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Tile kinds plus imps stay within 8 draw calls.
+- Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Held imps are skipped on the grid and drawn floating near the cursor through the same imp mesh, so tile kinds plus imps stay within 8 draw calls.
 - Camera: perspective, orbit around a ground target. Pitch is clamped to `[0.2, 1.35]` rad, zoom (distance) to `[12, 90]`, and the ground target to the map rectangle `[-MAP_HALF, MAP_WIDTH - MAP_HALF]` × `[-MAP_HALF, MAP_HEIGHT - MAP_HALF]`. Modes follow chart 2 in `src/input`; pose math lives in `src/camera`.
 - Visual style: low-poly blocks, moody dungeon light (one heart point light plus dim hemisphere and ambient), darker per-kind materials, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
 

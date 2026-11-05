@@ -1,13 +1,15 @@
 import type { Color, InstancedMesh, Object3D } from "three";
-import { MAP_HALF } from "../sim";
+import { MAP_HALF, MAP_WIDTH, type Hand, type TileIndex } from "../sim";
 import type { ImpSlot } from "../sim/imps";
 
 export function syncImpInstances(
   slots: ImpSlot[],
+  hand: Hand,
   alpha: number,
   mesh: InstancedMesh,
   dummy: Object3D,
   color: Color,
+  cursorTile: TileIndex | undefined,
 ): void {
   let drawn = 0;
   for (let i = 0; i < slots.length; i += 1) {
@@ -20,6 +22,9 @@ export function syncImpInstances(
         break;
       case "live": {
         const imp = slot.imp;
+        if (imp.state.kind === "held") {
+          break;
+        }
         const t = alpha;
         const x = imp.prevX + (imp.currX - imp.prevX) * t;
         const z = imp.prevZ + (imp.currZ - imp.prevZ) * t;
@@ -46,6 +51,36 @@ export function syncImpInstances(
       default: {
         const never: never = slot;
         throw never;
+      }
+    }
+  }
+  if (cursorTile !== undefined) {
+    const cy = (cursorTile / MAP_WIDTH) | 0;
+    const cx = cursorTile - cy * MAP_WIDTH;
+    for (let i = 0; i < hand.count; i += 1) {
+      const slot = hand.slots[i];
+      if (slot === undefined) {
+        continue;
+      }
+      switch (slot.kind) {
+        case "empty":
+          break;
+        case "held": {
+          const offset = i * 0.18;
+          dummy.position.set(cx - MAP_HALF + offset, 1.1 + offset, cy - MAP_HALF + offset);
+          dummy.scale.set(1, 1, 1);
+          dummy.rotation.set(0, 0, 0);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(drawn, dummy.matrix);
+          color.setHex(0xe03030);
+          mesh.setColorAt(drawn, color);
+          drawn += 1;
+          break;
+        }
+        default: {
+          const never: never = slot;
+          throw never;
+        }
       }
     }
   }

@@ -9,13 +9,16 @@ import {
 } from "../camera/pose";
 import {
   asTileIndex,
+  HAND_CAPACITY,
+  isWalkableCode,
   tileKindAt,
   type Command,
+  type ImpId,
   type TileIndex,
   type TileKind,
   type World,
 } from "../sim";
-import { inputCameraMachine, isOrbiting, isPanning, isTagging } from "./inputCameraMachine";
+import { inputCameraMachine, isHolding, isOrbiting, isPanning, isTagging } from "./inputCameraMachine";
 import { pickTileIndex } from "./pick";
 
 export type HeldKeys = { w: boolean; a: boolean; s: boolean; d: boolean };
@@ -77,10 +80,15 @@ export function bindCameraInput(
   world: World,
   enqueue: (command: Command) => void,
   onChange: () => void,
-): { actor: ReturnType<typeof createActor<typeof inputCameraMachine>>; tickHeldKeys: () => void } {
+): {
+  actor: ReturnType<typeof createActor<typeof inputCameraMachine>>;
+  tickHeldKeys: () => void;
+  cursorTile: () => TileIndex | undefined;
+} {
   const actor = createActor(inputCameraMachine);
   actor.start();
   const held: HeldKeys = { w: false, a: false, s: false, d: false };
+  const heldStack: ImpId[] = [];
   let lastX = 0;
   let lastY = 0;
   let sweepMode: SweepMode;
@@ -117,6 +125,41 @@ export function bindCameraInput(
     return pickTileIndex(camera, canvas, event.clientX, event.clientY);
   }
 
+  function pickImpFromEvent(event: PointerEvent): ImpId | undefined {
+    const tile = pickFromEvent(event);
+    if (tile === undefined) {
+      return undefined;
+    }
+    const y = (tile / world.width) | 0;
+    const x = tile - y * world.width;
+    for (let i = 0; i < world.imps.slots.length; i += 1) {
+      const slot = world.imps.slots[i];
+      if (slot === undefined) {
+        continue;
+      }
+      switch (slot.kind) {
+        case "empty":
+          break;
+        case "live": {
+          const imp = slot.imp;
+          if (imp.state.kind !== "held" && imp.tileX === x && imp.tileY === y) {
+            return imp.id;
+          }
+          break;
+        }
+        default: {
+          const never: never = slot;
+          return never;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  function cursorTile(): TileIndex | undefined {
+    return pickTileIndex(camera, canvas, lastX, lastY);
+  }
+
   canvas.addEventListener("contextmenu", (event) => {
     event.preventDefault();
   });
@@ -125,7 +168,30 @@ export function bindCameraInput(
     lastX = event.clientX;
     lastY = event.clientY;
     canvas.setPointerCapture(event.pointerId);
+    const snapshot = actor.getSnapshot();
     if (event.button === 2) {
+      if (isHolding(snapshot)) {
+        const tile = pickFromEvent(event);
+        if (tile === undefined) {
+          actor.send({ type: "DROP_REFUSED" });
+          return;
+        }
+        const code = world.tiles[tile];
+        if (code === undefined || !isWalkableCode(code)) {
+          actor.send({ type: "DROP_REFUSED" });
+          return;
+        }
+        const impId = heldStack.pop();
+        if (impId === undefined) {
+          actor.send({ type: "DROP_REFUSED" });
+          return;
+        }
+        const y = (tile / world.width) | 0;
+        const x = tile - y * world.width;
+        enqueue({ kind: "drop", tick: world.tick, impId, tileX: x, tileY: y });
+        actor.send({ type: "DROP_WALKABLE" });
+        return;
+      }
       actor.send({ type: "RIGHT_DOWN" });
       return;
     }
@@ -136,6 +202,25 @@ export function bindCameraInput(
     }
     if (event.button !== 0) {
       return;
+    }
+    if (isTagging(snapshot)) {
+      const tile = pickFromEvent(event);
+      if (tile !== undefined) {
+        applySweepTile(tile);
+      }
+      return;
+    }
+    if (isHolding(snapshot) || snapshot.matches("Idle")) {
+      const impId = pickImpFromEvent(event);
+      if (impId !== undefined && snapshot.context.heldCount < HAND_CAPACITY) {
+        heldStack.push(impId);
+        enqueue({ kind: "pickUp", tick: world.tick, impId });
+        actor.send({ type: "LEFT_DOWN_IMP" });
+        return;
+      }
+      if (isHolding(snapshot)) {
+        return;
+      }
     }
     const tile = pickFromEvent(event);
     if (tile === undefined) {
@@ -224,5 +309,5 @@ export function bindCameraInput(
     onChange();
   }
 
-  return { actor, tickHeldKeys };
+  return { actor, tickHeldKeys, cursorTile };
 }

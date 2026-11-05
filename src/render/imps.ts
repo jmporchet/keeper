@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { IMP_CAPACITY, type ImpBoard } from "../sim/imps";
+import { IMP_CAPACITY, type Hand, type ImpBoard, type TileIndex } from "../sim";
 import { syncImpInstances } from "./imps.hot";
 
 export type ImpMeshes = {
@@ -27,6 +27,12 @@ export function createImpMeshes(scene: THREE.Scene): ImpMeshes {
   };
 }
 
-export function syncImps(board: ImpBoard, alpha: number, visual: ImpMeshes): void {
-  syncImpInstances(board.slots, alpha, visual.mesh, visual.dummy, visual.color);
+export function syncImps(
+  board: ImpBoard,
+  hand: Hand,
+  alpha: number,
+  cursorTile: TileIndex | undefined,
+  visual: ImpMeshes,
+): void {
+  syncImpInstances(board.slots, hand, alpha, visual.mesh, visual.dummy, visual.color, cursorTile);
 }

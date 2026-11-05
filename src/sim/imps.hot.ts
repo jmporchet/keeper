@@ -37,6 +37,10 @@ export function stepImps(world: ImpWorld): void {
 }
 
 function stepLiveImp(world: ImpWorld, imp: Imp): void {
+  const current = imp.state;
+  if (current.kind === "held") {
+    return;
+  }
   capturePrev(imp);
   const state = imp.state;
   switch (state.kind) {
@@ -85,6 +89,8 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
       if (advanceAlongPath(imp, state, world.width)) {
         finishDelivery(world, imp);
       }
+      break;
+    case "held":
       break;
     default: {
       const never: never = state;

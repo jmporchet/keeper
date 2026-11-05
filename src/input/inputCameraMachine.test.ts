@@ -2,6 +2,7 @@ import { createActor } from "xstate";
 import { describe, expect, it } from "vitest";
 import {
   inputCameraMachine,
+  isHolding,
   isOrbiting,
   isPanning,
   isTagging,
@@ -84,10 +85,39 @@ describe("input and camera chart", () => {
     const actor = startInput();
     actor.send({ type: "LEFT_DOWN_IMP" });
     expect(actor.getSnapshot().value).toBe("Holding");
+    expect(isHolding(actor.getSnapshot())).toBe(true);
+    expect(actor.getSnapshot().context.heldCount).toBe(1);
     actor.send({ type: "DROP_REFUSED" });
     expect(actor.getSnapshot().value).toBe("Holding");
+    expect(actor.getSnapshot().context.heldCount).toBe(1);
     actor.send({ type: "DROP_WALKABLE" });
     expect(actor.getSnapshot().value).toBe("Idle");
+    expect(actor.getSnapshot().context.heldCount).toBe(0);
+  });
+
+  it("picks up more imps while holding and only returns to idle when the hand is empty", () => {
+    const actor = startInput();
+    actor.send({ type: "LEFT_DOWN_IMP" });
+    actor.send({ type: "LEFT_DOWN_IMP" });
+    expect(actor.getSnapshot().value).toBe("Holding");
+    expect(actor.getSnapshot().context.heldCount).toBe(2);
+    actor.send({ type: "DROP_WALKABLE" });
+    expect(actor.getSnapshot().value).toBe("Holding");
+    expect(actor.getSnapshot().context.heldCount).toBe(1);
+    actor.send({ type: "DROP_WALKABLE" });
+    expect(actor.getSnapshot().value).toBe("Idle");
+    expect(actor.getSnapshot().context.heldCount).toBe(0);
+  });
+
+  it("refuses to hold more than eight imps", () => {
+    const actor = startInput();
+    for (let i = 0; i < 8; i += 1) {
+      actor.send({ type: "LEFT_DOWN_IMP" });
+    }
+    expect(actor.getSnapshot().context.heldCount).toBe(8);
+    actor.send({ type: "LEFT_DOWN_IMP" });
+    expect(actor.getSnapshot().context.heldCount).toBe(8);
+    expect(actor.getSnapshot().value).toBe("Holding");
   });
 
   it("ignores camera gestures that are not on the current state", () => {

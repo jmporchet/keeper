@@ -4,7 +4,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
 
-const PORT = 4173;
+const PORT = Number(process.env.PROOF_PORT ?? "4173");
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
 async function waitUntilReady() {
@@ -107,17 +107,30 @@ async function pagePointForTile(page, box, tx, ty) {
   return { x: box.x + local.x, y: box.y + local.y };
 }
 
-async function panUntilTileVisible(page, box, tx, ty) {
-  for (let i = 0; i < 80; i += 1) {
-    const point = await pagePointForTile(page, box, tx, ty);
-    if (point !== null) {
-      return point;
+async function findHandTarget(page) {
+  for (let i = 0; i < 200; i += 1) {
+    const imps = await page.evaluate(() => globalThis.__keeper.impSnapshot());
+    const target = imps.find(
+      (imp) => imp.state === "walking" && imp.job !== null && imp.job.state === "reserved" && imp.tileX >= 35,
+    );
+    if (target !== undefined && !imps.some((imp) => imp.id !== target.id && imp.state === "idle")) {
+      return target;
     }
-    await page.keyboard.down("KeyA");
-    await stepOnce(page);
+    await stepOnce(page, 3, 30);
   }
-  await page.keyboard.up("KeyA");
-  throw new Error(`tile ${String(tx)},${String(ty)} stayed off screen`);
+  throw new Error("no walking imp with a reserved job and no idle imps appeared");
+}
+
+async function locateHandTarget(page, box) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const target = await findHandTarget(page);
+    const point = await pagePointForTile(page, box, target.tileX, target.tileY);
+    if (point !== null) {
+      return { target, point };
+    }
+    await panToTileCenter(page, box, target.tileX, target.tileY);
+  }
+  throw new Error("hand target stayed off screen");
 }
 
 async function panToTileCenter(page, box, tx, ty) {
@@ -135,26 +148,12 @@ async function panToTileCenter(page, box, tx, ty) {
     const dz = targetZ - pose.targetZ;
     const right = dx * Math.cos(pose.yaw) - dz * Math.sin(pose.yaw);
     const forward = dx * Math.sin(pose.yaw) + dz * Math.cos(pose.yaw);
-    const keys = [];
-    if (right > 0.05) {
-      keys.push("KeyD");
-    }
-    if (right < -0.05) {
-      keys.push("KeyA");
-    }
-    if (forward > 0.05) {
-      keys.push("KeyW");
-    }
-    if (forward < -0.05) {
-      keys.push("KeyS");
-    }
-    for (const key of keys) {
-      await page.keyboard.down(key);
-    }
+    const scale = 0.045 * (pose.distance / 40);
+    await page.mouse.move(cx, cy);
+    await page.mouse.down({ button: "middle" });
+    await page.mouse.move(cx - right / scale, cy + forward / scale);
+    await page.mouse.up({ button: "middle" });
     await stepOnce(page);
-    for (const key of keys) {
-      await page.keyboard.up(key);
-    }
   }
   throw new Error(`tile ${String(tx)},${String(ty)} never reached screen center`);
 }
@@ -185,6 +184,7 @@ async function run() {
       const cx = box.x + box.width / 2;
       const cy = box.y + box.height / 2;
       await page.mouse.move(cx, cy);
+      const claimedAtStart = await page.evaluate(() => globalThis.__keeper.claimedCount);
 
       const sweepXs = [35, 36, 37, 38, 39];
       const sweepPts = [];
@@ -211,8 +211,7 @@ async function run() {
         throw new Error(`expected 5 tagged tiles after earth sweep, got ${String(taggedAfterSweep)}`);
       }
 
-      const rockPoint = await panUntilTileVisible(page, box, 1, 32);
-      await page.keyboard.up("KeyA");
+      const rockPoint = await panToTileCenter(page, box, 1, 32);
       const beforeRock = await page.evaluate(() => globalThis.__keeper.taggedCount);
       await page.mouse.move(rockPoint.x, rockPoint.y);
       await page.mouse.down();
@@ -227,13 +226,122 @@ async function run() {
         throw new Error(`tagged count after rock click was ${String(afterRock)}`);
       }
 
-      await page.keyboard.up("KeyA");
+      await panToTileCenter(page, box, 29, 32);
+
+      const { target, point: pickPoint } = await locateHandTarget(page, box);
+      const targetJob = target.job;
+      if (targetJob === null || targetJob.state !== "reserved") {
+        throw new Error(`imp ${String(target.id)} had no reserved job before pickup`);
+      }
+      await page.mouse.move(pickPoint.x, pickPoint.y);
+      await page.mouse.down();
+      await page.mouse.up();
+      await stepOnce(page);
+      const afterPickup = await page.evaluate(() => ({
+        heldCount: globalThis.__keeper.heldCount,
+        imps: globalThis.__keeper.impSnapshot(),
+      }));
+      if (afterPickup.heldCount !== 1) {
+        throw new Error(`expected 1 held imp after pickup, got ${String(afterPickup.heldCount)}`);
+      }
+      const heldImp = afterPickup.imps.find((imp) => imp.id === target.id);
+      if (heldImp === undefined || heldImp.state !== "held") {
+        throw new Error(`imp ${String(target.id)} was not held after pickup`);
+      }
+      const jobAfterPickup = await page.evaluate(
+        ({ x, y }) => globalThis.__keeper.jobSnapshot(x, y),
+        { x: targetJob.tileX, y: targetJob.tileY },
+      );
+      if (jobAfterPickup === null || jobAfterPickup.state !== "open") {
+        throw new Error(
+          `job ${String(targetJob.kind)} at ${String(targetJob.tileX)},${String(targetJob.tileY)} was not Open after pickup`,
+        );
+      }
+      const pickupTile = { x: heldImp.tileX, y: heldImp.tileY };
+      await page.mouse.move(cx, cy);
+      for (let i = 0; i < 6; i += 1) {
+        await page.mouse.wheel(0, -240);
+        await stepOnce(page, 2, 40);
+      }
+
+      const holdStart = Date.now();
+      let angle = 0;
+      while (Date.now() - holdStart < 3000) {
+        angle += 0.16;
+        await page.mouse.move(
+          cx + Math.cos(angle) * box.width * 0.32,
+          cy + Math.sin(angle) * box.height * 0.24,
+        );
+        await stepOnce(page, 1, 50);
+      }
+      await page.mouse.move(cx + box.width * 0.11, cy - box.height * 0.09);
+      await stepOnce(page, 1, 80);
+      const duringHold = await page.evaluate(() => ({
+        heldCount: globalThis.__keeper.heldCount,
+        imps: globalThis.__keeper.impSnapshot(),
+      }));
+      if (duringHold.heldCount !== 1) {
+        throw new Error(`expected 1 held imp during hold, got ${String(duringHold.heldCount)}`);
+      }
+      const stillHeld = duringHold.imps.find((imp) => imp.id === target.id);
+      if (stillHeld === undefined || stillHeld.state !== "held") {
+        throw new Error(`imp ${String(target.id)} was not held during the arc`);
+      }
+      await page.screenshot({ path: "proof/shot.png" });
+
+      const dropX = 30;
+      const dropY = 30;
+      const dropKind = await page.evaluate(
+        ({ x, y }) => globalThis.__keeper.tileKind(x, y),
+        { x: dropX, y: dropY },
+      );
+      if (dropKind !== "claimed" && dropKind !== "dirt" && dropKind !== "room") {
+        throw new Error(`drop tile ${String(dropX)},${String(dropY)} is not walkable (${String(dropKind)})`);
+      }
+      const dropDistance = Math.max(Math.abs(dropX - pickupTile.x), Math.abs(dropY - pickupTile.y));
+      if (dropDistance < 5) {
+        throw new Error(`drop tile is only ${String(dropDistance)} tiles from pickup tile`);
+      }
+      const dropPoint = await pagePointForTile(page, box, dropX, dropY);
+      if (dropPoint === null) {
+        throw new Error(`drop tile ${String(dropX)},${String(dropY)} is off screen`);
+      }
+      await page.mouse.move(dropPoint.x, dropPoint.y);
+      await page.mouse.down({ button: "right" });
+      await page.mouse.up({ button: "right" });
+      await stepOnce(page);
+      const afterDrop = await page.evaluate(() => ({
+        heldCount: globalThis.__keeper.heldCount,
+        imps: globalThis.__keeper.impSnapshot(),
+      }));
+      if (afterDrop.heldCount !== 0) {
+        throw new Error(`expected 0 held imps after drop, got ${String(afterDrop.heldCount)}`);
+      }
+      const droppedImp = afterDrop.imps.find((imp) => imp.id === target.id);
+      if (
+        droppedImp === undefined ||
+        droppedImp.state === "held" ||
+        droppedImp.tileX !== dropX ||
+        droppedImp.tileY !== dropY
+      ) {
+        throw new Error(`imp ${String(target.id)} was not dropped on tile ${String(dropX)},${String(dropY)}`);
+      }
+      const droppedKind = await page.evaluate(
+        ({ x, y }) => globalThis.__keeper.tileKind(x, y),
+        { x: dropX, y: dropY },
+      );
+      if (droppedKind !== "claimed" && droppedKind !== "dirt" && droppedKind !== "room") {
+        throw new Error(`tile ${String(dropX)},${String(dropY)} stopped being walkable after drop`);
+      }
+
       await panToTileCenter(page, box, 34.5, 32);
       await page.mouse.move(cx, cy);
       for (let i = 0; i < 6; i += 1) {
         await page.mouse.wheel(0, -240);
-        await stepOnce(page, 2);
+        await stepOnce(page, 2, 40);
       }
+
+      await page.mouse.move(cx, cy);
       await page.mouse.down({ button: "right" });
       for (let i = 0; i < 8; i += 1) {
         await page.mouse.move(cx + i * 10, cy + Math.sin(i / 3) * 22);
@@ -284,6 +392,8 @@ async function run() {
         const counts = await page.evaluate(() => ({
           goldStored: globalThis.__keeper.goldStored,
           carryingCount: globalThis.__keeper.carryingCount,
+          tagged: globalThis.__keeper.taggedCount,
+          claimed: globalThis.__keeper.claimedCount,
         }));
         if (counts.carryingCount > maxCarrying) {
           maxCarrying = counts.carryingCount;
@@ -292,16 +402,22 @@ async function run() {
           carryingSeen = true;
         }
         const elapsed = Date.now() - recordStart;
-        if (counts.goldStored >= 40 && carryingSeen && elapsed >= 9000) {
+        if (
+          counts.goldStored >= 40 &&
+          carryingSeen &&
+          counts.tagged === 0 &&
+          counts.claimed === claimedAtStart + 5 &&
+          elapsed >= 12000
+        ) {
           break;
         }
         if (extraTicks >= 4000) {
           throw new Error(
-            `gold proof not complete after ${String(extraTicks)} extra ticks: goldStored ${String(counts.goldStored)}, maxCarrying ${String(maxCarrying)}, elapsed ${String(elapsed)} ms`,
+            `gold and claim proof not complete after ${String(extraTicks)} extra ticks: goldStored ${String(counts.goldStored)}, maxCarrying ${String(maxCarrying)}, tagged ${String(counts.tagged)}, claimed ${String(counts.claimed)} (start ${String(claimedAtStart)}), elapsed ${String(elapsed)} ms`,
           );
         }
-        await stepOnce(page, 3, 30);
-        extraTicks += 3;
+        await stepOnce(page, 4, 30);
+        extraTicks += 4;
       }
 
       const beforePanel = await page.evaluate(() => ({
@@ -396,7 +512,6 @@ async function run() {
         result.goldStored,
         result.hudText,
       );
-      await page.screenshot({ path: "proof/shot.png" });
       await context.close();
       const files = await readdir("proof/tmp");
       const webm = files.find((name) => name.endsWith(".webm"));
