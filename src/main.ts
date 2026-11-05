@@ -36,9 +36,11 @@ import {
 } from "./sim";
 import { createHud } from "./ui/hud";
 import { createSandboxPanel } from "./ui/sandboxPanel";
+import { max, median, percentile } from "./perf/stats";
 
 type JobDebug = { tileX: number; tileY: number; kind: string; state: string };
 type ImpDebug = { id: number; tileX: number; tileY: number; state: string; job: JobDebug | null };
+type BenchResult = { samples: number[]; median: number; p95: number; max: number };
 
 declare global {
   interface Window {
@@ -62,8 +64,8 @@ declare global {
       dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
       step(n: number): void;
       spawnImps(n: number): void;
-      benchSim(batches: number, ticksPerBatch: number): number[];
-      benchFrame(frames: number): number[];
+      benchSim(batches: number, ticksPerBatch: number): BenchResult;
+      benchFrame(frames: number): BenchResult;
     };
   }
 }
@@ -387,7 +389,12 @@ if (proof) {
         const elapsed = performance.now() - start;
         perTickMs.push(elapsed / ticksPerBatch);
       }
-      return perTickMs;
+      return {
+        samples: perTickMs,
+        median: median(perTickMs),
+        p95: percentile(perTickMs, 95),
+        max: max(perTickMs),
+      };
     },
     benchFrame(frames: number) {
       const gl = renderer.getContext();
@@ -397,7 +404,7 @@ if (proof) {
       for (let f = 0; f < frames; f += 1) {
         const start = performance.now();
         syncMap(world.tiles, world.width, world.tilesVersion, map);
-        syncImps(world.imps, 1, impsVisual);
+        syncImps(world.imps, world.hand, 1, undefined, impsVisual);
         placeCamera();
         syncHud();
         renderer.render(scene, camera);
@@ -409,7 +416,12 @@ if (proof) {
       if (advanced !== frames) {
         throw new Error(`benchFrame rendered ${String(advanced)} of ${String(frames)} frames`);
       }
-      return perFrameMs;
+      return {
+        samples: perFrameMs,
+        median: median(perFrameMs),
+        p95: percentile(perFrameMs, 95),
+        max: max(perFrameMs),
+      };
     },
   };
 } else {
