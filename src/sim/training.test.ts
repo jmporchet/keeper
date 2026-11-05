@@ -157,6 +157,7 @@ describe("training room", () => {
     let sawTraining = false;
     let sawLevel = false;
     let bed = LAIR_A;
+    let returned = false;
     for (let t = 0; t < 800; t += 1) {
       step(world, commands);
       for (const creature of creatures(world)) {
@@ -170,12 +171,19 @@ describe("training room", () => {
         }
         if (creature.level >= CREATURE_MAX_LEVEL) {
           sawLevel = true;
+          if (creature.state.kind === "toBed" || creature.state.kind === "sleeping") {
+            returned = true;
+          }
         }
+      }
+      if (returned) {
+        break;
       }
     }
     expect(sawToTraining).toBe(true);
     expect(sawTraining).toBe(true);
     expect(sawLevel).toBe(true);
+    expect(returned).toBe(true);
     expect(liveCreatureCount(world.creatures)).toBe(1);
     expect(world.rooms[bed]).toBe(ROOM_KIND.lair);
     expect(freeBedTiles(world)).not.toContain(bed);

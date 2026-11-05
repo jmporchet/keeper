@@ -28,3 +28,4 @@ One feature per PR, in this order. Each item names its acceptance check. "Proof"
 | 21 | ~~**Payday.** Every PAY_TICKS, pay each live creature a wage from treasury; unpaid creatures leave.~~ | Proof: payday with and without enough gold; unpaid frees its bed. Test: gold conserved across payday; bed freed. |
 | 22 | ~~**Training room.** Paint training on claimed floor; a creature trains for N ticks and gains a level/flag.~~ | Proof: paint training, a fly trains; bed still owned. |
 | 23 | ~~**First hero invasion.** A hero party enters from the portal on a timer; sandbox skirmish, no defeat screen.~~ | Proof: heroes appear and path; at least one fight resolution. |
+| 24 | ~~**Fly wander.** A sleeping fly may wander to a seeded reachable tile between sleep and hunger, keeping its bed and hunger timer.~~ | Proof: a fly sleeps, wanders and keeps its bed; tests cover the continued hunger timer and the hungry transition. |

@@ -6,16 +6,22 @@ import {
   beginToFood,
   beginToTraining,
   beginTraining,
+  beginWander,
   captureCreatureCurr,
   captureCreaturePrev,
   CREATURE_MAX_LEVEL,
   CREATURE_STEPS_PER_TILE,
   finishEating,
   finishTraining,
+  resumeSleeping,
   setCreatureHeading,
   tryArrival,
+  WANDER_CHANCE,
+  WANDER_PERIOD,
+  WANDER_ROLL,
   type Creature,
 } from "./creatures";
+import { advanceRng } from "./rng";
 import type { World } from "./worldCore";
 
 export function stepCreatures(world: World): void {
@@ -56,11 +62,24 @@ function stepLiveCreature(world: World, creature: Creature): void {
       if (creature.level < CREATURE_MAX_LEVEL && beginToTraining(world, creature)) {
         break;
       }
-      if (state.remaining > 0) {
-        state.remaining -= 1;
+      if (state.remaining <= 0) {
+        beginHungry(creature);
         break;
       }
-      beginHungry(creature);
+      if (state.remaining % WANDER_PERIOD === 0 && wanderRoll(world) && beginWander(world, creature)) {
+        break;
+      }
+      state.remaining -= 1;
+      break;
+    case "wandering":
+      state.remaining -= 1;
+      if (state.remaining <= 0) {
+        beginHungry(creature);
+        break;
+      }
+      if (advanceAlongPath(creature, state, world.width, 1)) {
+        resumeSleeping(creature, state.remaining);
+      }
       break;
     case "toTraining":
       if (advanceAlongPath(creature, state, world.width, 1)) {
@@ -97,6 +116,11 @@ function stepLiveCreature(world: World, creature: Creature): void {
     }
   }
   captureCreatureCurr(creature);
+}
+
+function wanderRoll(world: World): boolean {
+  advanceRng(world);
+  return world.rng % WANDER_ROLL < WANDER_CHANCE;
 }
 
 function advanceAlongPath(

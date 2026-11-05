@@ -27,15 +27,19 @@ describe("module import order", () => {
       { kind: "paintRoom", tick: ids.asTick(0), tile: ids.asTileIndex(30 * worldModule.MAP_WIDTH + 30), room: "lair" },
       { kind: "paintRoom", tick: ids.asTick(0), tile: ids.asTileIndex(33 * worldModule.MAP_WIDTH + 30), room: "training" },
     ];
-    const world = worldModule.run(1, worldModule.sortCommands(commands), 600);
+    const world = worldModule.createWorld(1);
+    const sorted = worldModule.sortCommands(commands);
     let level = 0;
-    for (let i = 0; i < world.creatures.slots.length; i += 1) {
-      const slot = world.creatures.slots[i];
-      if (slot === undefined || slot.kind === "empty") {
-        continue;
-      }
-      if (slot.creature.level > level) {
-        level = slot.creature.level;
+    for (let t = 0; t < 600; t += 1) {
+      worldModule.step(world, sorted);
+      for (let i = 0; i < world.creatures.slots.length; i += 1) {
+        const slot = world.creatures.slots[i];
+        if (slot === undefined || slot.kind === "empty") {
+          continue;
+        }
+        if (slot.creature.level > level) {
+          level = slot.creature.level;
+        }
       }
     }
     expect(level).toBe(creatures.CREATURE_MAX_LEVEL);

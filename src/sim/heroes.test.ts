@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { freeBedTiles, liveCreatureCount, type Creature } from "./creatures";
+import { beginWander, freeBedTiles, liveCreatureCount, type Creature } from "./creatures";
 import {
   FIGHT_TICKS,
   HERO_ARRIVE_TICKS,
@@ -121,6 +121,22 @@ describe("hero invasion", () => {
     step(world, sortCommands(lairSetup()));
     expect(creature.hp).toBeLessThan(creatureHp);
     expect(hero.hp).toBeLessThan(heroHp);
+  });
+
+  it("damages a wandering creature", () => {
+    const world = run(1, sortCommands(lairSetup()), HERO_ARRIVE_TICKS + 1);
+    const hero = liveHero(world, 0);
+    const creature = liveCreature(world, 0);
+    creature.state = creature.sleeping;
+    expect(beginWander(world, creature)).toBe(true);
+    expect(creature.state.kind).toBe("wandering");
+    hero.tileX = creature.tileX + 1;
+    hero.tileY = creature.tileY;
+    hero.attackCooldown = 0;
+    creature.attackCooldown = FIGHT_TICKS;
+    const creatureHp = creature.hp;
+    step(world, sortCommands(lairSetup()));
+    expect(creature.hp).toBeLessThan(creatureHp);
   });
 
   it("frees a creature bed when a hero kills it", () => {
