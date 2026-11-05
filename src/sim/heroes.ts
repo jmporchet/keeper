@@ -316,7 +316,7 @@ export function beginLeaving(world: World, hero: Hero): void {
   hero.leaving.progress = 0;
   const start = hero.tileY * world.width + hero.tileX;
   const portal = asTileIndex(PORTAL_Y * world.width + PORTAL_X);
-  const length = findPath(world.tiles, world.width, world.height, start, portal, world.pathScratch, hero.path, world.doorHp);
+  const length = findPath(world.tiles, world.width, world.height, start, portal, world.pathScratch, hero.path, world.doorHp, world.doorOpen);
   if (length > 0) {
     hero.leaving.pathLength = length;
     if (length > 1) {
@@ -472,6 +472,7 @@ function heroTarget(world: World, hero: Hero): TileIndex | undefined {
     world.pathScratch.reachable,
     world.pathScratch.distance,
     world.doorHp,
+    world.doorOpen,
   );
   if (count === 0) {
     return undefined;
@@ -494,7 +495,16 @@ function heroTarget(world: World, hero: Hero): TileIndex | undefined {
   return undefined;
 }
 
-export function heroAdvanceAlongPath(hero: Hero, width: number): boolean {
+function doorBlocksHero(world: World, tile: number): boolean {
+  const hp = world.doorHp[tile];
+  if (hp === undefined || hp <= 0) {
+    return false;
+  }
+  const open = world.doorOpen[tile];
+  return open === undefined || open === 0;
+}
+
+export function heroAdvanceAlongPath(world: World, hero: Hero, width: number): boolean {
   const state = hero.state;
   switch (state.kind) {
     case "fighting":
@@ -519,6 +529,15 @@ export function heroAdvanceAlongPath(hero: Hero, width: number): boolean {
   const nextTile = hero.path[nextIndex];
   if (nextTile === undefined) {
     return true;
+  }
+  if (doorBlocksHero(world, nextTile)) {
+    if (state.kind === "leaving") {
+      beginLeaving(world, hero);
+    } else {
+      hero.headingX = 0;
+      hero.headingY = 0;
+    }
+    return false;
   }
   const ny = (nextTile / width) | 0;
   const nx = nextTile - ny * width;
@@ -545,7 +564,7 @@ export function heroMarchStep(world: World, hero: Hero): void {
       return;
     }
     const start = hero.tileY * world.width + hero.tileX;
-    const length = findPath(world.tiles, world.width, world.height, start, target, world.pathScratch, hero.path, world.doorHp);
+    const length = findPath(world.tiles, world.width, world.height, start, target, world.pathScratch, hero.path, world.doorHp, world.doorOpen);
     if (length <= 0) {
       hero.headingX = 0;
       hero.headingY = 0;
@@ -555,7 +574,7 @@ export function heroMarchStep(world: World, hero: Hero): void {
     state.pathLength = length;
     setHeroHeading(hero, world.width);
   }
-  heroAdvanceAlongPath(hero, world.width);
+  heroAdvanceAlongPath(world, hero, world.width);
 }
 
 export function captureHeroPrev(hero: Hero): void {

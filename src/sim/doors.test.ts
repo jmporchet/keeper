@@ -20,6 +20,7 @@ import { createPathScratch } from "./path";
 import { findPath } from "./pathfind";
 import { parseSaveValue } from "./save";
 import {
+  createWorld,
   doorCount,
   hashWorld,
   run,
@@ -52,6 +53,10 @@ function paintDoor(tick: number, tile: TileIndex): Command {
   return { kind: "paintDoor", tick: asTick(tick), tile };
 }
 
+function toggleDoor(tick: number, tile: TileIndex): Command {
+  return { kind: "toggleDoor", tick: asTick(tick), tile };
+}
+
 function paintTrap(tick: number, tile: TileIndex): Command {
   return { kind: "paintTrap", tick: asTick(tick), tile };
 }
@@ -77,7 +82,7 @@ function clearImps(world: World): void {
 function heroPathLength(world: World, start: number, goal: number): number {
   const scratch = createPathScratch();
   const out = new Int16Array(MAP_WIDTH * MAP_WIDTH);
-  return findPath(world.tiles, world.width, world.height, start, goal, scratch, out, world.doorHp);
+  return findPath(world.tiles, world.width, world.height, start, goal, scratch, out, world.doorHp, world.doorOpen);
 }
 
 describe("doors", () => {
@@ -161,6 +166,99 @@ describe("doors", () => {
     expect(heroPathLength(world, start, goal)).toBeGreaterThan(0);
   });
 
+  it("toggles a door open and closed without changing HP or gold", () => {
+    const opened = run(
+      1,
+      sortCommands([addGold(0, 100), paintDoor(0, DOOR_A), toggleDoor(1, DOOR_A)]),
+      2,
+    );
+    expect(opened.doorHp[DOOR_A]).toBe(DOOR_HP);
+    expect(opened.doorOpen[DOOR_A]).toBe(1);
+    expect(opened.goldStored).toBe(100 - DOOR_COST);
+    expect(opened.goldSpent).toBe(DOOR_COST);
+
+    const closed = run(
+      1,
+      sortCommands([
+        addGold(0, 100),
+        paintDoor(0, DOOR_A),
+        toggleDoor(1, DOOR_A),
+        toggleDoor(2, DOOR_A),
+      ]),
+      3,
+    );
+    expect(closed.doorHp[DOOR_A]).toBe(DOOR_HP);
+    expect(closed.doorOpen[DOOR_A]).toBe(0);
+    expect(closed.goldSpent).toBe(DOOR_COST);
+  });
+
+  it("refuses a toggle without an intact door", () => {
+    const noDoor = run(1, sortCommands([toggleDoor(0, EARTH_TILE)]), 1);
+    expect(noDoor.doorOpen[EARTH_TILE]).toBe(0);
+
+    const broken = run(
+      1,
+      sortCommands([addGold(0, 100), paintDoor(0, DOOR_A)]),
+      1,
+    );
+    broken.doorHp[DOOR_A] = 0;
+    step(broken, sortCommands([toggleDoor(1, DOOR_A)]));
+    expect(broken.doorOpen[DOOR_A]).toBe(0);
+  });
+
+  it("lets heroes path through an open door and blocks again when closed", () => {
+    const start = PORTAL_Y * MAP_WIDTH + PORTAL_X;
+    const goal = HEART_Y * MAP_WIDTH + HEART_X;
+    const openWorld = run(
+      1,
+      sortCommands([...wallCommands(), toggleDoor(1, DOOR_A)]),
+      2,
+    );
+    expect(heroPathLength(openWorld, start, goal)).toBeGreaterThan(0);
+
+    const closedWorld = run(
+      1,
+      sortCommands([...wallCommands(), toggleDoor(1, DOOR_A), toggleDoor(2, DOOR_A)]),
+      3,
+    );
+    expect(heroPathLength(closedWorld, start, goal)).toBe(0);
+  });
+
+  it("does not damage open doors", () => {
+    const world = run(
+      1,
+      sortCommands([...wallCommands(), toggleDoor(1, DOOR_A)]),
+      2,
+    );
+    clearImps(world);
+    const hero = createHero(0, 32, 34, HERO_HP);
+    world.heroes.slots[0] = { kind: "live", hero };
+    const log = sortCommands([]);
+    for (let i = 0; i < 30; i += 1) {
+      step(world, log);
+    }
+    expect(world.doorHp[DOOR_A]).toBe(DOOR_HP);
+    expect(world.doorOpen[DOOR_A]).toBe(1);
+  });
+
+  it("repaths and attacks when a door closes on a marching hero path", () => {
+    const world = createWorld(1);
+    clearImps(world);
+    const hero = createHero(0, 32, 34, HERO_HP);
+    world.heroes.slots[0] = { kind: "live", hero };
+    const log = sortCommands([
+      ...wallCommands(),
+      toggleDoor(1, DOOR_A),
+      toggleDoor(3, DOOR_A),
+    ]);
+    for (let i = 0; i < 12; i += 1) {
+      step(world, log);
+    }
+    expect(hero.tileY).toBe(34);
+    expect(world.doorOpen[DOOR_A]).toBe(0);
+    expect(world.doorHp[DOOR_A]).toBeLessThan(DOOR_HP);
+  });
+
   it("lets a hero damage a door to zero and then march through", () => {
     const world = run(1, sortCommands(wallCommands()), 1);
     clearImps(world);
@@ -242,6 +340,7 @@ describe("gas traps", () => {
       paintDoor(1, DOOR_A),
       paintTrap(1, TRAP_A),
       paintDoor(1, asTileIndex(33 * MAP_WIDTH + 31)),
+      toggleDoor(2, DOOR_A),
     ];
     const a = hashWorld(run(9, sortCommands(commands), 10000));
     const b = hashWorld(run(9, sortCommands(commands), 10000));
@@ -251,13 +350,14 @@ describe("gas traps", () => {
 });
 
 describe("door and trap save parsing", () => {
-  it("round-trips paintDoor and paintTrap commands", () => {
+  it("round-trips paintDoor, toggleDoor and paintTrap commands", () => {
     const parsed = parseSaveValue({
       version: 1,
       seed: 1,
       tick: 0,
       commands: [
         { kind: "paintDoor", tick: 2, tile: DOOR_A },
+        { kind: "toggleDoor", tick: 4, tile: DOOR_A },
         { kind: "paintTrap", tick: 3, tile: TRAP_A },
       ],
     });
@@ -270,6 +370,7 @@ describe("door and trap save parsing", () => {
         commands: [
           { kind: "paintDoor", tick: 2, tile: DOOR_A },
           { kind: "paintTrap", tick: 3, tile: TRAP_A },
+          { kind: "toggleDoor", tick: 4, tile: DOOR_A },
         ],
       },
     });
@@ -278,6 +379,12 @@ describe("door and trap save parsing", () => {
   it("rejects a paintDoor command without a tile", () => {
     expect(
       parseSaveValue({ version: 1, seed: 1, tick: 0, commands: [{ kind: "paintDoor", tick: 0 }] }),
+    ).toEqual({
+      ok: false,
+      error: { kind: "invalidCommand", index: 0, reason: "invalidTile" },
+    });
+    expect(
+      parseSaveValue({ version: 1, seed: 1, tick: 0, commands: [{ kind: "toggleDoor", tick: 0 }] }),
     ).toEqual({
       ok: false,
       error: { kind: "invalidCommand", index: 0, reason: "invalidTile" },

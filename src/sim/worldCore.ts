@@ -18,6 +18,7 @@ export type World = {
   readonly tiles: TileRead;
   readonly rooms: Uint8Array;
   readonly doorHp: Uint8Array;
+  readonly doorOpen: Uint8Array;
   readonly trapState: Uint8Array;
   readonly treasuryStock: Uint16Array;
   readonly treasuryCache: Int32Array;

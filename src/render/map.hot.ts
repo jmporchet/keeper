@@ -2,6 +2,7 @@ import type { Color, InstancedMesh, Object3D } from "three";
 import { MAP_HALF, ROOM_KIND, TILE_KIND, TRAP_GAS_LIVE, TRAP_GAS_SPENT, type TileRead } from "../sim";
 import {
   DOOR_COLOR,
+  DOOR_OPEN_COLOR,
   PORTAL_COLOR,
   ROOM_FLOOR_COLOR,
   ROOM_HATCHERY_COLOR,
@@ -20,6 +21,7 @@ export function syncMapInstances(
   tiles: TileRead,
   rooms: TileRead,
   doorHp: TileRead,
+  doorOpen: TileRead,
   trapState: TileRead,
   width: number,
   meshes: InstancedMesh[],
@@ -82,9 +84,10 @@ export function syncMapInstances(
       hex = PORTAL_COLOR;
     } else if (code === TILE_KIND.claimed) {
       const hp = doorHp[i];
+      const open = doorOpen[i];
       const trap = trapState[i];
       if (hp !== undefined && hp > 0) {
-        hex = DOOR_COLOR;
+        hex = open === 1 ? DOOR_OPEN_COLOR : DOOR_COLOR;
       } else if (trap === TRAP_GAS_LIVE) {
         hex = TRAP_COLOR;
       } else if (trap === TRAP_GAS_SPENT) {

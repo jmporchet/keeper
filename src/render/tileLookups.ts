@@ -11,6 +11,7 @@ export const ROOM_LIBRARY_COLOR = 0x8c6bb1;
 export const ROOM_FLOOR_COLOR = 0x9a6a48;
 export const PORTAL_COLOR = 0x8a5cff;
 export const DOOR_COLOR = 0xd08a3c;
+export const DOOR_OPEN_COLOR = 0x7d6238;
 export const TRAP_COLOR = 0x59c878;
 export const TRAP_SPENT_COLOR = 0x546b5a;
 

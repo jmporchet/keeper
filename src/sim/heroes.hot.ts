@@ -70,7 +70,7 @@ function stepLiveHero(world: World, hero: Hero): boolean {
       }
       break;
     case "leaving":
-      if (heroAdvanceAlongPath(hero, world.width)) {
+      if (heroAdvanceAlongPath(world, hero, world.width)) {
         world.heroes.slots[hero.id] = EMPTY_HERO_SLOT;
         return false;
       }
@@ -205,6 +205,10 @@ function doorTileAt(world: World, x: number, y: number): number {
   if (hp === undefined || hp <= 0) {
     return -1;
   }
+  const open = world.doorOpen[tile];
+  if (open === undefined || open === 1) {
+    return -1;
+  }
   return tile;
 }
 
@@ -232,6 +236,7 @@ function damageDoor(world: World, hero: Hero, tile: number): void {
   const next = hp - COMBAT_DAMAGE;
   world.doorHp[tile] = next > 0 ? next : 0;
   if (next <= 0) {
+    world.doorOpen[tile] = 0;
     world.doorVersion += 1;
   }
   hero.attackCooldown = DOOR_DAMAGE_TICKS;

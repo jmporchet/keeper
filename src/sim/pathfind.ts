@@ -13,6 +13,7 @@ export function findPath(
   scratch: PathScratch,
   outPath: Int16Array,
   doorHp?: Uint8Array,
+  doorOpen?: Uint8Array,
 ): number {
   const gen = bumpPathGen(scratch);
   const reached = bfsToGoal(
@@ -27,6 +28,7 @@ export function findPath(
     scratch.cameFrom,
     scratch.distance,
     doorHp,
+    doorOpen,
   );
   if (!reached) {
     return 0;
