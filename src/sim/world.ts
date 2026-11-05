@@ -1,8 +1,8 @@
 import { asTick, asTileIndex, type Tick, type TileIndex } from "./ids";
-import { createImpBoard, hashImps, spawnStartingImps } from "./imps";
+import { createImpBoard, hashImps, spawnImp, spawnStartingImps } from "./imps";
 import { stepImps } from "./imps.hot";
 import { cancelJobAtTile, createJobBoard, hashJobs, openJob } from "./jobs";
-import { MAP_HEIGHT, MAP_HALF, MAP_WIDTH, TILE_KIND, tileKindAt } from "./map";
+import { HEART_X, HEART_Y, MAP_HEIGHT, MAP_HALF, MAP_WIDTH, TILE_KIND, tileKindAt } from "./map";
 import { createPathScratch } from "./path";
 import { advanceRng } from "./rng";
 import { attachTiles, setTile, type World } from "./worldCore";
@@ -34,7 +34,8 @@ export type Command =
   | { kind: "noop"; tick: Tick }
   | { kind: "addGold"; tick: Tick; amount: number }
   | { kind: "tag"; tick: Tick; tile: TileIndex }
-  | { kind: "untag"; tick: Tick; tile: TileIndex };
+  | { kind: "untag"; tick: Tick; tile: TileIndex }
+  | { kind: "spawnImp"; tick: Tick };
 
 export function tileIndexFromWorld(x: number, z: number): TileIndex | undefined {
   const tx = Math.floor(x + MAP_HALF + 0.5);
@@ -230,6 +231,9 @@ function applyCommand(world: World, command: Command): void {
       return;
     case "untag":
       applyUntag(world, command.tile);
+      return;
+    case "spawnImp":
+      spawnImp(world.imps, HEART_X, HEART_Y);
       return;
     default: {
       const never: never = command;
