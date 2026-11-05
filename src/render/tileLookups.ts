@@ -5,15 +5,15 @@ export { TILE_KIND_COUNT };
 export function colorForKind(kind: TileKind): number {
   switch (kind) {
     case "earth":
-      return 0x6a3a1c;
+      return 0x5e4430;
     case "goldSeam":
-      return 0xd49a14;
+      return 0xf0b820;
     case "rock":
-      return 0x3e3c44;
+      return 0x6a6872;
     case "dirt":
       return 0x7a4a28;
     case "claimed":
-      return 0x8a5a38;
+      return 0xa08a70;
     case "room":
       return 0x9a6a48;
     default: {

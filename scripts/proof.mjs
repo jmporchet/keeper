@@ -69,7 +69,7 @@ async function stepOnce(page) {
   await page.evaluate(() => {
     globalThis.__keeper.step(1);
   });
-  await delay(20);
+  await delay(80);
 }
 
 async function run() {
@@ -99,42 +99,42 @@ async function run() {
       await page.mouse.move(cx, cy);
 
       await page.mouse.down({ button: "right" });
-      for (let i = 0; i < 14; i += 1) {
-        await page.mouse.move(cx + i * 15, cy + Math.sin(i / 5) * 45);
+      for (let i = 0; i < 18; i += 1) {
+        await page.mouse.move(cx + i * 12, cy + Math.sin(i / 5) * 45);
         await stepOnce(page);
       }
       await page.mouse.up({ button: "right" });
 
       await page.keyboard.down("KeyW");
-      for (let i = 0; i < 8; i += 1) {
+      for (let i = 0; i < 12; i += 1) {
         await stepOnce(page);
       }
       await page.keyboard.down("KeyD");
-      for (let i = 0; i < 6; i += 1) {
+      for (let i = 0; i < 8; i += 1) {
         await stepOnce(page);
       }
       await page.keyboard.up("KeyW");
       await page.keyboard.up("KeyD");
       await page.keyboard.down("KeyA");
-      for (let i = 0; i < 6; i += 1) {
+      for (let i = 0; i < 8; i += 1) {
         await stepOnce(page);
       }
       await page.keyboard.up("KeyA");
 
       await page.mouse.move(cx, cy);
-      for (let i = 0; i < 4; i += 1) {
-        await page.mouse.wheel(0, -210);
+      for (let i = 0; i < 6; i += 1) {
+        await page.mouse.wheel(0, -140);
         await stepOnce(page);
       }
-      for (let i = 0; i < 4; i += 1) {
-        await page.mouse.wheel(0, 270);
+      for (let i = 0; i < 6; i += 1) {
+        await page.mouse.wheel(0, 180);
         await stepOnce(page);
       }
 
       await page.mouse.move(cx, cy);
       await page.mouse.down({ button: "middle" });
-      for (let i = 0; i < 8; i += 1) {
-        await page.mouse.move(cx - i * 21, cy + i * 10);
+      for (let i = 0; i < 12; i += 1) {
+        await page.mouse.move(cx - i * 14, cy + i * 7);
         await stepOnce(page);
       }
       await page.mouse.up({ button: "middle" });
@@ -142,7 +142,7 @@ async function run() {
       const beforePause = await page.evaluate(() => globalThis.__keeper.tick);
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible");
-      for (let i = 0; i < 6; i += 1) {
+      for (let i = 0; i < 20; i += 1) {
         await stepOnce(page);
       }
       const duringPause = await page.evaluate(() => globalThis.__keeper.tick);
@@ -151,7 +151,7 @@ async function run() {
       }
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible", { state: "hidden" });
-      for (let i = 0; i < 3; i += 1) {
+      for (let i = 0; i < 10; i += 1) {
         await stepOnce(page);
       }
 
