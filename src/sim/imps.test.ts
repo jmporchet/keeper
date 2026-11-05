@@ -191,6 +191,17 @@ describe("imps", () => {
     }
   });
 
+  it("skips dig jobs with no walkable neighbour", () => {
+    const commands: Command[] = [];
+    for (let x = 25; x <= 29; x += 1) {
+      commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(32 * MAP_WIDTH + x) });
+    }
+    const world = run(1, commands, 1500);
+    for (let x = 25; x <= 29; x += 1) {
+      expect(tileKindAt(world.tiles, 32 * MAP_WIDTH + x)).toBe("dirt");
+    }
+  });
+
   it("untagging a walking job returns the imp to idle and leaves earth", () => {
     const tile = asTileIndex(32 * MAP_WIDTH + 35);
     const world = run(1, [{ kind: "tag", tick: asTick(0), tile }], 1);

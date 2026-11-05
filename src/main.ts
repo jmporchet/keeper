@@ -23,6 +23,7 @@ import {
   MAX_STEPS_PER_FRAME,
   step,
   TICK_DT,
+  tileKindAt,
   type Command,
 } from "./sim";
 
@@ -32,6 +33,7 @@ declare global {
       tick: number;
       hash: number;
       taggedCount: number;
+      dirtCount: number;
       drawCalls: number;
       camera: { targetX: number; targetZ: number; yaw: number; pitch: number; distance: number };
       canvasPointForTile(tx: number, ty: number): { x: number; y: number } | null;
@@ -212,6 +214,15 @@ if (proof) {
     },
     get taggedCount() {
       return countTagged(world);
+    },
+    get dirtCount() {
+      let n = 0;
+      for (let i = 0; i < world.tiles.length; i += 1) {
+        if (tileKindAt(world.tiles, i) === "dirt") {
+          n += 1;
+        }
+      }
+      return n;
     },
     canvasPointForTile,
     step(n: number) {

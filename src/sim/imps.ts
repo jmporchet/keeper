@@ -215,7 +215,7 @@ function tryNeighbour(world: ImpWorld, imp: Imp, start: number, x: number, y: nu
 
 export function beginIdle(world: ImpWorld, imp: Imp): void {
   const worker = workerOf(imp);
-  const job = reserveOpenJob(world.jobs, worker, "dig");
+  const job = reserveOpenJob(world.jobs, worker, "dig", world.tiles, world.width);
   if (job !== undefined) {
     const length = pathToJobNeighbour(world, imp, job.tile);
     if (length > 0) {
