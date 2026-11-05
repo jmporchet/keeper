@@ -40,7 +40,7 @@ function heartState(page) {
 export const name = "defeat";
 
 export async function run(ctx) {
-  const { page, cx, cy } = ctx;
+  const { page } = ctx;
   await page.click("#add-gold", { force: true });
   await ctx.stepOnce();
   await ctx.panToTileCenter(31, 30);
@@ -102,7 +102,7 @@ export async function run(ctx) {
   if (!midHud.includes("breach")) {
     throw new Error(`HUD did not show the breach timer: ${midHud}`);
   }
-  await ctx.screenshot("proof/defeat.png", "defeat");
+  await ctx.screenshot("proof/defeat-breach.png", "defeat-breach");
   await ctx.checkpoint("defeat-mid");
   ctx.clipStart();
 
@@ -145,13 +145,72 @@ export async function run(ctx) {
     `defeat setupTicks=${String(setupTicks)} arrivalTicks=${String(arrivalTicks)} breachTicks=${String(breachTicks)} midBreach=${String(midpoint)} tick=${String(result.tick)} hash=${String(result.hash)} appState=${result.appState} hud="${result.hudText}" drawCalls=${String(result.drawCalls)}`,
   );
 
-  for (let i = 0; i < 3; i += 1) {
-    await ctx.panToTileCenter(i % 2 === 0 ? 35 : 30, 32);
-    await page.mouse.move(cx, cy);
-    await page.mouse.wheel(0, i % 2 === 0 ? -240 : 240);
-    await ctx.stepOnce(1, 150);
-  }
-  await ctx.panToTileCenter(32, 32);
   await ctx.stepOnce(1, 250);
+
+  const restartVisible = await page.locator("#restart-game").isVisible();
+  if (!restartVisible) {
+    throw new Error("restart control is not visible after defeat");
+  }
+  await ctx.screenshot("proof/defeat.png", "defeat");
+  const seedBeforeRestart = await page.evaluate(() => globalThis.__keeper.seed);
+  await page.click("#restart-game", { force: true });
+  const restarted = await page.evaluate(() => ({
+    seed: globalThis.__keeper.seed,
+    tick: globalThis.__keeper.tick,
+    hash: globalThis.__keeper.worldHash,
+    freshHash: globalThis.__keeper.freshHash,
+    commandCount: globalThis.__keeper.commandCount,
+    appState: globalThis.__keeper.appState,
+    defeated: globalThis.__keeper.defeated,
+    victorious: globalThis.__keeper.victorious,
+    heartBreached: globalThis.__keeper.heartBreached,
+    wavesCleared: globalThis.__keeper.wavesCleared,
+    breachTicks: globalThis.__keeper.breachTicks,
+    creatureCount: globalThis.__keeper.creatureCount,
+    heroCount: globalThis.__keeper.heroCount,
+    drawCalls: globalThis.__keeper.drawCalls,
+  }));
+  if (restarted.seed !== seedBeforeRestart) {
+    throw new Error(`restart changed seed ${String(seedBeforeRestart)} -> ${String(restarted.seed)}`);
+  }
+  if (restarted.appState !== "running") {
+    throw new Error(`restart did not return to running: ${restarted.appState}`);
+  }
+  if (restarted.tick !== 0 || restarted.hash !== restarted.freshHash) {
+    throw new Error(
+      `restart did not match a fresh world: tick=${String(restarted.tick)} hash=${String(restarted.hash)} fresh=${String(restarted.freshHash)}`,
+    );
+  }
+  if (restarted.commandCount !== 0) {
+    throw new Error(`restart kept ${String(restarted.commandCount)} commands`);
+  }
+  if (restarted.defeated || restarted.victorious || restarted.heartBreached) {
+    throw new Error(
+      `restart kept end flags: defeated=${String(restarted.defeated)} victorious=${String(restarted.victorious)} breached=${String(restarted.heartBreached)}`,
+    );
+  }
+  if (restarted.wavesCleared !== 0 || restarted.breachTicks !== 0) {
+    throw new Error(
+      `restart kept counters: wavesCleared=${String(restarted.wavesCleared)} breachTicks=${String(restarted.breachTicks)}`,
+    );
+  }
+  if (restarted.creatureCount !== 0 || restarted.heroCount !== 0) {
+    throw new Error(
+      `restart kept entities: creatures=${String(restarted.creatureCount)} heroes=${String(restarted.heroCount)}`,
+    );
+  }
+  if (restarted.drawCalls > 7) {
+    throw new Error(`restart draw calls ${String(restarted.drawCalls)} exceed 7`);
+  }
+  const overlayVisible = await page.locator("#pause-overlay").isVisible();
+  if (overlayVisible) {
+    throw new Error("end screen overlay stayed visible after restart");
+  }
+  console.log(
+    `restart seed=${String(restarted.seed)} tick=${String(restarted.tick)} hash=${String(restarted.hash)} fresh=${String(restarted.freshHash)} appState=${restarted.appState} commandCount=${String(restarted.commandCount)} creatures=${String(restarted.creatureCount)} heroes=${String(restarted.heroCount)} drawCalls=${String(restarted.drawCalls)}`,
+  );
+
+  await ctx.stepOnce(12, 150);
+  await ctx.stepOnce(12, 150);
   ctx.clipEnd();
 }

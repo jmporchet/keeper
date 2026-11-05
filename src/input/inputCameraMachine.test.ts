@@ -244,6 +244,29 @@ describe("possession input", () => {
     expect(isPossessed(actor.getSnapshot())).toBe(false);
   });
 
+  it("resets held imps to Idle", () => {
+    const actor = startInput();
+    actor.send({ type: "LEFT_DOWN_IMP" });
+    actor.send({ type: "LEFT_DOWN_IMP" });
+    actor.send({ type: "RESET" });
+    expect(actor.getSnapshot().value).toBe("Idle");
+    expect(actor.getSnapshot().context.heldCount).toBe(0);
+  });
+
+  it("resets the paint tool and possession to Idle", () => {
+    const painting = startInput();
+    painting.send({ type: "SELECT_PAINT_TOOL", tool: "lair" });
+    painting.send({ type: "RESET" });
+    expect(painting.getSnapshot().value).toBe("Idle");
+    expect(painting.getSnapshot().context.tool).toBe("treasury");
+
+    const possessed = startInput();
+    possessed.send({ type: "POSSESS_CREATURE", creatureId: asCreatureId(3) });
+    possessed.send({ type: "RESET" });
+    expect(possessed.getSnapshot().value).toBe("Idle");
+    expect(possessed.getSnapshot().context.possession).toEqual({ kind: "none" });
+  });
+
   it("ignores possessMove while Idle", () => {
     const actor = startInput();
     actor.send({ type: "POSSESS_MOVE", dx: 1, dy: 0 });

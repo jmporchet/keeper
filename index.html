@@ -275,17 +275,104 @@
         justify-content: center;
         color: var(--gold-bright);
         font-family: Georgia, "Times New Roman", serif;
-        font-size: 40px;
-        font-weight: 700;
-        letter-spacing: 0.3em;
-        text-transform: uppercase;
-        text-shadow: 0 2px 0 #000, 0 0 22px rgba(255, 200, 90, 0.35);
         background:
           radial-gradient(ellipse at center, rgba(20, 16, 12, 0.5) 0%, rgba(0, 0, 0, 0.74) 70%);
         pointer-events: none;
       }
       #pause-overlay.visible {
         display: flex;
+      }
+      #pause-overlay.end-screen {
+        pointer-events: auto;
+      }
+      .pause-panel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 22px;
+      }
+      #pause-overlay.end-screen .pause-panel {
+        padding: 28px 54px 30px;
+        background-color: var(--stone-mid);
+        background-image:
+          radial-gradient(ellipse at 18% 8%, rgba(255, 238, 202, 0.12) 0%, rgba(255, 238, 202, 0) 40%),
+          radial-gradient(ellipse at 82% 22%, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0) 48%),
+          radial-gradient(ellipse at 28% 88%, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 55%),
+          repeating-linear-gradient(0deg, transparent 0 23px, rgba(0, 0, 0, 0.18) 23px 24px),
+          repeating-linear-gradient(90deg, transparent 0 30px, rgba(255, 255, 255, 0.035) 30px 31px),
+          linear-gradient(160deg, #433a2f 0%, #2d261f 42%, #1a1511 100%);
+        border: 2px solid var(--stone-deep);
+        border-top-color: #71624d;
+        border-left-color: #5c5040;
+        border-right-color: #15110d;
+        border-bottom-color: #080605;
+        border-radius: 4px;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 238, 200, 0.24),
+          inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+          inset 0 -3px 4px rgba(0, 0, 0, 0.65),
+          inset 0 0 24px rgba(0, 0, 0, 0.45),
+          0 10px 26px rgba(0, 0, 0, 0.72);
+      }
+      #pause-title {
+        color: var(--gold-bright);
+        font-size: 40px;
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        text-shadow: 0 2px 0 #000, 0 0 22px rgba(255, 200, 90, 0.35);
+      }
+      #restart-game {
+        display: none;
+        font: inherit;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--gold-bright);
+        background-color: var(--stone-light);
+        background-image:
+          linear-gradient(180deg, rgba(255, 240, 210, 0.14) 0%, rgba(255, 240, 210, 0) 42%),
+          linear-gradient(180deg, #5a4d3d 0%, #42372b 45%, #2a221b 100%);
+        border: 1px solid var(--stone-deep);
+        border-top-color: #9c8a70;
+        border-left-color: #77664f;
+        border-right-color: #17120e;
+        border-bottom-color: #070604;
+        border-radius: 3px;
+        padding: 10px 26px;
+        cursor: pointer;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 245, 210, 0.28),
+          inset 0 -2px 2px rgba(0, 0, 0, 0.5),
+          0 0 10px rgba(232, 196, 110, 0.2),
+          0 1px 0 rgba(0, 0, 0, 0.8);
+        transition: color 120ms ease, background-color 120ms ease, box-shadow 120ms ease, transform 60ms ease;
+      }
+      #pause-overlay.end-screen #restart-game {
+        display: inline-block;
+      }
+      #restart-game:hover {
+        color: #fff0bd;
+        background-color: #5a4d3d;
+        background-image:
+          linear-gradient(180deg, rgba(255, 245, 220, 0.2) 0%, rgba(255, 245, 220, 0) 45%),
+          linear-gradient(180deg, #6b5b49 0%, #4d4033 45%, #30261e 100%);
+        border-top-color: #b09c80;
+        border-left-color: #8a775e;
+      }
+      #restart-game:active {
+        transform: translateY(1px);
+        background-image:
+          linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.05) 45%),
+          linear-gradient(180deg, #241e19 0%, #2c241d 50%, #382e25 100%);
+        box-shadow:
+          inset 0 3px 6px rgba(0, 0, 0, 0.8),
+          inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+      }
+      #restart-game:focus-visible {
+        outline: 2px solid var(--gold);
+        outline-offset: 2px;
       }
     </style>
   </head>
@@ -318,7 +405,12 @@
       </div>
       <input id="load-file" type="file" accept="application/json" hidden />
     </div>
-    <div id="pause-overlay">Pause</div>
+    <div id="pause-overlay">
+      <div class="pause-panel">
+        <div id="pause-title">Pause</div>
+        <button id="restart-game" type="button">Restart</button>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
