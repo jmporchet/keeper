@@ -3,22 +3,13 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { createActor } from "xstate";
 import { appMachine, isPaused, isSimStepping } from "./app/appMachine";
 import { orbitPosition } from "./orbit";
-import {
-  createWorld,
-  hashWorld,
-  MAP_HALF,
-  MAX_FRAME_DELTA,
-  MAX_STEPS_PER_FRAME,
-  step,
-  TICK_DT,
-  tileKindAt,
-  type TileKind,
-  type World,
-} from "./sim";
+import { addTorchLighting } from "./render/lights";
+import { createMapMeshes, syncMap } from "./render/map";
+import { createWorld, hashWorld, MAX_FRAME_DELTA, MAX_STEPS_PER_FRAME, step, TICK_DT } from "./sim";
 
 declare global {
   interface Window {
-    __keeper: { tick: number; hash: number; step(n: number): void };
+    __keeper: { tick: number; hash: number; drawCalls: number; step(n: number): void };
   }
 }
 
@@ -32,100 +23,21 @@ canvas.style.height = "100%";
 document.body.append(canvas);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.35;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0806);
+scene.background = new THREE.Color(0x1c1612);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
 const lookAt = new THREE.Vector3(0, 0, 0);
 
 const world = createWorld(1);
-const meshes: THREE.Mesh[] = [];
-const meshHeights = new Float32Array(world.width * world.height);
-
-function colorFor(kind: TileKind): number {
-  switch (kind) {
-    case "goldSeam":
-      return 0xc9a227;
-    case "claimed":
-      return 0x6a5340;
-    case "earth":
-      return 0x2a1d14;
-    case "rock":
-      return 0x121014;
-    case "dirt":
-      return 0x4a3728;
-    case "room":
-      return 0x8a6a48;
-    default: {
-      const never: never = kind;
-      return never;
-    }
-  }
-}
-
-function heightFor(kind: TileKind): number {
-  switch (kind) {
-    case "claimed":
-    case "dirt":
-    case "room":
-      return 0.2;
-    case "earth":
-    case "goldSeam":
-      return 1;
-    case "rock":
-      return 1.4;
-    default: {
-      const never: never = kind;
-      return never;
-    }
-  }
-}
-
-function addTileMesh(x: number, y: number, kind: TileKind): void {
-  const height = heightFor(kind);
-  const geometry = new THREE.BoxGeometry(1, height, 1);
-  const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: colorFor(kind) }));
-  const lx = x - MAP_HALF;
-  const lz = y - MAP_HALF;
-  mesh.position.set(lx, height / 2, lz);
-  scene.add(mesh);
-  meshes.push(mesh);
-  meshHeights[meshes.length - 1] = height;
-}
-
-function syncTiles(from: World): void {
-  for (let y = 0; y < from.height; y += 1) {
-    for (let x = 0; x < from.width; x += 1) {
-      const i = y * from.width + x;
-      const kind = tileKindAt(from.tiles, i);
-      const mesh = meshes[i];
-      if (mesh === undefined) {
-        addTileMesh(x, y, kind);
-        continue;
-      }
-      const height = heightFor(kind);
-      const material = mesh.material;
-      if (material instanceof THREE.MeshStandardMaterial) {
-        material.color.setHex(colorFor(kind));
-      }
-      const base = meshHeights[i];
-      if (base !== undefined && base > 0) {
-        mesh.scale.set(1, height / base, 1);
-      }
-      mesh.position.y = height / 2;
-    }
-  }
-}
-
-syncTiles(world);
-
-scene.add(new THREE.AmbientLight(0x3a3228, 0.55));
-const torch = new THREE.PointLight(0xffbb77, 200, 80);
-torch.position.set(0, 18, 0);
-scene.add(torch);
+const map = createMapMeshes(scene);
+syncMap(world.tiles, world.width, map);
+addTorchLighting(scene);
 
 const tickHud = document.getElementById("tick");
 const pauseOverlay = document.getElementById("pause-overlay");
@@ -215,6 +127,9 @@ if (proof) {
     get hash() {
       return hashWorld(world);
     },
+    get drawCalls() {
+      return renderer.info.render.calls;
+    },
     step(n: number) {
       if (!isSimStepping(actor.getSnapshot())) {
         syncHud();
@@ -223,7 +138,7 @@ if (proof) {
       for (let i = 0; i < n; i += 1) {
         step(world, []);
       }
-      syncTiles(world);
+      syncMap(world.tiles, world.width, map);
       placeCamera(world.tick);
       syncHud();
       render();
@@ -256,7 +171,7 @@ if (proof) {
     if (!isSimStepping(actor.getSnapshot())) {
       accumulator = 0;
     }
-    syncTiles(world);
+    syncMap(world.tiles, world.width, map);
     controls.update();
     syncHud();
     render();
