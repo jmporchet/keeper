@@ -44,12 +44,14 @@ Rules for every change, human or agent. Each rule says what to do. Sources are a
 Every PR proves itself. A green build alone is not proof.
 
 1. `npm run build` passes, then `npm test` and `npm run lint`.
-2. `npm run proof` serves the built `dist/`, opens it in headless Chromium with Playwright on the shared box, runs the feature's scripted scenario, and writes:
-   - `proof/shot.png`: a screenshot of the end state.
-   - `proof/play.mp4`: a **gameplay video of 10 to 20 seconds**, recorded with Playwright `recordVideo` (WebM) and converted with `ffmpeg -i in.webm -c:v libx264 -pix_fmt yuv420p -movflags +faststart play.mp4`.
-3. Every feature PR attaches both files to the PR description. A docs-only or tooling-only PR says "no gameplay change" instead of the video.
+2. `npm run proof` serves the built `dist/`, opens it in headless Chromium with Playwright on the shared box, runs the named scenarios in `scripts/proof/scenarios/` in registry order, and writes the stills and `proof/play.mp4`.
+   - Scenarios: `digClaim`, `hand`, `pause`, `treasury`, `lair`, `hatchery`, `saveReplay`, `panelPerf`.
+   - Stills: `proof/shot.png`, `proof/treasury.png`, `proof/lair.png`, `proof/hatchery.png`, `proof/replay.png`, `proof/perf.png`.
+   - Each scenario records its own clip in a fresh browser context and marks the window worth showing. The reel cuts each clip window, re-encodes it with `libx264`/`yuv420p` at 1280x720 25 fps, and concatenates the clips in registry order into `proof/play.mp4` with `-movflags +faststart`. The reel is **10 to 20 seconds** (target 13). The run fails outside that bound or if a scenario clip window is under 1 second.
+   - `node scripts/proof/run.mjs --only=treasury,lair` runs a subset and writes `proof/play-<names>.mp4`; the reel duration guard applies only to a full run.
+3. Every feature PR attaches `proof/shot.png` and `proof/play.mp4` to the PR description. A docs-only or tooling-only PR says "no gameplay change" instead of the video.
 4. The scenario drives the real user path (mouse and keyboard events on the canvas), not internal setters. It also prints the sim tick and a state hash so the reviewer sees the result as text.
-5. The proof script lives in the repo and the reviewer can rerun it.
+5. The proof scripts live in the repo and the reviewer can rerun them. Add a scenario by adding a file to `scripts/proof/scenarios/` that exports `{ name, run(ctx) }` and listing it in `scripts/proof/scenarios/index.mjs` in reel order.
 
 Box status, checked 2026-11-04:
 

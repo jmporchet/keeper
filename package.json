@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint .",
-    "proof": "npm run build && node scripts/proof.mjs"
+    "proof": "npm run build && node scripts/proof/run.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

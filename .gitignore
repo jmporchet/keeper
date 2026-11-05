@@ -2,3 +2,4 @@ node_modules
 dist
 proof/tmp
 .scratch
+proof/play-*.mp4
