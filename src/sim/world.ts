@@ -61,7 +61,7 @@ import {
   syncPossession,
 } from "./possession";
 import { advanceRng } from "./rng";
-import { availableGold, drainTreasury, runPayday } from "./wages";
+import { runPayday, spendGold } from "./wages";
 import { attachTiles, setTile, type World } from "./worldCore";
 
 export {
@@ -478,11 +478,9 @@ function applyPaintRoom(world: World, tile: TileIndex, room: RoomTool): void {
   }
   switch (room) {
     case "treasury": {
-      if (world.goldStored < TREASURY_COST) {
+      if (!spendGold(world, TREASURY_COST)) {
         return;
       }
-      world.goldStored -= TREASURY_COST;
-      world.goldSpent += TREASURY_COST;
       setTile(world, tile, TILE_KIND.room);
       world.rooms[tile] = ROOM_KIND.treasury;
       world.treasuryStock[tile] = 0;
@@ -491,55 +489,45 @@ function applyPaintRoom(world: World, tile: TileIndex, room: RoomTool): void {
       return;
     }
     case "lair": {
-      if (world.goldStored < LAIR_COST) {
+      if (!spendGold(world, LAIR_COST)) {
         return;
       }
-      world.goldStored -= LAIR_COST;
-      world.goldSpent += LAIR_COST;
       setTile(world, tile, TILE_KIND.room);
       world.rooms[tile] = ROOM_KIND.lair;
       world.roomsVersion += 1;
       return;
     }
     case "hatchery": {
-      if (world.goldStored < HATCHERY_COST) {
+      if (!spendGold(world, HATCHERY_COST)) {
         return;
       }
-      world.goldStored -= HATCHERY_COST;
-      world.goldSpent += HATCHERY_COST;
       setTile(world, tile, TILE_KIND.room);
       world.rooms[tile] = ROOM_KIND.hatchery;
       world.roomsVersion += 1;
       return;
     }
     case "training": {
-      if (world.goldStored < TRAINING_COST) {
+      if (!spendGold(world, TRAINING_COST)) {
         return;
       }
-      world.goldStored -= TRAINING_COST;
-      world.goldSpent += TRAINING_COST;
       setTile(world, tile, TILE_KIND.room);
       world.rooms[tile] = ROOM_KIND.training;
       world.roomsVersion += 1;
       return;
     }
     case "workshop": {
-      if (world.goldStored < WORKSHOP_COST) {
+      if (!spendGold(world, WORKSHOP_COST)) {
         return;
       }
-      world.goldStored -= WORKSHOP_COST;
-      world.goldSpent += WORKSHOP_COST;
       setTile(world, tile, TILE_KIND.room);
       world.rooms[tile] = ROOM_KIND.workshop;
       world.roomsVersion += 1;
       return;
     }
     case "library": {
-      if (world.goldStored < LIBRARY_COST) {
+      if (!spendGold(world, LIBRARY_COST)) {
         return;
       }
-      world.goldStored -= LIBRARY_COST;
-      world.goldSpent += LIBRARY_COST;
       setTile(world, tile, TILE_KIND.room);
       world.rooms[tile] = ROOM_KIND.library;
       world.roomsVersion += 1;
@@ -569,11 +557,9 @@ function applyPaintDoor(world: World, tile: TileIndex): void {
   if (trap === undefined || trap !== TRAP_NONE) {
     return;
   }
-  if (world.goldStored < DOOR_COST) {
+  if (!spendGold(world, DOOR_COST)) {
     return;
   }
-  world.goldStored -= DOOR_COST;
-  world.goldSpent += DOOR_COST;
   world.doorHp[tile] = DOOR_HP;
   world.doorOpen[tile] = 0;
   world.doorVersion += 1;
@@ -609,11 +595,9 @@ function applyPaintTrap(world: World, tile: TileIndex): void {
   if (hp === undefined || hp > 0) {
     return;
   }
-  if (world.goldStored < TRAP_COST) {
+  if (!spendGold(world, TRAP_COST)) {
     return;
   }
-  world.goldStored -= TRAP_COST;
-  world.goldSpent += TRAP_COST;
   world.trapState[tile] = TRAP_GAS_LIVE;
   world.trapVersion += 1;
 }
@@ -861,13 +845,9 @@ function applyRepairHeart(world: World): void {
   if (!world.heartBreached) {
     return;
   }
-  if (availableGold(world) < REPAIR_HEART_COST) {
+  if (!spendGold(world, REPAIR_HEART_COST)) {
     return;
   }
-  const fromStored = world.goldStored < REPAIR_HEART_COST ? world.goldStored : REPAIR_HEART_COST;
-  world.goldStored -= fromStored;
-  drainTreasury(world, REPAIR_HEART_COST - fromStored);
-  world.goldSpent += REPAIR_HEART_COST;
   world.heartHp = HEART_HP;
   world.heartBreached = false;
   world.repairsDone += 1;

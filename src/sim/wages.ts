@@ -41,6 +41,17 @@ export function drainTreasury(world: World, amount: number): number {
   return remaining;
 }
 
+export function spendGold(world: World, cost: number): boolean {
+  if (availableGold(world) < cost) {
+    return false;
+  }
+  const fromStored = world.goldStored < cost ? world.goldStored : cost;
+  world.goldStored -= fromStored;
+  drainTreasury(world, cost - fromStored);
+  world.goldSpent += cost;
+  return true;
+}
+
 export function runPayday(world: World): void {
   if (world.tick === 0 || world.tick % PAY_TICKS !== 0) {
     return;
