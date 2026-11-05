@@ -23,6 +23,8 @@ export const HERO_CAPACITY = 8;
 export const HERO_PARTY_SIZE = 2;
 export const HERO_ARRIVE_TICKS = 500;
 export const HERO_HP = 4;
+export const HERO_WAVE_PARTY_CAP = 5;
+export const HERO_WAVE_HP_CAP = 6;
 export const FIGHT_TICKS = 20;
 export const COMBAT_DAMAGE = 1;
 
@@ -77,7 +79,15 @@ export const EMPTY_HERO_SLOT: HeroSlot = { kind: "empty" };
 export const EMPTY_CREATURE_SLOT: CreatureSlot = { kind: "empty" };
 export const EMPTY_IMP_SLOT: ImpSlot = { kind: "empty" };
 
-export function createHero(index: number, tileX: number, tileY: number): Hero {
+export function heroWavePartySize(repairsDone: number): number {
+  return Math.min(HERO_PARTY_SIZE + repairsDone, HERO_WAVE_PARTY_CAP);
+}
+
+export function heroWaveHp(repairsDone: number): number {
+  return Math.min(HERO_HP + repairsDone, HERO_WAVE_HP_CAP);
+}
+
+export function createHero(index: number, tileX: number, tileY: number, maxHp: number): Hero {
   const marching: HeroMarching = {
     kind: "marching",
     goal: "heart",
@@ -102,8 +112,8 @@ export function createHero(index: number, tileX: number, tileY: number): Hero {
     prevZ: tileY,
     currX: tileX,
     currZ: tileY,
-    hp: HERO_HP,
-    maxHp: HERO_HP,
+    hp: maxHp,
+    maxHp,
     attackCooldown: 0,
     path: new Int16Array(PATH_CELL_COUNT),
     marching,
@@ -197,39 +207,39 @@ function heroOccupied(world: World, tileX: number, tileY: number): boolean {
 }
 
 function spawnTile(world: World, member: number): TileIndex | undefined {
-  const candidates = 5;
-  for (let i = 0; i < candidates; i += 1) {
-    let x = PORTAL_X;
-    let y = PORTAL_Y;
-    if (i === 1) {
-      y = PORTAL_Y - 1;
-    } else if (i === 2) {
-      x = PORTAL_X + 1;
-    } else if (i === 3) {
-      y = PORTAL_Y + 1;
-    } else if (i === 4) {
-      x = PORTAL_X - 1;
-    }
-    if (member > 0 && i === 0) {
-      continue;
-    }
-    if (x < 0 || y < 0 || x >= world.width || y >= world.height) {
-      continue;
-    }
-    const tile = asTileIndex(y * world.width + x);
+  if (member === 0) {
+    const tile = portalTile(world);
     const code = world.tiles[tile];
     if (code === undefined || !isWalkableCode(code)) {
-      continue;
+      return undefined;
     }
-    if (heroOccupied(world, x, y)) {
-      continue;
+    if (heroOccupied(world, PORTAL_X, PORTAL_Y)) {
+      return undefined;
     }
     return tile;
   }
-  return undefined;
+  let best: TileIndex | undefined;
+  let bestDistance = 0;
+  for (let i = 0; i < world.tiles.length; i += 1) {
+    const code = world.tiles[i];
+    if (code === undefined || !isWalkableCode(code)) {
+      continue;
+    }
+    const y = (i / world.width) | 0;
+    const x = i - y * world.width;
+    const distance = Math.max(Math.abs(x - PORTAL_X), Math.abs(y - PORTAL_Y));
+    if (distance === 0 || heroOccupied(world, x, y)) {
+      continue;
+    }
+    if (best === undefined || distance < bestDistance || (distance === bestDistance && i < best)) {
+      best = asTileIndex(i);
+      bestDistance = distance;
+    }
+  }
+  return best;
 }
 
-function spawnHero(world: World, tile: TileIndex): boolean {
+function spawnHero(world: World, tile: TileIndex, maxHp: number): boolean {
   const y = (tile / world.width) | 0;
   const x = tile - y * world.width;
   for (let i = 0; i < world.heroes.slots.length; i += 1) {
@@ -239,7 +249,7 @@ function spawnHero(world: World, tile: TileIndex): boolean {
     }
     switch (slot.kind) {
       case "empty":
-        world.heroes.slots[i] = { kind: "live", hero: createHero(i, x, y) };
+        world.heroes.slots[i] = { kind: "live", hero: createHero(i, x, y, maxHp) };
         return true;
       case "live":
         break;
@@ -268,12 +278,14 @@ export function tryHeroArrival(world: World): void {
   if (!portalExists(world)) {
     return;
   }
-  for (let member = 0; member < HERO_PARTY_SIZE; member += 1) {
+  const partySize = heroWavePartySize(world.repairsDone);
+  const maxHp = heroWaveHp(world.repairsDone);
+  for (let member = 0; member < partySize; member += 1) {
     const tile = spawnTile(world, member);
     if (tile === undefined) {
       return;
     }
-    if (!spawnHero(world, tile)) {
+    if (!spawnHero(world, tile, maxHp)) {
       return;
     }
   }

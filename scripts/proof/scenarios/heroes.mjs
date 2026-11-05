@@ -163,12 +163,24 @@ export async function run(ctx) {
     }));
   }
 
+  const escalation = await page.evaluate(() => ({
+    repairsDone: globalThis.__keeper.repairsDone,
+    waveIndex: globalThis.__keeper.waveIndex,
+    heroes: globalThis.__keeper.heroSnapshot(),
+  }));
+  const escalatedHp = escalation.heroes.some((hero) => hero.maxHp > 4);
+  if (escalation.repairsDone < 1 || (respawn.heroCount <= 2 && !escalatedHp)) {
+    throw new Error(
+      `wave did not escalate after repair: repairs=${String(escalation.repairsDone)} respawnHeroes=${String(respawn.heroCount)} maxHp=${String(escalation.heroes.map((hero) => hero.maxHp).join(","))}`,
+    );
+  }
+
   const drawCalls = await page.evaluate(() => globalThis.__keeper.drawCalls);
   if (drawCalls > 7) {
     throw new Error(`draw calls ${String(drawCalls)} exceed 7`);
   }
   console.log(
-    `heroes heroes=${String(initial.heroCount)} heartHp=${String(current.heartHp)} breached=${String(current.heartBreached)} heartTicks=${String(heartTicks)} breachTicks=${String(breachTicks)} repairedHp=${String(repaired.heartHp)} repairedSpent=${String(repaired.goldSpent)} leavingTicks=${String(leavingTicks)} respawnTicks=${String(respawnTicks)} respawnHeroes=${String(respawn.heroCount)} drawCalls=${String(drawCalls)}`,
+    `heroes heroes=${String(initial.heroCount)} heartHp=${String(current.heartHp)} breached=${String(current.heartBreached)} heartTicks=${String(heartTicks)} breachTicks=${String(breachTicks)} repairedHp=${String(repaired.heartHp)} repairedSpent=${String(repaired.goldSpent)} leavingTicks=${String(leavingTicks)} respawnTicks=${String(respawnTicks)} respawnHeroes=${String(respawn.heroCount)} repairsDone=${String(escalation.repairsDone)} waveIndex=${String(escalation.waveIndex)} respawnMaxHp=${String(escalation.heroes.map((hero) => hero.maxHp).join(","))} drawCalls=${String(drawCalls)}`,
   );
 
   for (let i = 0; i < 4; i += 1) {

@@ -81,15 +81,21 @@ describe("sandbox panel paint buttons", () => {
 });
 
 describe("hud", () => {
-  it("formats gold, imp count, tick, payday countdown and heart hp", () => {
-    expect(formatHud(140, 6, 512, 38, 20, false)).toBe(
-      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20",
+  it("formats gold, imp count, tick, payday countdown, heart hp and wave index", () => {
+    expect(formatHud(140, 6, 512, 38, 20, false, 0)).toBe(
+      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · wave 1",
     );
   });
 
   it("shows pay now when a payday is due and breached after heart damage", () => {
-    expect(formatHud(140, 6, 450, 0, 0, true)).toBe(
-      "gold 140 · imps 6 · tick 450 · pay now · breached",
+    expect(formatHud(140, 6, 450, 0, 0, true, 0)).toBe(
+      "gold 140 · imps 6 · tick 450 · pay now · breached · wave 1",
+    );
+  });
+
+  it("shows the escalated wave index after a repair", () => {
+    expect(formatHud(140, 6, 512, 38, 20, false, 2)).toBe(
+      "gold 140 · imps 6 · tick 512 · pay 38 · heart 20 · wave 3",
     );
   });
 
@@ -100,18 +106,18 @@ describe("hud", () => {
   it("writes the DOM only when a value changes", () => {
     const element: HudElement = { textContent: "" };
     const hud = createHud(element);
-    hud.update(0, 4, 0, 450, 20, false);
-    expect(element.textContent).toBe("gold 0 · imps 4 · tick 0 · pay 450 · heart 20");
+    hud.update(0, 4, 0, 450, 20, false, 0);
+    expect(element.textContent).toBe("gold 0 · imps 4 · tick 0 · pay 450 · heart 20 · wave 1");
     element.textContent = "unchanged";
-    hud.update(0, 4, 0, 450, 20, false);
+    hud.update(0, 4, 0, 450, 20, false, 0);
     expect(element.textContent).toBe("unchanged");
-    hud.update(100, 4, 0, 450, 20, false);
-    expect(element.textContent).toBe("gold 100 · imps 4 · tick 0 · pay 450 · heart 20");
-    hud.update(100, 6, 0, 450, 20, false);
-    expect(element.textContent).toBe("gold 100 · imps 6 · tick 0 · pay 450 · heart 20");
-    hud.update(100, 6, 1, 449, 19, false);
-    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay 449 · heart 19");
-    hud.update(100, 6, 1, 0, 0, true);
-    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay now · breached");
+    hud.update(100, 4, 0, 450, 20, false, 0);
+    expect(element.textContent).toBe("gold 100 · imps 4 · tick 0 · pay 450 · heart 20 · wave 1");
+    hud.update(100, 6, 0, 450, 20, false, 0);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 0 · pay 450 · heart 20 · wave 1");
+    hud.update(100, 6, 1, 449, 19, false, 1);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay 449 · heart 19 · wave 2");
+    hud.update(100, 6, 1, 0, 0, true, 1);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay now · breached · wave 2");
   });
 });
