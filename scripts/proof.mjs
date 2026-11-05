@@ -88,8 +88,11 @@ async function run() {
         });
         await delay(50);
       }
-      const tick = await page.evaluate(() => globalThis.__keeper.tick);
-      console.log(tick);
+      const result = await page.evaluate(() => ({
+        tick: globalThis.__keeper.tick,
+        hash: globalThis.__keeper.hash,
+      }));
+      console.log(result.tick, result.hash);
       await page.screenshot({ path: "proof/shot.png" });
       await context.close();
       const files = await readdir("proof/tmp");
