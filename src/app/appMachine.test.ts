@@ -11,6 +11,13 @@ function startApp() {
   return actor;
 }
 
+function startSandbox() {
+  const actor = startApp();
+  actor.send({ type: "ASSETS_REQUESTED" });
+  actor.send({ type: "ASSETS_READY" });
+  return actor;
+}
+
 describe("app chart", () => {
   it("starts in Booting and does not step the sim", () => {
     const actor = startApp();
@@ -41,9 +48,7 @@ describe("app chart", () => {
   });
 
   it("pauses and resumes the sandbox", () => {
-    const actor = startApp();
-    actor.send({ type: "ASSETS_REQUESTED" });
-    actor.send({ type: "ASSETS_READY" });
+    const actor = startSandbox();
     actor.send({ type: "PAUSE" });
     expect(actor.getSnapshot().value).toEqual({ Sandbox: "Paused" });
     expect(isPaused(actor.getSnapshot())).toBe(true);
@@ -53,27 +58,121 @@ describe("app chart", () => {
     expect(isSimStepping(actor.getSnapshot())).toBe(true);
   });
 
-  it("loses and restores the WebGL context from running and paused", () => {
-    const actor = startApp();
-    actor.send({ type: "ASSETS_REQUESTED" });
-    actor.send({ type: "ASSETS_READY" });
+  it("keeps a manual pause across tab hide and show", () => {
+    const actor = startSandbox();
+    actor.send({ type: "PAUSE" });
+    actor.send({ type: "TAB_HIDDEN" });
+    expect(actor.getSnapshot().value).toBe("Hidden");
+    expect(isPaused(actor.getSnapshot())).toBe(false);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+    actor.send({ type: "TAB_VISIBLE" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Paused" });
+    expect(isPaused(actor.getSnapshot())).toBe(true);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+  });
+
+  it("keeps running across tab hide and show", () => {
+    const actor = startSandbox();
+    actor.send({ type: "TAB_HIDDEN" });
+    expect(actor.getSnapshot().value).toBe("Hidden");
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+    actor.send({ type: "TAB_VISIBLE" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Running" });
+    expect(isSimStepping(actor.getSnapshot())).toBe(true);
+  });
+
+  it("ignores pause and resume while hidden", () => {
+    const actor = startSandbox();
+    actor.send({ type: "TAB_HIDDEN" });
+    actor.send({ type: "PAUSE" });
+    expect(actor.getSnapshot().value).toBe("Hidden");
+    actor.send({ type: "RESUME" });
+    expect(actor.getSnapshot().value).toBe("Hidden");
+    actor.send({ type: "TAB_VISIBLE" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Running" });
+  });
+
+  it("keeps a manual pause across context loss and restore", () => {
+    const actor = startSandbox();
+    actor.send({ type: "PAUSE" });
     actor.send({ type: "CONTEXT_LOST" });
-    expect(actor.getSnapshot().value).toBe("ContextLost");
+    expect(actor.getSnapshot().value).toEqual({ ContextLost: "Visible" });
+    expect(isPaused(actor.getSnapshot())).toBe(false);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+    actor.send({ type: "CONTEXT_RESTORED" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Paused" });
+    expect(isPaused(actor.getSnapshot())).toBe(true);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+  });
+
+  it("keeps running across context loss and restore", () => {
+    const actor = startSandbox();
+    actor.send({ type: "CONTEXT_LOST" });
+    expect(actor.getSnapshot().value).toEqual({ ContextLost: "Visible" });
     expect(isSimStepping(actor.getSnapshot())).toBe(false);
     actor.send({ type: "CONTEXT_RESTORED" });
     expect(actor.getSnapshot().value).toEqual({ Sandbox: "Running" });
     expect(isSimStepping(actor.getSnapshot())).toBe(true);
+  });
+
+  it("remembers a manual pause through hidden then context loss", () => {
+    const actor = startSandbox();
+    actor.send({ type: "PAUSE" });
+    actor.send({ type: "TAB_HIDDEN" });
+    actor.send({ type: "CONTEXT_LOST" });
+    expect(actor.getSnapshot().value).toEqual({ ContextLost: "Hidden" });
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+    actor.send({ type: "TAB_VISIBLE" });
+    expect(actor.getSnapshot().value).toEqual({ ContextLost: "Visible" });
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+    actor.send({ type: "CONTEXT_RESTORED" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Paused" });
+    expect(isPaused(actor.getSnapshot())).toBe(true);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+  });
+
+  it("remembers a manual pause through context loss then hidden", () => {
+    const actor = startSandbox();
     actor.send({ type: "PAUSE" });
     actor.send({ type: "CONTEXT_LOST" });
-    expect(actor.getSnapshot().value).toBe("ContextLost");
+    actor.send({ type: "TAB_HIDDEN" });
+    expect(actor.getSnapshot().value).toEqual({ ContextLost: "Hidden" });
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
     actor.send({ type: "CONTEXT_RESTORED" });
-    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Running" });
+    expect(actor.getSnapshot().value).toBe("Hidden");
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+    actor.send({ type: "TAB_VISIBLE" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Paused" });
+    expect(isPaused(actor.getSnapshot())).toBe(true);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+  });
+
+  it("remembers running through hidden and context loss in both orders", () => {
+    const hiddenFirst = startSandbox();
+    hiddenFirst.send({ type: "TAB_HIDDEN" });
+    hiddenFirst.send({ type: "CONTEXT_LOST" });
+    expect(hiddenFirst.getSnapshot().value).toEqual({ ContextLost: "Hidden" });
+    expect(isSimStepping(hiddenFirst.getSnapshot())).toBe(false);
+    hiddenFirst.send({ type: "TAB_VISIBLE" });
+    hiddenFirst.send({ type: "CONTEXT_RESTORED" });
+    expect(hiddenFirst.getSnapshot().value).toEqual({ Sandbox: "Running" });
+    expect(isSimStepping(hiddenFirst.getSnapshot())).toBe(true);
+
+    const lostFirst = startSandbox();
+    lostFirst.send({ type: "CONTEXT_LOST" });
+    lostFirst.send({ type: "TAB_HIDDEN" });
+    expect(lostFirst.getSnapshot().value).toEqual({ ContextLost: "Hidden" });
+    expect(isSimStepping(lostFirst.getSnapshot())).toBe(false);
+    lostFirst.send({ type: "CONTEXT_RESTORED" });
+    expect(lostFirst.getSnapshot().value).toBe("Hidden");
+    expect(isSimStepping(lostFirst.getSnapshot())).toBe(false);
+    lostFirst.send({ type: "TAB_VISIBLE" });
+    expect(lostFirst.getSnapshot().value).toEqual({ Sandbox: "Running" });
+    expect(isSimStepping(lostFirst.getSnapshot())).toBe(true);
   });
 
   it("replays a loaded save from running and returns to running", () => {
-    const actor = startApp();
-    actor.send({ type: "ASSETS_REQUESTED" });
-    actor.send({ type: "ASSETS_READY" });
+    const actor = startSandbox();
     actor.send({ type: "LOAD_SAVE", save });
     expect(actor.getSnapshot().value).toEqual({ Sandbox: "Replaying" });
     expect(isReplaying(actor.getSnapshot())).toBe(true);
@@ -85,9 +184,7 @@ describe("app chart", () => {
   });
 
   it("replays a loaded save from paused and pauses after a replay error", () => {
-    const actor = startApp();
-    actor.send({ type: "ASSETS_REQUESTED" });
-    actor.send({ type: "ASSETS_READY" });
+    const actor = startSandbox();
     actor.send({ type: "PAUSE" });
     actor.send({ type: "LOAD_SAVE", save });
     expect(actor.getSnapshot().value).toEqual({ Sandbox: "Replaying" });
@@ -103,6 +200,7 @@ describe("app chart", () => {
     actor.send({ type: "PAUSE" });
     actor.send({ type: "ASSETS_READY" });
     actor.send({ type: "CONTEXT_LOST" });
+    actor.send({ type: "TAB_HIDDEN" });
     expect(actor.getSnapshot().value).toBe("Booting");
     actor.send({ type: "ASSETS_REQUESTED" });
     actor.send({ type: "PAUSE" });
