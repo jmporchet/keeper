@@ -580,6 +580,15 @@ export function bindCameraInput(
       }
       return;
     }
+    const arrow = arrowKeyFromCode(event.code);
+    if (arrow !== undefined) {
+      if (heldArrows[arrow]) {
+        return;
+      }
+      heldArrows[arrow] = true;
+      actor.send({ type: "PAN_KEY_DOWN" });
+      return;
+    }
     const key = panKeyFromCode(event.code);
     if (key === undefined) {
       return;
@@ -594,7 +603,13 @@ export function bindCameraInput(
   window.addEventListener("keyup", (event) => {
     const arrow = arrowKeyFromCode(event.code);
     if (arrow !== undefined) {
+      if (!heldArrows[arrow]) {
+        return;
+      }
       heldArrows[arrow] = false;
+      if (!isPossessed(actor.getSnapshot())) {
+        actor.send({ type: "PAN_KEY_UP" });
+      }
       return;
     }
     const key = panKeyFromCode(event.code);
@@ -626,7 +641,12 @@ export function bindCameraInput(
     if (!isPanning(snapshot)) {
       return;
     }
-    applyHeldKeys(pose, held);
+    applyHeldKeys(pose, {
+      w: held.w || heldArrows.up,
+      s: held.s || heldArrows.down,
+      a: held.a || heldArrows.left,
+      d: held.d || heldArrows.right,
+    });
     onChange();
   }
 

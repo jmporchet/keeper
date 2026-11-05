@@ -79,10 +79,10 @@ export function applyHeldKeys(
   let right = 0;
   let forward = 0;
   if (held.w) {
-    forward += PAN_KEY_SPEED;
+    forward -= PAN_KEY_SPEED;
   }
   if (held.s) {
-    forward -= PAN_KEY_SPEED;
+    forward += PAN_KEY_SPEED;
   }
   if (held.a) {
     right -= PAN_KEY_SPEED;

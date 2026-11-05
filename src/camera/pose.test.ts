@@ -78,6 +78,17 @@ describe("camera pose", () => {
     onMap(pose);
   });
 
+  it("moves the target away from the eye when holding W", () => {
+    const pose = createCameraPose();
+    const beforeX = pose.targetX;
+    const beforeZ = pose.targetZ;
+    applyHeldKeys(pose, { w: true, a: false, s: false, d: false });
+    const dot =
+      (pose.targetX - beforeX) * -Math.sin(pose.yaw) +
+      (pose.targetZ - beforeZ) * -Math.cos(pose.yaw);
+    expect(dot).toBeGreaterThan(0);
+  });
+
   it("keeps the target on the map after 1000 random inputs", () => {
     const kind = fc.constantFrom("orbit", "pan", "panPixels", "zoom", "wasd");
     const input = fc.record({

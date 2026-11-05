@@ -143,7 +143,7 @@ stateDiagram-v2
     [*] --> Idle
     Idle --> Orbiting: right drag
     Orbiting --> Idle: release
-    Idle --> Panning: middle drag or WASD
+    Idle --> Panning: middle drag, WASD or arrows
     Panning --> Idle: release
     Idle --> Tagging: left press on a tile
     Tagging --> Idle: release (tag/untag commands for the sweep)

@@ -52,6 +52,26 @@ describe("input and camera chart", () => {
     expect(actor.getSnapshot().value).toBe("Idle");
   });
 
+  it("pans on arrow keys and returns when keys are released", () => {
+    const actor = startInput();
+    actor.send({ type: "PAN_KEY_DOWN" });
+    actor.send({ type: "PAN_KEY_DOWN" });
+    expect(actor.getSnapshot().value).toBe("Panning");
+    actor.send({ type: "PAN_KEY_UP" });
+    expect(actor.getSnapshot().value).toBe("Panning");
+    actor.send({ type: "PAN_KEY_UP" });
+    expect(actor.getSnapshot().value).toBe("Idle");
+  });
+
+  it("pans on arrow keys and returns when keys are released", () => {
+    const actor = startInput();
+    actor.send({ type: "PAN_KEY_DOWN" });
+    expect(actor.getSnapshot().value).toBe("Panning");
+    expect(isPanning(actor.getSnapshot())).toBe(true);
+    actor.send({ type: "PAN_KEY_UP" });
+    expect(actor.getSnapshot().value).toBe("Idle");
+  });
+
   it("stays panning while WASD is held after middle release", () => {
     const actor = startInput();
     actor.send({ type: "PAN_KEY_DOWN" });
