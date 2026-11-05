@@ -23,7 +23,7 @@ Rules for every change, human or agent. Each rule says what to do. Sources are a
 - Code that runs every tick or every frame lives in `*.hot.ts`. Lint bans object and array literals, closures, `new`, spread and string building in those files. The loop makes no garbage, so the GC does not stutter.
 - Tiles live in typed arrays. Agents and jobs live in preallocated pools with free lists, referenced by index.
 - Render with `InstancedMesh`, one per visual kind. A removed block gets scale 0 so its instance index stays its tile index.
-- Budgets: 60 fps with 200 imps on a mid-range laptop; first download under 300 KB gzipped. The build fails above the size budget.
+- Budgets: 60 fps with 200 imps on a mid-range laptop; first-load JS under 300 KB gzipped (sum of gzip sizes of JS files statically referenced from `dist/index.html`, measured with Node `zlib` gzip level 9 after `vite build`). The build fails above that budget.
 
 ## 4. Turn every lesson into structure
 

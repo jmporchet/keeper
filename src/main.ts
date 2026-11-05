@@ -1,4 +1,11 @@
-import * as THREE from "three";
+import {
+  ACESFilmicToneMapping,
+  Color,
+  PerspectiveCamera,
+  Scene,
+  Vector3,
+  WebGLRenderer,
+} from "three";
 import { createActor } from "xstate";
 import { appMachine, isPaused, isSimStepping } from "./app/appMachine";
 import { createCameraPose, eyeFromPose } from "./camera/pose";
@@ -41,16 +48,16 @@ canvas.style.width = "100%";
 canvas.style.height = "100%";
 document.body.append(canvas);
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMapping = ACESFilmicToneMapping;
 renderer.toneMappingExposure = DUNGEON_EXPOSURE;
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1c1612);
+const scene = new Scene();
+scene.background = new Color(0x1c1612);
 
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
+const camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
 const pose = createCameraPose();
 
 const world = createWorld(1);
@@ -58,7 +65,7 @@ const commands: Command[] = [];
 const map = createMapMeshes(scene);
 syncMap(world.tiles, world.width, world.tilesVersion, map);
 addTorchLighting(scene);
-const screenPoint = new THREE.Vector3();
+const screenPoint = new Vector3();
 
 const tickHud = document.getElementById("tick");
 const pauseOverlay = document.getElementById("pause-overlay");
