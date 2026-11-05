@@ -1,6 +1,6 @@
 import { addHeld, createHand, hashHand, isHeld, removeHeld } from "./hand";
 import { asTick, asTileIndex, type ImpId, type Tick, type TileIndex } from "./ids";
-import { createImpBoard, hashImps, spawnImp, spawnStartingImps, workerOf, type Imp } from "./imps";
+import { boostImp, clearBoost, createImpBoard, hashImps, spawnImp, spawnStartingImps, workerOf, type Imp } from "./imps";
 import { stepImps } from "./imps.hot";
 import { cancelJobAtTile, createJobBoard, hashJobs, openJob, releaseWorker } from "./jobs";
 import { HEART_X, HEART_Y, MAP_HEIGHT, MAP_HALF, MAP_WIDTH, ROOM_KIND, TILE_KIND, TREASURY_COST, tileKindAt } from "./map";
@@ -47,7 +47,8 @@ export type Command =
   | { kind: "paintRoom"; tick: Tick; tile: TileIndex; room: "treasury" }
   | { kind: "spawnImp"; tick: Tick }
   | { kind: "pickUp"; tick: Tick; impId: ImpId }
-  | { kind: "drop"; tick: Tick; impId: ImpId; tileX: number; tileY: number };
+  | { kind: "drop"; tick: Tick; impId: ImpId; tileX: number; tileY: number }
+  | { kind: "slap"; tick: Tick; impId: ImpId };
 
 export function tileIndexFromWorld(x: number, z: number): TileIndex | undefined {
   const tx = Math.floor(x + MAP_HALF + 0.5);
@@ -345,6 +346,7 @@ function applyPickUp(world: World, impId: ImpId): void {
         return;
       }
       releaseWorker(world.jobs, workerOf(imp));
+      clearBoost(imp);
       imp.headingX = 0;
       imp.headingY = 0;
       imp.state = imp.held;
@@ -355,6 +357,17 @@ function applyPickUp(world: World, impId: ImpId): void {
       return never;
     }
   }
+}
+
+function applySlap(world: World, impId: ImpId): void {
+  const imp = liveImpById(world, impId);
+  if (imp === undefined) {
+    return;
+  }
+  if (imp.state.kind === "held") {
+    return;
+  }
+  boostImp(imp);
 }
 
 function applyDrop(world: World, impId: ImpId, tileX: number, tileY: number): void {
@@ -427,6 +440,9 @@ function applyCommand(world: World, command: Command): void {
       return;
     case "drop":
       applyDrop(world, command.impId, command.tileX, command.tileY);
+      return;
+    case "slap":
+      applySlap(world, command.impId);
       return;
     default: {
       const never: never = command;

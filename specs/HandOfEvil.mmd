@@ -1,7 +1,9 @@
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Held: pickUp [hand not full]
-    Walking --> Held: pickUp [job released]
-    Working --> Held: pickUp [job released]
+    Idle --> Held: pickUp [hand not full] (clears boost)
+    Walking --> Held: pickUp [job released] (clears boost)
+    Working --> Held: pickUp [job released] (clears boost)
     Held --> Held: drop refused
     Held --> Idle: drop on walkable tile
+    Idle --> Idle: Slap (boost = SlapTicks)
+    Idle --> Idle: Tick (boost decrements)

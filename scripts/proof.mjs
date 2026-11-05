@@ -6,6 +6,7 @@ import { chromium } from "playwright";
 
 const PORT = Number(process.env.PROOF_PORT ?? "4173");
 const ORIGIN = `http://127.0.0.1:${PORT}`;
+const SLAP_TICKS = 60;
 
 function ms(value) {
   return value.toFixed(3);
@@ -137,6 +138,22 @@ async function locateHandTarget(page, box) {
   throw new Error("hand target stayed off screen");
 }
 
+async function locateImp(page, box, impId) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const imps = await page.evaluate(() => globalThis.__keeper.impSnapshot());
+    const imp = imps.find((entry) => entry.id === impId);
+    if (imp === undefined || imp.state === "held") {
+      throw new Error(`imp ${String(impId)} is missing or held`);
+    }
+    const point = await pagePointForTile(page, box, imp.tileX, imp.tileY);
+    if (point !== null) {
+      return { imp, point };
+    }
+    await panToTileCenter(page, box, imp.tileX, imp.tileY);
+  }
+  throw new Error(`imp ${String(impId)} stayed off screen`);
+}
+
 async function panToTileCenter(page, box, tx, ty) {
   const targetX = tx - 32;
   const targetZ = ty - 32;
@@ -157,7 +174,7 @@ async function panToTileCenter(page, box, tx, ty) {
     await page.mouse.down({ button: "middle" });
     await page.mouse.move(cx - right / scale, cy + forward / scale);
     await page.mouse.up({ button: "middle" });
-    await stepOnce(page, 1, 10);
+    await delay(10);
   }
   throw new Error(`tile ${String(tx)},${String(ty)} never reached screen center`);
 }
@@ -202,11 +219,9 @@ async function run() {
       const first = sweepPts[0];
       await page.mouse.move(first.x, first.y);
       await page.mouse.down();
-      await stepOnce(page);
       for (let i = 1; i < sweepPts.length; i += 1) {
         const point = sweepPts[i];
         await page.mouse.move(point.x, point.y);
-        await stepOnce(page);
       }
       await page.mouse.up();
       await stepOnce(page);
@@ -220,7 +235,6 @@ async function run() {
       const beforeRock = await page.evaluate(() => globalThis.__keeper.taggedCount);
       await page.mouse.move(rockPoint.x, rockPoint.y);
       await page.mouse.down();
-      await stepOnce(page);
       await page.mouse.up();
       await stepOnce(page);
       const afterRock = await page.evaluate(() => globalThis.__keeper.taggedCount);
@@ -253,11 +267,9 @@ async function run() {
       const treasuryFirst = treasuryPoints[0];
       await page.mouse.move(treasuryFirst.x, treasuryFirst.y);
       await page.mouse.down();
-      await stepOnce(page);
       for (let i = 1; i < treasuryPoints.length; i += 1) {
         const point = treasuryPoints[i];
         await page.mouse.move(point.x, point.y);
-        await stepOnce(page);
       }
       await page.mouse.up();
       await stepOnce(page);
@@ -319,12 +331,12 @@ async function run() {
       await page.mouse.move(cx, cy);
       for (let i = 0; i < 6; i += 1) {
         await page.mouse.wheel(0, -240);
-        await stepOnce(page, 2, 40);
       }
+      await stepOnce(page, 12, 20);
 
       const holdStart = Date.now();
       let angle = 0;
-      while (Date.now() - holdStart < 1000) {
+      while (Date.now() - holdStart < 400) {
         angle += 0.16;
         await page.mouse.move(
           cx + Math.cos(angle) * box.width * 0.32,
@@ -394,12 +406,37 @@ async function run() {
       }
 
       console.log("checkpoint drop", Date.now() - recordStart);
+      const slapTarget = await locateImp(page, box, target.id);
+      await page.keyboard.down("Shift");
+      await page.mouse.move(slapTarget.point.x, slapTarget.point.y);
+      await page.mouse.click(slapTarget.point.x, slapTarget.point.y);
+      await page.keyboard.up("Shift");
+      await stepOnce(page);
+      const afterSlap = await page.evaluate(() => ({
+        heldCount: globalThis.__keeper.heldCount,
+        imps: globalThis.__keeper.impSnapshot(),
+      }));
+      if (afterSlap.heldCount !== 0) {
+        throw new Error(`Shift+left slap picked up an imp: held ${String(afterSlap.heldCount)}`);
+      }
+      const boostedImp = afterSlap.imps.find((imp) => imp.boost > 0);
+      if (boostedImp === undefined) {
+        throw new Error("Shift+left click did not boost an imp");
+      }
+      const boostedId = boostedImp.id;
+      await stepOnce(page, SLAP_TICKS + 2, 20);
+      const afterSlapExpiry = await page.evaluate(() => globalThis.__keeper.impSnapshot());
+      const expiredImp = afterSlapExpiry.find((imp) => imp.id === boostedId);
+      if (expiredImp === undefined || expiredImp.boost !== 0) {
+        throw new Error(`imp ${String(boostedId)} boost did not expire after ${String(SLAP_TICKS)} ticks`);
+      }
+      console.log("checkpoint slap", Date.now() - recordStart);
       await panToTileCenter(page, box, 34.5, 32);
       await page.mouse.move(cx, cy);
       for (let i = 0; i < 6; i += 1) {
         await page.mouse.wheel(0, -240);
-        await stepOnce(page, 2, 40);
       }
+      await stepOnce(page, 12, 20);
 
       await page.mouse.move(cx, cy);
       await page.mouse.down({ button: "right" });
@@ -415,9 +452,7 @@ async function run() {
           throw new Error(`corridor tile ${String(x)},32 is off screen`);
         }
       }
-      for (let i = 0; i < 6; i += 1) {
-        await stepOnce(page, 5);
-      }
+      await stepOnce(page, 30, 20);
 
       console.log("checkpoint corridor", Date.now() - recordStart);
       const beforePause = await page.evaluate(() => globalThis.__keeper.tick);
@@ -482,7 +517,7 @@ async function run() {
             `gold and treasury proof not complete after ${String(extraTicks)} extra ticks: goldStored ${String(counts.goldStored)}, goldSpent ${String(counts.goldSpent)}, treasuryTiles ${String(counts.treasuryTileCount)}, treasuryStock ${String(counts.treasuryStockTotal)}, maxCarrying ${String(maxCarrying)}, tagged ${String(counts.tagged)}, claimed ${String(counts.claimed)} (start ${String(claimedAtStart)}), elapsed ${String(elapsed)} ms`,
           );
         }
-        await stepOnce(page, 4, 5);
+        await stepOnce(page, 4, 1);
         extraTicks += 4;
       }
       console.log("checkpoint wait", Date.now() - recordStart);
@@ -544,9 +579,7 @@ async function run() {
       ) {
         throw new Error(`hud did not show new values: ${afterPanel.hudText}`);
       }
-      for (let i = 0; i < 4; i += 1) {
-        await stepOnce(page, 1, 20);
-      }
+      await stepOnce(page, 4, 20);
 
       console.log("checkpoint panel", Date.now() - recordStart);
       const targetImps = 200;

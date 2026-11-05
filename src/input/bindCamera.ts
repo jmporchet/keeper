@@ -231,6 +231,14 @@ export function bindCameraInput(
       }
       return;
     }
+    if (snapshot.matches("Idle") && event.shiftKey) {
+      const impId = pickImpFromEvent(event);
+      if (impId !== undefined) {
+        enqueue({ kind: "slap", tick: world.tick, impId });
+        actor.send({ type: "SLAP_IMP" });
+        return;
+      }
+    }
     if (isHolding(snapshot) || snapshot.matches("Idle")) {
       const impId = pickImpFromEvent(event);
       if (impId !== undefined && snapshot.context.heldCount < HAND_CAPACITY) {

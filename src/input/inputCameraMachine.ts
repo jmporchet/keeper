@@ -14,7 +14,8 @@ export type InputCameraEvent =
   | { type: "ESCAPE" }
   | { type: "DROP_WALKABLE" }
   | { type: "DROP_REFUSED" }
-  | { type: "TAG_RELEASE" };
+  | { type: "TAG_RELEASE" }
+  | { type: "SLAP_IMP" };
 
 export type InputCameraContext = {
   panKeys: number;
@@ -54,6 +55,7 @@ export const inputCameraMachine = setup({
         LEFT_DOWN_TILE: "Tagging",
         SELECT_ROOM_TOOL: "Painting",
         LEFT_DOWN_IMP: { target: "Holding", guard: "handHasRoom", actions: "incHeld" },
+        SLAP_IMP: {},
       },
     },
     Orbiting: {

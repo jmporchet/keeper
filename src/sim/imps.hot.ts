@@ -42,13 +42,15 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
     return;
   }
   capturePrev(imp);
+  const boosted = imp.boost.kind === "boosted";
+  const speed = boosted ? 2 : 1;
   const state = imp.state;
   switch (state.kind) {
     case "idle":
       beginIdle(world, imp);
       break;
     case "wandering":
-      if (advanceAlongPath(imp, state, world.width)) {
+      if (advanceAlongPath(imp, state, world.width, speed)) {
         beginIdle(world, imp);
       }
       break;
@@ -57,7 +59,7 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
         goIdle(imp);
         break;
       }
-      if (advanceAlongPath(imp, state, world.width)) {
+      if (advanceAlongPath(imp, state, world.width, speed)) {
         beginWorking(world, imp, state.tile);
       }
       break;
@@ -66,7 +68,7 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
         goIdle(imp);
         break;
       }
-      state.remaining -= 1;
+      state.remaining -= speed;
       if (state.remaining <= 0) {
         switch (state.work) {
           case "dig":
@@ -86,7 +88,7 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
       }
       break;
     case "delivering":
-      if (advanceAlongPath(imp, state, world.width)) {
+      if (advanceAlongPath(imp, state, world.width, speed)) {
         finishDelivery(world, imp);
       }
       break;
@@ -97,35 +99,57 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
       throw never;
     }
   }
+  tickBoost(imp);
   captureCurr(imp);
+}
+
+function tickBoost(imp: Imp): void {
+  const boost = imp.boost;
+  switch (boost.kind) {
+    case "none":
+      return;
+    case "boosted":
+      boost.remaining -= 1;
+      if (boost.remaining <= 0) {
+        imp.boost = imp.boostNone;
+      }
+      return;
+    default: {
+      const never: never = boost;
+      throw never;
+    }
+  }
 }
 
 function advanceAlongPath(
   imp: Imp,
   state: { pathStep: number; pathLength: number; progress: number },
   width: number,
+  steps: number,
 ): boolean {
   if (state.pathLength <= 1) {
     return true;
   }
-  state.progress += 1;
-  if (state.progress < STEPS_PER_TILE) {
-    return false;
+  for (let step = 0; step < steps; step += 1) {
+    state.progress += 1;
+    if (state.progress < STEPS_PER_TILE) {
+      continue;
+    }
+    state.progress = 0;
+    const nextIndex = state.pathStep + 1;
+    const nextTile = imp.path[nextIndex];
+    if (nextTile === undefined) {
+      return true;
+    }
+    const ny = (nextTile / width) | 0;
+    const nx = nextTile - ny * width;
+    imp.tileX = nx;
+    imp.tileY = ny;
+    state.pathStep = nextIndex;
+    if (state.pathStep + 1 >= state.pathLength) {
+      return true;
+    }
+    setHeading(imp, width);
   }
-  state.progress = 0;
-  const nextIndex = state.pathStep + 1;
-  const nextTile = imp.path[nextIndex];
-  if (nextTile === undefined) {
-    return true;
-  }
-  const ny = (nextTile / width) | 0;
-  const nx = nextTile - ny * width;
-  imp.tileX = nx;
-  imp.tileY = ny;
-  state.pathStep = nextIndex;
-  if (state.pathStep + 1 >= state.pathLength) {
-    return true;
-  }
-  setHeading(imp, width);
   return false;
 }

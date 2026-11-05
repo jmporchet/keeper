@@ -108,6 +108,21 @@ describe("input and camera chart", () => {
     expect(actor.getSnapshot().context.heldCount).toBe(0);
   });
 
+  it("slaps an imp while idle without leaving idle or picking it up", () => {
+    const actor = startInput();
+    actor.send({ type: "SLAP_IMP" });
+    expect(actor.getSnapshot().value).toBe("Idle");
+    expect(actor.getSnapshot().context.heldCount).toBe(0);
+  });
+
+  it("ignores a slap event while holding", () => {
+    const actor = startInput();
+    actor.send({ type: "LEFT_DOWN_IMP" });
+    actor.send({ type: "SLAP_IMP" });
+    expect(actor.getSnapshot().value).toBe("Holding");
+    expect(actor.getSnapshot().context.heldCount).toBe(1);
+  });
+
   it("picks up more imps while holding and only returns to idle when the hand is empty", () => {
     const actor = startInput();
     actor.send({ type: "LEFT_DOWN_IMP" });

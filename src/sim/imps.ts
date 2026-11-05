@@ -14,6 +14,7 @@ export const DIG_TICKS = 40;
 export const CLAIM_TICKS = 30;
 export const MINE_TICKS = 30;
 export const MINE_CHUNK = 20;
+export const SLAP_TICKS = 60;
 
 export type ImpIdle = { kind: "idle" };
 export type ImpWandering = {
@@ -47,6 +48,9 @@ export type ImpHeld = { kind: "held" };
 export type ImpCarryEmpty = { kind: "empty" };
 export type ImpCarryGold = { kind: "gold"; amount: number };
 export type ImpCarry = ImpCarryEmpty | ImpCarryGold;
+export type ImpBoostNone = { kind: "none" };
+export type ImpBoostBoosted = { kind: "boosted"; remaining: number };
+export type ImpBoost = ImpBoostNone | ImpBoostBoosted;
 export type ImpState = ImpIdle | ImpWandering | ImpWalking | ImpWorking | ImpDelivering | ImpHeld;
 
 export type Imp = {
@@ -68,6 +72,9 @@ export type Imp = {
   carry: ImpCarry;
   carryEmpty: ImpCarryEmpty;
   carryGold: ImpCarryGold;
+  boost: ImpBoost;
+  boostNone: ImpBoostNone;
+  boostBoosted: ImpBoostBoosted;
   held: ImpHeld;
   state: ImpState;
 };
@@ -106,6 +113,8 @@ export function createImp(index: number, tileX: number, tileY: number): Imp {
   };
   const carryEmpty: ImpCarryEmpty = { kind: "empty" };
   const carryGold: ImpCarryGold = { kind: "gold", amount: 0 };
+  const boostNone: ImpBoostNone = { kind: "none" };
+  const boostBoosted: ImpBoostBoosted = { kind: "boosted", remaining: 0 };
   const held: ImpHeld = { kind: "held" };
   return {
     id: asImpId(index),
@@ -126,6 +135,9 @@ export function createImp(index: number, tileX: number, tileY: number): Imp {
     carry: carryEmpty,
     carryEmpty,
     carryGold,
+    boost: boostNone,
+    boostNone,
+    boostBoosted,
     held,
     state: idle,
   };
@@ -425,6 +437,15 @@ export function goIdle(imp: Imp): void {
   imp.state = imp.idle;
   imp.headingX = 0;
   imp.headingY = 0;
+}
+
+export function boostImp(imp: Imp): void {
+  imp.boostBoosted.remaining = SLAP_TICKS;
+  imp.boost = imp.boostBoosted;
+}
+
+export function clearBoost(imp: Imp): void {
+  imp.boost = imp.boostNone;
 }
 
 export function finishDig(world: ImpWorld, imp: Imp, tile: TileIndex): void {
@@ -762,6 +783,19 @@ function carryCode(carry: ImpCarry): number {
   }
 }
 
+function boostCode(boost: ImpBoost): number {
+  switch (boost.kind) {
+    case "none":
+      return 1;
+    case "boosted":
+      return 2;
+    default: {
+      const never: never = boost;
+      return never;
+    }
+  }
+}
+
 export function hashImps(board: ImpBoard): number {
   let h = 2166136261;
   h = mix(h, board.slots.length);
@@ -783,6 +817,18 @@ export function hashImps(board: ImpBoard): number {
         h = mix(h, carryCode(imp.carry));
         if (imp.carry.kind === "gold") {
           h = mix(h, imp.carry.amount);
+        }
+        h = mix(h, boostCode(imp.boost));
+        switch (imp.boost.kind) {
+          case "none":
+            break;
+          case "boosted":
+            h = mix(h, imp.boost.remaining);
+            break;
+          default: {
+            const never: never = imp.boost;
+            return never;
+          }
         }
         h = mix(h, impStateCode(imp.state.kind));
         const moving = imp.state;
