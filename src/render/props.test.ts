@@ -5,8 +5,13 @@ import {
   createChicken,
   createCreature,
   createWorld,
+  DOOR_HP,
   MAP_WIDTH,
   ROOM_KIND,
+  setTile,
+  TILE_KIND,
+  TRAP_GAS_LIVE,
+  TRAP_GAS_SPENT,
   TREASURY_CAPACITY,
   type ChickenSlot,
   type CreatureSlot,
@@ -30,6 +35,10 @@ function sync(
     MAP_WIDTH,
     chickens,
     creatures,
+    world.doorHp,
+    world.doorOpen,
+    world.trapState,
+    world.tiles,
     visual.mesh,
     visual.dummy,
     visual.color,
@@ -162,5 +171,42 @@ describe("room props packing", () => {
     const visual = makeVisual();
     sync(world, [], [], visual);
     expect(visual.mesh.count).toBe(4);
+  });
+
+  it("draws more instances for a closed door than for an open door", () => {
+    const world = createWorld(1);
+    const tile = asTileIndex(30 * MAP_WIDTH + 30);
+    setTile(world, tile, TILE_KIND.claimed);
+    world.doorHp[tile] = DOOR_HP;
+    world.doorOpen[tile] = 0;
+    const visual = makeVisual();
+    sync(world, [], [], visual);
+    const closed = visual.mesh.count;
+    expect(closed).toBeGreaterThan(0);
+    world.doorOpen[tile] = 1;
+    sync(world, [], [], visual);
+    const open = visual.mesh.count;
+    expect(open).toBeGreaterThan(0);
+    expect(closed).toBeGreaterThan(open);
+  });
+
+  it("draws a green vent on a live gas trap and fewer instances once spent", () => {
+    const world = createWorld(1);
+    const tile = asTileIndex(30 * MAP_WIDTH + 30);
+    setTile(world, tile, TILE_KIND.claimed);
+    world.trapState[tile] = TRAP_GAS_LIVE;
+    const visual = makeVisual();
+    sync(world, [], [], visual);
+    const live = visual.mesh.count;
+    expect(live).toBeGreaterThan(1);
+    const vent = new THREE.Color();
+    visual.mesh.getColorAt(1, vent);
+    expect(vent.g).toBeGreaterThan(vent.r);
+    expect(vent.g).toBeGreaterThan(vent.b);
+    world.trapState[tile] = TRAP_GAS_SPENT;
+    sync(world, [], [], visual);
+    const spent = visual.mesh.count;
+    expect(spent).toBeGreaterThan(0);
+    expect(live).toBeGreaterThan(spent);
   });
 });
