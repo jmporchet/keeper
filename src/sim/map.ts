@@ -40,6 +40,30 @@ export const TILE_KIND_COUNT = TILE_KINDS.length;
 
 export type TileKindCode = (typeof TILE_KIND)[TileKind];
 
+export const ROOM_KINDS = ["none", "treasury"] as const;
+
+export type RoomKind = (typeof ROOM_KINDS)[number];
+
+function roomCode(kind: RoomKind): number {
+  const index = ROOM_KINDS.indexOf(kind);
+  if (index < 0) {
+    throw new Error("unknown room kind");
+  }
+  return index;
+}
+
+export const ROOM_KIND = {
+  none: roomCode("none"),
+  treasury: roomCode("treasury"),
+} as const;
+
+export const ROOM_KIND_COUNT = ROOM_KINDS.length;
+
+export type RoomKindCode = (typeof ROOM_KIND)[RoomKind];
+
+export const TREASURY_CAPACITY = 200;
+export const TREASURY_COST = 25;
+
 export type TileRead = {
   readonly length: number;
   readonly [index: number]: number;
@@ -53,6 +77,18 @@ export function tileKindAt(tiles: TileRead, index: number): TileKind {
   const kind = TILE_KINDS[code];
   if (kind === undefined) {
     throw new Error("invalid tile kind");
+  }
+  return kind;
+}
+
+export function roomKindAt(rooms: TileRead, index: number): RoomKind {
+  const code = rooms[index];
+  if (code === undefined) {
+    throw new Error("room index out of range");
+  }
+  const kind = ROOM_KINDS[code];
+  if (kind === undefined) {
+    throw new Error("invalid room kind");
   }
   return kind;
 }

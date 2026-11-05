@@ -43,6 +43,9 @@
         opacity: 0.45;
         cursor: default;
       }
+      #sandbox-panel button[aria-pressed="true"] {
+        background: #6b5a45;
+      }
       #pause-overlay {
         display: none;
         position: fixed;
@@ -64,6 +67,7 @@
     <div id="sandbox-panel">
       <button id="spawn-imp" type="button">Spawn imp</button>
       <button id="add-gold" type="button">Add 100 gold</button>
+      <button id="paint-treasury" type="button" aria-pressed="false">Paint treasury</button>
     </div>
     <div id="pause-overlay">Pause</div>
     <script type="module" src="/src/main.ts"></script>

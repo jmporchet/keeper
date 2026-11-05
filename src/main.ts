@@ -10,6 +10,8 @@ import { createActor } from "xstate";
 import { appMachine, isPaused, isSimStepping } from "./app/appMachine";
 import { createCameraPose, eyeFromPose } from "./camera/pose";
 import { bindCameraInput } from "./input/bindCamera";
+import { isPainting } from "./input/inputCameraMachine";
+import { createGoldPileMeshes, syncGoldPiles } from "./render/goldPiles";
 import { createImpMeshes, syncImps } from "./render/imps";
 import { addTorchLighting, DUNGEON_EXPOSURE } from "./render/lights";
 import { createMapMeshes, syncMap } from "./render/map";
@@ -24,12 +26,15 @@ import {
   MAP_WIDTH,
   MAX_FRAME_DELTA,
   MAX_STEPS_PER_FRAME,
+  ROOM_KIND,
   step,
   TICK_DT,
   tileKindAt,
   asTileIndex,
   jobAtTile,
   jobHeldBy,
+  treasuryStockTotal,
+  treasuryTileCount,
   workerOf,
   type Command,
   type Job,
@@ -51,14 +56,19 @@ declare global {
       dirtCount: number;
       claimedCount: number;
       goldStored: number;
+      goldSpent: number;
       impCount: number;
       carryingCount: number;
       hudText: string;
       drawCalls: number;
       heldCount: number;
+      painting: boolean;
+      treasuryTileCount: number;
+      treasuryStockTotal: number;
       camera: { targetX: number; targetZ: number; yaw: number; pitch: number; distance: number };
       canvasPointForTile(tx: number, ty: number): { x: number; y: number } | null;
       tileKind(tx: number, ty: number): string | null;
+      treasuryTiles(): { x: number; y: number; stock: number }[];
       jobSnapshot(tx: number, ty: number): JobDebug | null;
       impSnapshot(): ImpDebug[];
       dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
@@ -95,43 +105,16 @@ const world = createWorld(1);
 const commands: Command[] = [];
 const hudElement = document.getElementById("hud");
 const hud = createHud(hudElement);
-const sandboxPanel = createSandboxPanel(
-  document.getElementById("sandbox-panel"),
-  () => world.tick,
-  (command) => {
-    commands.push(command);
-  },
-);
+const goldPiles = createGoldPileMeshes(scene);
 const map = createMapMeshes(scene);
 const impsVisual = createImpMeshes(scene);
 syncMap(world.tiles, world.width, world.tilesVersion, map);
+syncGoldPiles(world, goldPiles);
 syncImps(world.imps, world.hand, 1, undefined, impsVisual);
 addTorchLighting(scene);
 const screenPoint = new Vector3();
 
 const pauseOverlay = document.getElementById("pause-overlay");
-
-function hudText(): string {
-  return hudElement === null ? "" : hudElement.textContent ?? "";
-}
-
-function syncHud(): void {
-  hud.update(world.goldStored, liveImpCount(world.imps), world.tick);
-  const paused = isPaused(actor.getSnapshot());
-  sandboxPanel.setPaused(paused);
-  if (pauseOverlay !== null) {
-    pauseOverlay.classList.toggle("visible", paused);
-  }
-}
-
-actor.subscribe(() => {
-  syncHud();
-});
-
-actor.send({ type: "ASSETS_REQUESTED" });
-actor.send({ type: "ASSETS_READY" });
-syncHud();
-
 const proof = new URLSearchParams(window.location.search).has("proof");
 
 function placeCamera(): void {
@@ -156,6 +139,54 @@ const cameraInput = bindCameraInput(
   },
 );
 
+function togglePaint(): void {
+  const snapshot = cameraInput.actor.getSnapshot();
+  if (isPainting(snapshot)) {
+    cameraInput.actor.send({ type: "CLEAR_TOOL" });
+    return;
+  }
+  cameraInput.actor.send({ type: "SELECT_ROOM_TOOL" });
+}
+
+const sandboxPanel = createSandboxPanel(
+  document.getElementById("sandbox-panel"),
+  () => world.tick,
+  (command) => {
+    commands.push(command);
+  },
+  togglePaint,
+);
+
+function syncPaintMode(): void {
+  sandboxPanel.setPainting(isPainting(cameraInput.actor.getSnapshot()));
+}
+
+cameraInput.actor.subscribe(() => {
+  syncPaintMode();
+});
+syncPaintMode();
+
+function hudText(): string {
+  return hudElement === null ? "" : hudElement.textContent ?? "";
+}
+
+function syncHud(): void {
+  hud.update(world.goldStored, liveImpCount(world.imps), world.tick);
+  const paused = isPaused(actor.getSnapshot());
+  sandboxPanel.setPaused(paused);
+  if (pauseOverlay !== null) {
+    pauseOverlay.classList.toggle("visible", paused);
+  }
+}
+
+actor.subscribe(() => {
+  syncHud();
+});
+
+actor.send({ type: "ASSETS_REQUESTED" });
+actor.send({ type: "ASSETS_READY" });
+syncHud();
+
 function render(): void {
   if (actor.getSnapshot().matches("ContextLost")) {
     return;
@@ -175,7 +206,15 @@ function togglePause(): void {
 }
 
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" || event.key === "p" || event.key === "P") {
+  if (event.key === "Escape") {
+    if (isPainting(cameraInput.actor.getSnapshot())) {
+      cameraInput.actor.send({ type: "ESCAPE" });
+      return;
+    }
+    togglePause();
+    return;
+  }
+  if (event.key === "p" || event.key === "P") {
     togglePause();
   }
 });
@@ -300,6 +339,18 @@ if (proof) {
     get goldStored() {
       return world.goldStored;
     },
+    get goldSpent() {
+      return world.goldSpent;
+    },
+    get painting() {
+      return isPainting(cameraInput.actor.getSnapshot());
+    },
+    get treasuryTileCount() {
+      return treasuryTileCount(world);
+    },
+    get treasuryStockTotal() {
+      return treasuryStockTotal(world);
+    },
     get impCount() {
       return liveImpCount(world.imps);
     },
@@ -357,6 +408,20 @@ if (proof) {
     },
     canvasPointForTile,
     tileKind: tileKindDebug,
+    treasuryTiles() {
+      const tiles: { x: number; y: number; stock: number }[] = [];
+      for (let i = 0; i < world.rooms.length; i += 1) {
+        const room = world.rooms[i];
+        if (room !== ROOM_KIND.treasury) {
+          continue;
+        }
+        const stock = world.treasuryStock[i];
+        const y = (i / world.width) | 0;
+        const x = i - y * world.width;
+        tiles.push({ x, y, stock: stock === undefined ? 0 : stock });
+      }
+      return tiles;
+    },
     jobSnapshot: jobSnapshotDebug,
     step(n: number) {
       if (!isSimStepping(actor.getSnapshot())) {
@@ -368,6 +433,7 @@ if (proof) {
         cameraInput.tickHeldKeys();
       }
       syncMap(world.tiles, world.width, world.tilesVersion, map);
+      syncGoldPiles(world, goldPiles);
       syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual);
       placeCamera();
       syncHud();
@@ -404,6 +470,7 @@ if (proof) {
       for (let f = 0; f < frames; f += 1) {
         const start = performance.now();
         syncMap(world.tiles, world.width, world.tilesVersion, map);
+        syncGoldPiles(world, goldPiles);
         syncImps(world.imps, world.hand, 1, undefined, impsVisual);
         placeCamera();
         syncHud();
@@ -450,6 +517,7 @@ if (proof) {
     }
     cameraInput.tickHeldKeys();
     syncMap(world.tiles, world.width, world.tilesVersion, map);
+    syncGoldPiles(world, goldPiles);
     syncImps(world.imps, world.hand, accumulator / TICK_DT, cameraInput.cursorTile(), impsVisual);
     placeCamera();
     syncHud();

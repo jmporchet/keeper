@@ -13,9 +13,15 @@ import {
 } from "./world";
 
 function totalGold(world: World): number {
-  let total = world.goldStored;
+  let total = world.goldStored + world.goldSpent;
   for (let i = 0; i < world.goldStock.length; i += 1) {
     const stock = world.goldStock[i];
+    if (stock !== undefined) {
+      total += stock;
+    }
+  }
+  for (let i = 0; i < world.treasuryStock.length; i += 1) {
+    const stock = world.treasuryStock[i];
     if (stock !== undefined) {
       total += stock;
     }

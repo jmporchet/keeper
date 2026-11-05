@@ -12,8 +12,15 @@ export type World = {
   width: number;
   height: number;
   readonly tiles: TileRead;
+  readonly rooms: Uint8Array;
+  readonly treasuryStock: Uint16Array;
+  readonly treasuryCache: Int32Array;
+  treasuryCacheCount: number;
+  treasuryCacheVersion: number;
   tilesVersion: number;
+  treasuryVersion: number;
   goldStored: number;
+  goldSpent: number;
   goldStock: Uint32Array;
   commandCursor: number;
   jobs: JobBoard;

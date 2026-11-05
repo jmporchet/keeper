@@ -17,15 +17,18 @@ export function sandboxCommand(action: SandboxAction, tick: Tick): Command {
 
 export type SandboxPanel = {
   setPaused(paused: boolean): void;
+  setPainting(painting: boolean): void;
 };
 
 export function createSandboxPanel(
   root: HTMLElement | null,
   getTick: () => Tick,
   enqueue: (command: Command) => void,
+  togglePaint: () => void,
 ): SandboxPanel {
   const spawnButton = root === null ? null : root.querySelector<HTMLButtonElement>("#spawn-imp");
   const goldButton = root === null ? null : root.querySelector<HTMLButtonElement>("#add-gold");
+  const paintButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-treasury");
   let paused = false;
 
   if (spawnButton !== null) {
@@ -44,6 +47,14 @@ export function createSandboxPanel(
       enqueue(sandboxCommand("addGold", getTick()));
     });
   }
+  if (paintButton !== null) {
+    paintButton.addEventListener("click", () => {
+      if (paused) {
+        return;
+      }
+      togglePaint();
+    });
+  }
 
   function setPaused(next: boolean): void {
     if (paused === next) {
@@ -56,7 +67,16 @@ export function createSandboxPanel(
     if (goldButton !== null) {
       goldButton.disabled = next;
     }
+    if (paintButton !== null) {
+      paintButton.disabled = next;
+    }
   }
 
-  return { setPaused };
+  function setPainting(painting: boolean): void {
+    if (paintButton !== null) {
+      paintButton.setAttribute("aria-pressed", painting ? "true" : "false");
+    }
+  }
+
+  return { setPaused, setPainting };
 }

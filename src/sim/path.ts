@@ -8,6 +8,7 @@ export type PathScratch = {
   gen: number;
   cameFrom: Int32Array;
   reachable: Int32Array;
+  distance: Int32Array;
   reverseBuf: Int32Array;
 };
 
@@ -18,6 +19,7 @@ export function createPathScratch(): PathScratch {
     gen: 1,
     cameFrom: new Int32Array(PATH_CELL_COUNT),
     reachable: new Int32Array(PATH_CELL_COUNT),
+    distance: new Int32Array(PATH_CELL_COUNT),
     reverseBuf: new Int32Array(PATH_CELL_COUNT),
   };
 }

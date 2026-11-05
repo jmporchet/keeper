@@ -11,6 +11,7 @@ export function bfsToGoal(
   generation: Uint32Array,
   gen: number,
   cameFrom: Int32Array,
+  distance: Int32Array,
 ): boolean {
   const startCode = tiles[start];
   const goalCode = tiles[goal];
@@ -22,6 +23,7 @@ export function bfsToGoal(
   }
   generation[start] = gen;
   cameFrom[start] = start;
+  distance[start] = 0;
   if (start === goal) {
     return true;
   }
@@ -39,10 +41,10 @@ export function bfsToGoal(
     }
     const y = (i / width) | 0;
     const x = i - y * width;
-    tail = enqueue(tiles, width, height, x, y - 1, i, queue, generation, gen, cameFrom, tail);
-    tail = enqueue(tiles, width, height, x + 1, y, i, queue, generation, gen, cameFrom, tail);
-    tail = enqueue(tiles, width, height, x, y + 1, i, queue, generation, gen, cameFrom, tail);
-    tail = enqueue(tiles, width, height, x - 1, y, i, queue, generation, gen, cameFrom, tail);
+    tail = enqueue(tiles, width, height, x, y - 1, i, queue, generation, gen, cameFrom, distance, tail);
+    tail = enqueue(tiles, width, height, x + 1, y, i, queue, generation, gen, cameFrom, distance, tail);
+    tail = enqueue(tiles, width, height, x, y + 1, i, queue, generation, gen, cameFrom, distance, tail);
+    tail = enqueue(tiles, width, height, x - 1, y, i, queue, generation, gen, cameFrom, distance, tail);
   }
   const goalGen = generation[goal];
   return goalGen === gen;
@@ -58,6 +60,7 @@ export function floodWalkable(
   gen: number,
   cameFrom: Int32Array,
   reachable: Int32Array,
+  distance: Int32Array,
 ): number {
   const startCode = tiles[start];
   if (startCode === undefined || !isWalkableCode(startCode)) {
@@ -65,6 +68,7 @@ export function floodWalkable(
   }
   generation[start] = gen;
   cameFrom[start] = start;
+  distance[start] = 0;
   queue[0] = start;
   reachable[0] = start;
   let head = 0;
@@ -79,16 +83,16 @@ export function floodWalkable(
     const y = (i / width) | 0;
     const x = i - y * width;
     const beforeN = tail;
-    tail = enqueue(tiles, width, height, x, y - 1, i, queue, generation, gen, cameFrom, tail);
+    tail = enqueue(tiles, width, height, x, y - 1, i, queue, generation, gen, cameFrom, distance, tail);
     count = noteReachable(queue, reachable, count, beforeN, tail);
     const beforeE = tail;
-    tail = enqueue(tiles, width, height, x + 1, y, i, queue, generation, gen, cameFrom, tail);
+    tail = enqueue(tiles, width, height, x + 1, y, i, queue, generation, gen, cameFrom, distance, tail);
     count = noteReachable(queue, reachable, count, beforeE, tail);
     const beforeS = tail;
-    tail = enqueue(tiles, width, height, x, y + 1, i, queue, generation, gen, cameFrom, tail);
+    tail = enqueue(tiles, width, height, x, y + 1, i, queue, generation, gen, cameFrom, distance, tail);
     count = noteReachable(queue, reachable, count, beforeS, tail);
     const beforeW = tail;
-    tail = enqueue(tiles, width, height, x - 1, y, i, queue, generation, gen, cameFrom, tail);
+    tail = enqueue(tiles, width, height, x - 1, y, i, queue, generation, gen, cameFrom, distance, tail);
     count = noteReachable(queue, reachable, count, beforeW, tail);
   }
   return count;
@@ -156,6 +160,7 @@ function enqueue(
   generation: Uint32Array,
   gen: number,
   cameFrom: Int32Array,
+  distance: Int32Array,
   tail: number,
 ): number {
   if (x < 0 || y < 0 || x >= width || y >= height) {
@@ -176,8 +181,10 @@ function enqueue(
   if (!isWalkableCode(code)) {
     return tail;
   }
+  const fromDistance = distance[from];
   generation[n] = gen;
   cameFrom[n] = from;
+  distance[n] = (fromDistance === undefined ? 0 : fromDistance) + 1;
   queue[tail] = n;
   return tail + 1;
 }

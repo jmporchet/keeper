@@ -117,3 +117,7 @@ export function isTagging(snapshot: InputCameraSnapshot): boolean {
 export function isHolding(snapshot: InputCameraSnapshot): boolean {
   return snapshot.matches("Holding");
 }
+
+export function isPainting(snapshot: InputCameraSnapshot): boolean {
+  return snapshot.matches("Painting");
+}
