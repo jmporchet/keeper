@@ -139,6 +139,7 @@ declare global {
       victorious: boolean;
       victoryWaves: number;
       repairsDone: number;
+      researchDone: boolean;
       waveIndex: number;
       lightningCooldown: number;
       lightningCost: number;
@@ -891,6 +892,9 @@ if (proof) {
     },
     get repairsDone() {
       return world.repairsDone;
+    },
+    get researchDone() {
+      return world.researchDone;
     },
     get waveIndex() {
       return world.repairsDone + 1;

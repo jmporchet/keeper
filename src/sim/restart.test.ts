@@ -42,6 +42,7 @@ function expectFresh(world: World, seed: number): void {
   expect(world.heartHp).toBe(fresh.heartHp);
   expect(world.wavesCleared).toBe(0);
   expect(world.breachTicks).toBe(0);
+  expect(world.researchDone).toBe(false);
   expect(world.commandCursor).toBe(0);
   expect(liveImpCount(world.imps)).toBe(liveImpCount(fresh.imps));
   expect(liveCreatureCount(world.creatures)).toBe(0);

@@ -60,6 +60,7 @@ export type World = {
   victorious: boolean;
   waveActive: boolean;
   repairsDone: number;
+  researchDone: boolean;
   lightningCooldown: number;
   healCooldown: number;
   speedImpsCooldown: number;

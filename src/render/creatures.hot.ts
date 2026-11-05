@@ -5,6 +5,7 @@ import {
   CREATURE_KIND_BEETLE,
   CREATURE_KIND_FLY,
   CREATURE_KIND_HERO,
+  CREATURE_KIND_WARLOCK,
 } from "./creatureGeometry";
 
 export function syncCreatureInstances(
@@ -50,6 +51,13 @@ export function syncCreatureInstances(
             scaleY = trained ? 0.8 : 0.7;
             scaleZ = trained ? 1.3 : 1.05;
             hex = trained ? 0xe0b050 : 0x8b5a2b;
+            break;
+          case "warlock":
+            variant = CREATURE_KIND_WARLOCK;
+            scaleX = trained ? 1.05 : 0.95;
+            scaleY = trained ? 1.1 : 1;
+            scaleZ = trained ? 1.05 : 0.95;
+            hex = trained ? 0xc39bff : 0x7b4fd6;
             break;
           default: {
             const never: never = creature.kind;

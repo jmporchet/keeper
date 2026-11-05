@@ -5,7 +5,8 @@ export const CREATURE_GEOMETRY_BASE_Y = 0;
 export const CREATURE_GROUND_Y = 0.2;
 export const CREATURE_KIND_FLY = 0;
 export const CREATURE_KIND_BEETLE = 1;
-export const CREATURE_KIND_HERO = 2;
+export const CREATURE_KIND_WARLOCK = 2;
+export const CREATURE_KIND_HERO = 3;
 
 function partBox(
   width: number,
@@ -117,6 +118,22 @@ function beetleParts(): THREE.BufferGeometry[] {
   ];
 }
 
+function warlockParts(): THREE.BufferGeometry[] {
+  return [
+    partCone(0.2, 0.55, 6, 0, 0.275, 0, 0, 0, 0),
+    partBox(0.24, 0.05, 0.22, 0, 0.03, 0, 0, 0, 0),
+    partBox(0.18, 0.2, 0.14, 0, 0.58, 0, 0, 0, 0),
+    partBox(0.28, 0.06, 0.16, 0, 0.68, 0, 0, 0, 0),
+    partBox(0.07, 0.28, 0.08, -0.17, 0.55, 0, 0, 0, -0.08),
+    partBox(0.07, 0.28, 0.08, 0.17, 0.55, 0, 0, 0, 0.08),
+    partSphere(0.11, 7, 5, 0, 0.8, 0.01),
+    partCone(0.13, 0.22, 6, 0, 0.84, 0, 0, 0, 0),
+    partBox(0.14, 0.05, 0.05, 0, 0.78, 0.1, 0, 0, 0),
+    partBox(0.05, 0.38, 0.05, 0.2, 0.25, 0.05, 0, 0, 0),
+    partSphere(0.055, 6, 4, 0.2, 0.48, 0.05),
+  ];
+}
+
 function heroParts(): THREE.BufferGeometry[] {
   return [
     partBox(0.11, 0.36, 0.12, -0.1, 0.18, 0, 0, 0, 0),
@@ -165,6 +182,10 @@ export function createBeetleGeometry(): THREE.BufferGeometry {
   return mergeParts(tagKind(beetleParts(), CREATURE_KIND_BEETLE));
 }
 
+export function createWarlockGeometry(): THREE.BufferGeometry {
+  return mergeParts(tagKind(warlockParts(), CREATURE_KIND_WARLOCK));
+}
+
 export function createHeroGeometry(): THREE.BufferGeometry {
   return mergeParts(tagKind(heroParts(), CREATURE_KIND_HERO));
 }
@@ -173,6 +194,7 @@ export function createCreatureGeometry(): THREE.BufferGeometry {
   return mergeParts([
     ...tagKind(flyParts(), CREATURE_KIND_FLY),
     ...tagKind(beetleParts(), CREATURE_KIND_BEETLE),
+    ...tagKind(warlockParts(), CREATURE_KIND_WARLOCK),
     ...tagKind(heroParts(), CREATURE_KIND_HERO),
   ]);
 }

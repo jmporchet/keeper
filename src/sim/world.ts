@@ -327,6 +327,7 @@ export function createWorld(seed: number): World {
     victorious: false,
     waveActive: false,
     repairsDone: 0,
+    researchDone: false,
     lightningCooldown: 0,
     healCooldown: 0,
     speedImpsCooldown: 0,
@@ -368,6 +369,7 @@ export function hashWorld(world: World): number {
   h = mix(h, world.victorious ? 1 : 0);
   h = mix(h, world.waveActive ? 1 : 0);
   h = mix(h, world.repairsDone);
+  h = mix(h, world.researchDone ? 1 : 0);
   h = mix(h, world.lightningCooldown);
   h = mix(h, world.healCooldown);
   h = mix(h, world.speedImpsCooldown);

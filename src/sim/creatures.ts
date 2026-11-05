@@ -21,9 +21,10 @@ export const WANDER_ROLL = 2;
 export const CREATURE_MAX_LEVEL = 1;
 export const CREATURE_HP = 3;
 export const BEETLE_HP = 5;
+export const WARLOCK_HP = 4;
 export const CREATURE_HP_PER_LEVEL = 1;
 
-export type CreatureKind = "fly" | "beetle";
+export type CreatureKind = "fly" | "beetle" | "warlock";
 
 export type CreatureArriving = { kind: "arriving" };
 export type CreatureToBed = {
@@ -109,6 +110,8 @@ function creatureKindHp(kind: CreatureKind): number {
       return CREATURE_HP;
     case "beetle":
       return BEETLE_HP;
+    case "warlock":
+      return WARLOCK_HP;
     default: {
       const never: never = kind;
       return never;
@@ -395,6 +398,14 @@ function spawnCreature(world: World, bedTile: TileIndex, kind: CreatureKind): bo
   return false;
 }
 
+function arrivalKind(world: World): CreatureKind {
+  const roll = world.rng % (world.researchDone ? 3 : 2);
+  if (!world.researchDone) {
+    return roll === 0 ? "fly" : "beetle";
+  }
+  return roll === 0 ? "fly" : roll === 1 ? "beetle" : "warlock";
+}
+
 export function tryArrival(world: World): void {
   if (world.tick === 0 || world.tick % ARRIVE_TICKS !== 0) {
     return;
@@ -409,8 +420,7 @@ export function tryArrival(world: World): void {
   if (bed === undefined) {
     return;
   }
-  const kind: CreatureKind = world.rng % 2 === 0 ? "fly" : "beetle";
-  spawnCreature(world, bed, kind);
+  spawnCreature(world, bed, arrivalKind(world));
 }
 
 function tileIndex(x: number, y: number, width: number): number {
@@ -532,6 +542,9 @@ export function beginTraining(world: World, creature: Creature, tile: TileIndex)
 }
 
 export function finishTraining(world: World, creature: Creature): void {
+  if (trainingBoostedByLibrary(world, creature.training.tile)) {
+    world.researchDone = true;
+  }
   creature.level = CREATURE_MAX_LEVEL;
   creature.maxHp += CREATURE_HP_PER_LEVEL;
   creature.hp += CREATURE_HP_PER_LEVEL;
@@ -802,6 +815,8 @@ function creatureKindCode(kind: CreatureKind): number {
       return 1;
     case "beetle":
       return 2;
+    case "warlock":
+      return 3;
     default: {
       const never: never = kind;
       return never;
