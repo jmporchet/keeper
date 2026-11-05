@@ -12,7 +12,7 @@ One feature per PR, in this order. Each item names its acceptance check. "Proof"
 | 6 | ~~**App chart.** XState chart 1: boot, loading, sandbox running/paused, context lost.~~ | Unit test drives every transition. Proof video shows pause and resume; tick counter frozen while paused. |
 | 7 | **Free camera.** Orbit, pan (drag + WASD), zoom, clamps (chart 2 camera states). | Proof video: scripted orbit, pan and zoom. Test: target never leaves the map after 1,000 random inputs (property test). |
 | 8 | ~~**Tag tiles.** Click and sweep to tag earth and gold; rock refuses. Tagged tiles highlighted.~~ | Expect test of the grid after a tag sweep. Proof screenshot shows highlighted tiles. |
-| 9 | **Job board.** Chart 5, job pool, priorities. TLA+ spec for reservation. | TLA+ check passes with `OneImpPerJob` invariant; Mermaid chart from the `statechart` skill committed. Property test: no job reserved twice after random commands. |
+| 9 | ~~**Job board.** Chart 5, job pool, priorities. TLA+ spec for reservation.~~ | TLA+ check passes with `OneImpPerJob` invariant; Mermaid chart from the `statechart` skill committed. Property test: no job reserved twice after random commands. |
 | 10 | **Imps walk.** Spawn imps at the heart, grid pathfinding, chart 4 idle/walking/wandering. | Expect test of an imp's path. Proof video shows imps walking. |
 | 11 | **Imps dig.** Working state, earth becomes dirt. | Proof video: tag a corridor, imps dig it out. Determinism test still passes. |
 | 12 | **Imps claim.** Dirt next to claimed floor gets claimed. | Property test: every claimed tile connects to the heart through claimed tiles. |

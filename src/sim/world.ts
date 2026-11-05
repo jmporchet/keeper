@@ -1,4 +1,5 @@
 import { asTick, asTileIndex, type Tick, type TileIndex } from "./ids";
+import { cancelJobAtTile, createJobBoard, hashJobs, openJob, type JobBoard } from "./jobs";
 
 export const TICK_HZ = 20;
 export const TICK_DT = 1 / TICK_HZ;
@@ -66,6 +67,7 @@ export type World = {
   tilesVersion: number;
   goldStored: number;
   commandCursor: number;
+  jobs: JobBoard;
 };
 
 const TILE_BUFFERS = new WeakMap<World, Uint8Array>();
@@ -171,6 +173,7 @@ export function createWorld(seed: number): World {
     tilesVersion: 1,
     goldStored: 0,
     commandCursor: 0,
+    jobs: createJobBoard(width * height),
   };
   TILE_BUFFERS.set(world, tiles);
   return world;
@@ -208,6 +211,7 @@ export function hashWorld(world: World): number {
   h = mix(h, world.height);
   h = mix(h, world.goldStored);
   h = mix(h, world.tilesVersion);
+  h = mix(h, hashJobs(world.jobs));
   const tiles = world.tiles;
   for (let i = 0; i < tiles.length; i += 1) {
     const cell = tiles[i];
@@ -224,9 +228,11 @@ function applyTag(world: World, tile: TileIndex): void {
   switch (kind) {
     case "earth":
       setTile(world, tile, TILE_KIND.taggedEarth);
+      openJob(world.jobs, tile, "dig");
       return;
     case "goldSeam":
       setTile(world, tile, TILE_KIND.taggedGold);
+      openJob(world.jobs, tile, "mineGold");
       return;
     case "taggedEarth":
     case "taggedGold":
@@ -247,9 +253,11 @@ function applyUntag(world: World, tile: TileIndex): void {
   switch (kind) {
     case "taggedEarth":
       setTile(world, tile, TILE_KIND.earth);
+      cancelJobAtTile(world.jobs, tile);
       return;
     case "taggedGold":
       setTile(world, tile, TILE_KIND.goldSeam);
+      cancelJobAtTile(world.jobs, tile);
       return;
     case "earth":
     case "goldSeam":
