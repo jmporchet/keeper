@@ -25,6 +25,9 @@ export type World = {
   readonly hatcheryCache: Int32Array;
   hatcheryCacheCount: number;
   hatcheryCacheVersion: number;
+  readonly trainingCache: Int32Array;
+  trainingCacheCount: number;
+  trainingCacheVersion: number;
   readonly chickenTileCount: Uint16Array;
   chickens: ChickenBoard;
   chickensVersion: number;

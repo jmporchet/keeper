@@ -12,6 +12,8 @@ export const CREATURE_STEPS_PER_TILE = STEPS_PER_TILE;
 export const HUNGER_TICKS = 300;
 export const HUNGER_RETRY_TICKS = 40;
 export const EAT_TICKS = 20;
+export const TRAIN_TICKS = 80;
+export const CREATURE_MAX_LEVEL = 1;
 
 export type CreatureArriving = { kind: "arriving" };
 export type CreatureToBed = {
@@ -21,6 +23,14 @@ export type CreatureToBed = {
   progress: number;
 };
 export type CreatureSleeping = { kind: "sleeping"; remaining: number };
+export type CreatureToTraining = {
+  kind: "toTraining";
+  tile: TileIndex;
+  pathStep: number;
+  pathLength: number;
+  progress: number;
+};
+export type CreatureTraining = { kind: "training"; tile: TileIndex; remaining: number };
 export type CreatureHungry = { kind: "hungry"; retry: number };
 export type CreatureToFood = {
   kind: "toFood";
@@ -34,6 +44,8 @@ export type CreatureState =
   | CreatureArriving
   | CreatureToBed
   | CreatureSleeping
+  | CreatureToTraining
+  | CreatureTraining
   | CreatureHungry
   | CreatureToFood
   | CreatureEating;
@@ -49,10 +61,13 @@ export type Creature = {
   prevZ: number;
   currX: number;
   currZ: number;
+  level: number;
   path: Int16Array;
   arriving: CreatureArriving;
   toBed: CreatureToBed;
   sleeping: CreatureSleeping;
+  toTraining: CreatureToTraining;
+  training: CreatureTraining;
   hungry: CreatureHungry;
   toFood: CreatureToFood;
   eating: CreatureEating;
@@ -69,6 +84,14 @@ export function createCreature(index: number, tileX: number, tileY: number, bedT
   const arriving: CreatureArriving = { kind: "arriving" };
   const toBed: CreatureToBed = { kind: "toBed", pathStep: 0, pathLength: 0, progress: 0 };
   const sleeping: CreatureSleeping = { kind: "sleeping", remaining: HUNGER_TICKS };
+  const toTraining: CreatureToTraining = {
+    kind: "toTraining",
+    tile: bedTile,
+    pathStep: 0,
+    pathLength: 0,
+    progress: 0,
+  };
+  const training: CreatureTraining = { kind: "training", tile: bedTile, remaining: TRAIN_TICKS };
   const hungry: CreatureHungry = { kind: "hungry", retry: 0 };
   const toFood: CreatureToFood = {
     kind: "toFood",
@@ -89,10 +112,13 @@ export function createCreature(index: number, tileX: number, tileY: number, bedT
     prevZ: tileY,
     currX: tileX,
     currZ: tileY,
+    level: 0,
     path: new Int16Array(PATH_CELL_COUNT),
     arriving,
     toBed,
     sleeping,
+    toTraining,
+    training,
     hungry,
     toFood,
     eating,
@@ -153,6 +179,50 @@ function refreshLairCache(world: World): void {
     count += 1;
   }
   world.lairCacheCount = count;
+}
+
+function refreshTrainingCache(world: World): void {
+  if (world.trainingCacheVersion === world.roomsVersion) {
+    return;
+  }
+  world.trainingCacheVersion = world.roomsVersion;
+  let count = 0;
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room !== ROOM_KIND.training) {
+      continue;
+    }
+    world.trainingCache[count] = i;
+    count += 1;
+  }
+  world.trainingCacheCount = count;
+}
+
+function trainingTileClaimed(world: World, tile: TileIndex): boolean {
+  for (let i = 0; i < world.creatures.slots.length; i += 1) {
+    const slot = world.creatures.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "live": {
+        const state = slot.creature.state;
+        if (state.kind === "toTraining" || state.kind === "training") {
+          if (state.tile === tile) {
+            return true;
+          }
+        }
+        break;
+      }
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+  return false;
 }
 
 function bedClaimed(world: World, tile: TileIndex): boolean {
@@ -252,7 +322,7 @@ function tileIndex(x: number, y: number, width: number): number {
 
 export function setCreatureHeading(creature: Creature, width: number): void {
   const state = creature.state;
-  if (state.kind !== "toBed" && state.kind !== "toFood") {
+  if (state.kind !== "toBed" && state.kind !== "toFood" && state.kind !== "toTraining") {
     creature.headingX = 0;
     creature.headingY = 0;
     return;
@@ -302,6 +372,80 @@ export function beginSleeping(creature: Creature): void {
   creature.headingY = 0;
   creature.sleeping.remaining = HUNGER_TICKS;
   creature.state = creature.sleeping;
+}
+
+export function beginTraining(creature: Creature, tile: TileIndex): void {
+  creature.headingX = 0;
+  creature.headingY = 0;
+  creature.training.tile = tile;
+  creature.training.remaining = TRAIN_TICKS;
+  creature.state = creature.training;
+}
+
+export function finishTraining(world: World, creature: Creature): void {
+  creature.level = CREATURE_MAX_LEVEL;
+  beginToBed(world, creature);
+}
+
+export function beginToTraining(world: World, creature: Creature): boolean {
+  refreshTrainingCache(world);
+  if (world.trainingCacheCount === 0) {
+    return false;
+  }
+  const start = tileIndex(creature.tileX, creature.tileY, world.width);
+  const gen = bumpPathGen(world.pathScratch);
+  const count = floodWalkable(
+    world.tiles,
+    world.width,
+    world.height,
+    start,
+    world.pathScratch.queue,
+    world.pathScratch.generation,
+    gen,
+    world.pathScratch.cameFrom,
+    world.pathScratch.reachable,
+    world.pathScratch.distance,
+  );
+  if (count === 0) {
+    return false;
+  }
+  const generation = world.pathScratch.generation;
+  for (let i = 0; i < world.trainingCacheCount; i += 1) {
+    const tile = world.trainingCache[i];
+    if (tile === undefined) {
+      continue;
+    }
+    const goal = asTileIndex(tile);
+    if (trainingTileClaimed(world, goal)) {
+      continue;
+    }
+    const reached = generation[goal];
+    if (reached !== gen) {
+      continue;
+    }
+    const length = reconstructPath(
+      start,
+      goal,
+      world.pathScratch.cameFrom,
+      world.pathScratch.reverseBuf,
+      creature.path,
+    );
+    if (length <= 0) {
+      continue;
+    }
+    if (length <= 1) {
+      beginTraining(creature, goal);
+      return true;
+    }
+    creature.toTraining.tile = goal;
+    creature.toTraining.pathStep = 0;
+    creature.toTraining.pathLength = length;
+    creature.toTraining.progress = 0;
+    creature.state = creature.toTraining;
+    setCreatureHeading(creature, world.width);
+    return true;
+  }
+  return false;
 }
 
 export function beginHungry(creature: Creature): void {
@@ -463,7 +607,8 @@ export function worldCreatureZ(tileY: number, headingY: number, progress: number
 
 export function captureCreatureCurr(creature: Creature): void {
   const state = creature.state;
-  const progress = state.kind === "toBed" || state.kind === "toFood" ? state.progress : 0;
+  const progress =
+    state.kind === "toBed" || state.kind === "toFood" || state.kind === "toTraining" ? state.progress : 0;
   creature.currX = worldCreatureX(creature.tileX, creature.headingX, progress);
   creature.currZ = worldCreatureZ(creature.tileY, creature.headingY, progress);
 }
@@ -503,12 +648,16 @@ function creatureStateCode(kind: CreatureState["kind"]): number {
       return 2;
     case "sleeping":
       return 3;
-    case "hungry":
+    case "toTraining":
       return 4;
-    case "toFood":
+    case "training":
       return 5;
-    case "eating":
+    case "hungry":
       return 6;
+    case "toFood":
+      return 7;
+    case "eating":
+      return 8;
     default: {
       const never: never = kind;
       return never;
@@ -533,6 +682,7 @@ export function hashCreatures(board: CreatureBoard): number {
         h = mix(h, 1);
         h = mix(h, creature.id);
         h = mix(h, creature.bedTile);
+        h = mix(h, creature.level);
         h = mix(h, creature.tileX);
         h = mix(h, creature.tileY);
         h = mix(h, creatureStateCode(creature.state.kind));
@@ -541,6 +691,21 @@ export function hashCreatures(board: CreatureBoard): number {
             break;
           case "sleeping": {
             const state = creature.state;
+            h = mix(h, state.remaining);
+            break;
+          }
+          case "toTraining": {
+            const state = creature.state;
+            h = mix(h, state.tile);
+            h = mix(h, state.pathStep);
+            h = mix(h, state.pathLength);
+            h = mix(h, state.progress);
+            h = mixPath(h, creature.path, state.pathLength);
+            break;
+          }
+          case "training": {
+            const state = creature.state;
+            h = mix(h, state.tile);
             h = mix(h, state.remaining);
             break;
           }

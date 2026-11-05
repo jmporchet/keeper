@@ -43,7 +43,7 @@ async function convertWebm(webmPath) {
         "-i",
         webmPath,
         "-t",
-        "19.5",
+        "15",
         "-c:v",
         "libx264",
         "-pix_fmt",
@@ -402,6 +402,72 @@ async function run() {
         throw new Error("paint lair tool stayed selected after toggle");
       }
 
+      await page.click("#add-gold", { force: true });
+      await stepOnce(page);
+      await panToTileCenter(page, box, 30.5, 33);
+      const trainingXs = [30, 31];
+      const trainingY = 33;
+      const trainingPoints = [];
+      for (const tx of trainingXs) {
+        const point = await pagePointForTile(page, box, tx, trainingY);
+        if (point === null) {
+          throw new Error(`training tile ${String(tx)},${String(trainingY)} is off screen`);
+        }
+        trainingPoints.push(point);
+      }
+      await page.click("#paint-training", { force: true });
+      const trainingPaintingOn = await page.evaluate(() => globalThis.__keeper.painting);
+      if (!trainingPaintingOn) {
+        throw new Error("paint training tool did not select Painting");
+      }
+      const trainingFirst = trainingPoints[0];
+      await page.mouse.move(trainingFirst.x, trainingFirst.y);
+      await page.mouse.down();
+      for (let i = 1; i < trainingPoints.length; i += 1) {
+        const point = trainingPoints[i];
+        await page.mouse.move(point.x, point.y);
+      }
+      await page.mouse.up();
+      await stepOnce(page);
+      const trainingTiles = await page.evaluate(() => globalThis.__keeper.trainingTileCount);
+      if (trainingTiles !== 2) {
+        throw new Error(`expected 2 training tiles after drag, got ${String(trainingTiles)}`);
+      }
+      const spentAfterTraining = await page.evaluate(() => globalThis.__keeper.goldSpent);
+      if (spentAfterTraining !== 245) {
+        throw new Error(`expected 245 gold spent after treasury, lair and training, got ${String(spentAfterTraining)}`);
+      }
+      await page.click("#paint-training", { force: true });
+      const trainingPaintingOff = await page.evaluate(() => globalThis.__keeper.painting);
+      if (trainingPaintingOff) {
+        throw new Error("paint training tool stayed selected after toggle");
+      }
+
+      let trainingTicks = 0;
+      let trainingCreature = null;
+      for (;;) {
+        const snapshot = await page.evaluate(() => globalThis.__keeper.creatureSnapshot());
+        const trainer = snapshot.find((creature) => creature.state === "training");
+        if (trainer !== undefined) {
+          const beds = await page.evaluate(() => globalThis.__keeper.freeBeds());
+          if (beds.some((bed) => bed.x === trainer.bedTileX && bed.y === trainer.bedTileY)) {
+            throw new Error(`training creature ${String(trainer.id)} lost its bed`);
+          }
+          trainingCreature = trainer;
+          await panToTileCenter(page, box, trainer.tileX, trainer.tileY);
+          await screenshot(page, "proof/training.png", "training");
+          break;
+        }
+        if (trainingTicks >= 800) {
+          throw new Error(`creature did not start training after ${String(trainingTicks)} ticks`);
+        }
+        await stepOnce(page, 4, 5);
+        trainingTicks += 4;
+      }
+      if (trainingCreature === null) {
+        throw new Error("training screenshot did not capture a training creature");
+      }
+
       let creatureTicks = 0;
       for (;;) {
         const snapshot = await page.evaluate(() => globalThis.__keeper.creatureSnapshot());
@@ -421,6 +487,14 @@ async function run() {
       const bedCreature = creaturesAfterWalk.find((creature) => creature.state === "sleeping");
       if (bedCreature === undefined) {
         throw new Error("no creature was sleeping on a bed");
+      }
+      const trainedCreature = creaturesAfterWalk.find((creature) => creature.level >= 1);
+      if (trainedCreature === undefined) {
+        throw new Error("no creature gained a training level");
+      }
+      const bedsAfterTraining = await page.evaluate(() => globalThis.__keeper.freeBeds());
+      if (bedsAfterTraining.some((bed) => bed.x === trainedCreature.bedTileX && bed.y === trainedCreature.bedTileY)) {
+        throw new Error(`trained creature ${String(trainedCreature.id)} lost its bed`);
       }
       await panToTileCenter(page, box, bedCreature.bedTileX, bedCreature.bedTileY);
       await screenshot(page, "proof/lair.png", "lair");
@@ -620,13 +694,22 @@ async function run() {
         await stepOnce(page, 6);
       }
       await page.mouse.up({ button: "right" });
-      await panToTileCenter(page, box, 34.5, 32);
-      for (let x = 30; x <= 39; x += 1) {
+      await panToTileCenter(page, box, 36, 32);
+      const corridorPoints = [];
+      for (let x = 30; x <= 42; x += 1) {
         const point = await pagePointForTile(page, box, x, 32);
         if (point === null) {
           throw new Error(`corridor tile ${String(x)},32 is off screen`);
         }
+        corridorPoints.push(point);
       }
+      const extraTagStart = corridorPoints[10];
+      const extraTagEnd = corridorPoints[12];
+      await page.mouse.move(extraTagStart.x, extraTagStart.y);
+      await page.mouse.down();
+      await page.mouse.move(extraTagEnd.x, extraTagEnd.y);
+      await page.mouse.up();
+      await stepOnce(page);
       for (let i = 0; i < 3; i += 1) {
         await stepOnce(page, 10, 1);
       }
@@ -634,7 +717,7 @@ async function run() {
       await checkpoint(page, recordStart, "corridor");
       await presentFrame(page);
       let sawWorking = false;
-      for (let i = 0; i < 21; i += 1) {
+      for (let i = 0; i < 120; i += 1) {
         await stepOnce(page, 1, 5);
         const working = await page.evaluate(() =>
           globalThis.__keeper.impSnapshot().some((imp) => imp.state === "working"),
@@ -704,8 +787,8 @@ async function run() {
         throw new Error(`expected 2 hatchery tiles after drag, got ${String(hatcheryTiles)}`);
       }
       const spentAfterHatchery = await page.evaluate(() => globalThis.__keeper.goldSpent);
-      if (spentAfterHatchery !== 265) {
-        throw new Error(`expected 265 gold spent after treasury, lair and hatchery, got ${String(spentAfterHatchery)}`);
+      if (spentAfterHatchery !== 345) {
+        throw new Error(`expected 345 gold spent after treasury, lair, training and hatchery, got ${String(spentAfterHatchery)}`);
       }
       await page.click("#paint-hatchery", { force: true });
       const hatcheryPaintingOff = await page.evaluate(() => globalThis.__keeper.painting);
@@ -731,6 +814,7 @@ async function run() {
           claimed: globalThis.__keeper.claimedCount,
           lairTileCount: globalThis.__keeper.lairTileCount,
           hatcheryTileCount: globalThis.__keeper.hatcheryTileCount,
+          trainingTileCount: globalThis.__keeper.trainingTileCount,
           chickenCount: globalThis.__keeper.chickenCount,
         }));
         if (counts.carryingCount > maxCarrying) {
@@ -760,8 +844,12 @@ async function run() {
           counts.treasuryStockTotal >= 20 &&
           carryingSeen &&
           counts.tagged === 0 &&
-          counts.claimed + counts.treasuryTileCount + counts.lairTileCount + counts.hatcheryTileCount ===
-            claimedAtStart + 5 &&
+          counts.claimed +
+              counts.treasuryTileCount +
+              counts.lairTileCount +
+              counts.hatcheryTileCount +
+              counts.trainingTileCount ===
+            claimedAtStart + 8 &&
           chickenDropped &&
           foodSeen &&
           elapsed >= 1000
@@ -944,6 +1032,7 @@ async function run() {
         creatureCount: globalThis.__keeper.creatureCount,
         lairTileCount: globalThis.__keeper.lairTileCount,
         hatcheryTileCount: globalThis.__keeper.hatcheryTileCount,
+        trainingTileCount: globalThis.__keeper.trainingTileCount,
         chickenCount: globalThis.__keeper.chickenCount,
         hudText: globalThis.__keeper.hudText,
         drawCalls: globalThis.__keeper.drawCalls,
@@ -966,6 +1055,9 @@ async function run() {
       }
       if (result.hatcheryTileCount !== 2) {
         throw new Error(`hatcheryTileCount ended at ${String(result.hatcheryTileCount)}`);
+      }
+      if (result.trainingTileCount !== 2) {
+        throw new Error(`trainingTileCount ended at ${String(result.trainingTileCount)}`);
       }
       console.log(
         `hatchery chickens peak=${String(chickenPeak)} dropped=${String(chickenDropped)} foodSeen=${String(foodSeen)} final=${String(result.chickenCount)}`,

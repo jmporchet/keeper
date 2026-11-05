@@ -17,6 +17,30 @@ describe("module import order", () => {
     expect(worldModule.liveCreatureCount(world.creatures)).toBe(1);
   });
 
+  it("trains creatures when creatures is imported before world", async () => {
+    vi.resetModules();
+    const creatures = await import("./creatures");
+    const worldModule = await import("./world");
+    const ids = await import("./ids");
+    const commands: Command[] = [
+      { kind: "addGold", tick: ids.asTick(0), amount: 1000 },
+      { kind: "paintRoom", tick: ids.asTick(0), tile: ids.asTileIndex(30 * worldModule.MAP_WIDTH + 30), room: "lair" },
+      { kind: "paintRoom", tick: ids.asTick(0), tile: ids.asTileIndex(33 * worldModule.MAP_WIDTH + 30), room: "training" },
+    ];
+    const world = worldModule.run(1, worldModule.sortCommands(commands), 600);
+    let level = 0;
+    for (let i = 0; i < world.creatures.slots.length; i += 1) {
+      const slot = world.creatures.slots[i];
+      if (slot === undefined || slot.kind === "empty") {
+        continue;
+      }
+      if (slot.creature.level > level) {
+        level = slot.creature.level;
+      }
+    }
+    expect(level).toBe(creatures.CREATURE_MAX_LEVEL);
+  });
+
   it("hatches chickens when chickens is imported before world", async () => {
     vi.resetModules();
     const chickens = await import("./chickens");
