@@ -52,6 +52,7 @@ export {
   createCreatureBoard,
   EAT_TICKS,
   finishEating,
+  freeBedTiles,
   hashCreatures,
   HUNGER_RETRY_TICKS,
   HUNGER_TICKS,
@@ -165,6 +166,7 @@ export type {
   TileRead,
   World,
 } from "./world";
+export { CREATURE_WAGE, PAY_TICKS, ticksUntilPayday } from "./wages";
 export {
   buildSave,
   MAX_GOLD_AMOUNT,

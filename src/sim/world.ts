@@ -41,6 +41,7 @@ import {
 } from "./map";
 import { createPathScratch, isWalkableCode } from "./path";
 import { advanceRng } from "./rng";
+import { runPayday } from "./wages";
 import { attachTiles, setTile, type World } from "./worldCore";
 
 export {
@@ -73,7 +74,8 @@ export {
 export { setTile, type World } from "./worldCore";
 export { openClaimJobsAround } from "./claims";
 export { CHICKEN_CAPACITY, CHICKEN_TILE_CAP, HATCH_TICKS, liveChickenCount } from "./chickens";
-export { lairTileCount, liveCreatureCount } from "./creatures";
+export { freeBedTiles, lairTileCount, liveCreatureCount } from "./creatures";
+export { CREATURE_WAGE, PAY_TICKS, ticksUntilPayday } from "./wages";
 
 export const TICK_HZ = 20;
 export const TICK_DT = 1 / TICK_HZ;
@@ -226,6 +228,7 @@ export function createWorld(seed: number): World {
     treasuryVersion: 0,
     goldStored: 0,
     goldSpent: 0,
+    goldPaidOut: 0,
     goldStock,
     commandCursor: 0,
     jobs: createJobBoard(width * height),
@@ -253,6 +256,7 @@ export function hashWorld(world: World): number {
   h = mix(h, world.height);
   h = mix(h, world.goldStored);
   h = mix(h, world.goldSpent);
+  h = mix(h, world.goldPaidOut);
   h = mix(h, world.goldStock.length);
   for (let i = 0; i < world.goldStock.length; i += 1) {
     const stock = world.goldStock[i];
@@ -643,6 +647,7 @@ export function step(world: World, commands: CommandLog): void {
     i += 1;
   }
   world.commandCursor = i;
+  runPayday(world);
   stepImps(world);
   hatchChickens(world);
   stepCreatures(world);

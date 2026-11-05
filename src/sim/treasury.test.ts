@@ -46,7 +46,7 @@ function corridorCommands(): Command[] {
 }
 
 function totalGold(world: World): number {
-  let total = world.goldStored + world.goldSpent;
+  let total = world.goldStored + world.goldSpent + world.goldPaidOut;
   for (let i = 0; i < world.goldStock.length; i += 1) {
     const stock = world.goldStock[i];
     if (stock !== undefined) {

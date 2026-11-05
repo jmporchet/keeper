@@ -22,6 +22,9 @@ One feature per PR, in this order. Each item names its acceptance check. "Proof"
 | 16 | **Sandbox panel + HUD.** Spawn imp, add gold, show gold, imp count, tick. | Proof screenshot of the panel. Test: panel actions are plain commands in the replay log. |
 | 17 | **Perf budget.** 200 imps at 60 fps target; first download budget enforced by the build. | Proof script prints sim ms per tick and frame ms; build fails above the size budget. |
 
-| 18 | **Lair + portal.** Paint lair on claimed floor, portal attracts one creature kind to a free bed. | Proof: paint lair tiles, a creature arrives at the portal and walks to a bed. Test: two creatures never share a bed. |
-| 19 | **Hatchery + feeding.** Paint hatchery, chickens appear, creatures eat. | Proof: hatchery with chickens; a hungry creature walks to one. |
-| 20 | **Command-log save/replay.** Export/import the seed + command log; replay matches live hashWorld. | Test: round-trip save then replay equals the live hash after N ticks. |
+| 18 | ~~**Lair + portal.** Paint lair on claimed floor, portal attracts one creature kind to a free bed.~~ | Proof: paint lair tiles, a creature arrives at the portal and walks to a bed. Test: two creatures never share a bed. |
+| 19 | ~~**Hatchery + feeding.** Paint hatchery, chickens appear, creatures eat.~~ | Proof: hatchery with chickens; a hungry creature walks to one. |
+| 20 | ~~**Command-log save/replay.** Export/import the seed + command log; replay matches live hashWorld.~~ | Test: round-trip save then replay equals the live hash after N ticks. |
+| 21 | **Payday.** Every PAY_TICKS, pay each live creature a wage from treasury; unpaid creatures leave. | Proof: payday with and without enough gold; unpaid frees its bed. Test: gold conserved across payday; bed freed. |
+| 22 | **Training room.** Paint training on claimed floor; a creature trains for N ticks and gains a level/flag. | Proof: paint training, a fly trains; bed still owned. |
+| 23 | **First hero invasion.** A hero party enters from the portal on a timer; sandbox skirmish, no defeat screen. | Proof: heroes appear and path; at least one fight resolution. |

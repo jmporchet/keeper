@@ -48,6 +48,9 @@ import {
   hatcheryTileCount,
   liveCreatureCount,
   liveChickenCount,
+  freeBedTiles,
+  ticksUntilPayday,
+  PAY_TICKS,
   workerOf,
   type Command,
   type CommandLog,
@@ -82,6 +85,10 @@ declare global {
       claimedCount: number;
       goldStored: number;
       goldSpent: number;
+      goldPaidOut: number;
+      ticksUntilPayday: number;
+      payTicks: number;
+      liveCreatureCount: number;
       impCount: number;
       creatureCount: number;
       lairTileCount: number;
@@ -103,7 +110,9 @@ declare global {
       jobSnapshot(tx: number, ty: number): JobDebug | null;
       impSnapshot(): ImpDebug[];
       creatureSnapshot(): CreatureDebug[];
+      freeBeds(): { x: number; y: number }[];
       dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
+      drainGold(): number;
       step(n: number): void;
       spawnImps(n: number): void;
       saveNow(): Save;
@@ -232,7 +241,12 @@ function hudText(): string {
 }
 
 function syncHud(): void {
-  hud.update(hudGold(world.goldStored, treasuryStockTotal(world)), liveImpCount(world.imps), world.tick);
+  hud.update(
+    hudGold(world.goldStored, treasuryStockTotal(world)),
+    liveImpCount(world.imps),
+    world.tick,
+    ticksUntilPayday(world.tick),
+  );
   const snapshot = actor.getSnapshot();
   const paused = isPaused(snapshot);
   sandboxPanel.setPaused(paused);
@@ -451,6 +465,15 @@ if (proof) {
     get goldSpent() {
       return world.goldSpent;
     },
+    get goldPaidOut() {
+      return world.goldPaidOut;
+    },
+    get ticksUntilPayday() {
+      return ticksUntilPayday(world.tick);
+    },
+    get payTicks() {
+      return PAY_TICKS;
+    },
     get painting() {
       return isPainting(cameraInput.actor.getSnapshot());
     },
@@ -467,6 +490,9 @@ if (proof) {
       return liveImpCount(world.imps);
     },
     get creatureCount() {
+      return liveCreatureCount(world.creatures);
+    },
+    get liveCreatureCount() {
       return liveCreatureCount(world.creatures);
     },
     get lairTileCount() {
@@ -546,6 +572,35 @@ if (proof) {
         }
       }
       return creatures;
+    },
+    freeBeds() {
+      const beds: { x: number; y: number }[] = [];
+      const tiles = freeBedTiles(world);
+      for (let i = 0; i < tiles.length; i += 1) {
+        const tile = tiles[i];
+        if (tile === undefined) {
+          continue;
+        }
+        const y = (tile / world.width) | 0;
+        const x = tile - y * world.width;
+        beds.push({ x, y });
+      }
+      return beds;
+    },
+    drainGold() {
+      let drained = world.goldStored;
+      world.goldStored = 0;
+      for (let i = 0; i < world.treasuryStock.length; i += 1) {
+        const stock = world.treasuryStock[i];
+        if (stock === undefined || stock === 0) {
+          continue;
+        }
+        drained += stock;
+        world.treasuryStock[i] = 0;
+      }
+      world.treasuryVersion += 1;
+      world.goldSpent += drained;
+      return drained;
     },
     dropTiles(fromX: number, fromY: number) {
       const tiles: { x: number; y: number }[] = [];
