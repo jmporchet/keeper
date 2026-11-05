@@ -91,10 +91,14 @@ export async function run(ctx) {
   for (let i = 0; i < 5; i += 1) {
     await ctx.stepOnce(1, 180);
   }
+  await ctx.panToTileCenter(32, 32);
   await page.evaluate(() => globalThis.__keeper.clearWave());
   await ctx.stepOnce(1, 250);
-  await ctx.panToTileCenter(32, 32);
   await ctx.stepOnce(1, 150);
+  const restartVisible = await page.locator("#restart-game").isVisible();
+  if (!restartVisible) {
+    throw new Error("restart control is not visible after victory");
+  }
   await ctx.screenshot("proof/victory.png", "victory");
 
   const result = await victoryState(page);

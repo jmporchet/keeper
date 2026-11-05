@@ -135,8 +135,10 @@ stateDiagram-v2
         Paused --> Running: RESUME
         Running --> Defeated: DEFEAT
         Defeated --> Defeated: PAUSE / RESUME ignored
+        Defeated --> Running: RESTART
         Running --> Victorious: VICTORY
         Victorious --> Victorious: PAUSE / RESUME ignored
+        Victorious --> Running: RESTART
         Running --> Replaying: LOAD_SAVE
         Paused --> Replaying: LOAD_SAVE
         Replaying --> Running: REPLAY_DONE
@@ -159,9 +161,11 @@ stateDiagram-v2
     ContextLostHidden --> Hidden: CONTEXT_RESTORED
 ```
 
-`Hidden` is a non-manual suspended state for a hidden tab. `isPaused` is true only for the manual `Paused` state, so a hidden tab does not show the pause overlay. `isSimStepping` is false in `Hidden`, `ContextLost`, `Paused`, `Replaying`, `Defeated` and `Victorious`; the sim tick counter proves it in tests. `Defeated` and `Victorious` have no outgoing transition yet: item 48 adds restart.
+`Hidden` is a non-manual suspended state for a hidden tab. `isPaused` is true only for the manual `Paused` state, so a hidden tab does not show the pause overlay. `isSimStepping` is false in `Hidden`, `ContextLost`, `Paused`, `Replaying`, `Defeated` and `Victorious`; the sim tick counter proves it in tests. `Defeated` and `Victorious` return to `Running` only through `RESTART`; `PAUSE` and `RESUME` stay ignored there.
 
 The `Sandbox.Last` history state remembers the last of `Running`, `Paused`, `Replaying`, `Defeated` and `Victorious`. `TAB_VISIBLE` from `Hidden` returns there, and `CONTEXT_RESTORED` from `ContextLostVisible` returns there, so a manual pause stays paused and a running game stays running. `ContextLostHidden` records that the tab is still hidden: `TAB_VISIBLE` moves it to `ContextLostVisible`, while `CONTEXT_RESTORED` returns to `Hidden` until the tab becomes visible. Both orders of `TAB_HIDDEN` and `CONTEXT_LOST` therefore preserve the remembered `Running` or `Paused` state, and `PAUSE`/`RESUME` are ignored while suspended.
+
+`RESTART` is accepted only in `Defeated` and `Victorious`. It rebuilds `createWorld(world.seed)` from the same seed, replaces the command list with an empty `CommandLog`, clears hand, paint, held and possession input state, resyncs the renderer and HUD, and returns the chart to `Sandbox.Running`. `Last` then remembers `Running`, so a later tab hide and show resumes the restarted run rather than the end screen.
 
 Loading a save enters `Replaying`, replaces the world, seed and command log, steps the imported `CommandLog` to the saved tick through the chart, then sends `REPLAY_DONE` (or `REPLAY_ERROR`). Replay is synchronous inside that load, so hide or context loss is not normally observed during `Replaying`; if one does interleave, the history returns to `Replaying`.
 
@@ -189,11 +193,18 @@ stateDiagram-v2
     Idle --> Possessed: POSSESS_CREATURE (live creature)
     Possessed --> Possessed: POSSESS_MOVE (one tile per tick)
     Possessed --> Idle: EXIT_POSSESS / Escape
+    Idle --> Idle: RESET
+    Orbiting --> Idle: RESET
+    Panning --> Idle: RESET
+    Tagging --> Idle: RESET
+    Painting --> Idle: RESET
+    Holding --> Idle: RESET
+    Possessed --> Idle: RESET
 ```
 
 `SELECT_PAINT_TOOL` carries the paint tool (`treasury`, `lair`, `hatchery`, `training`, `workshop`, `library`, `door` or `trap`) and the painter emits that tool with every tile: rooms emit `paintRoom`, doors emit `paintDoor` and traps emit `paintTrap`. Selecting a different tool while Painting switches to it without leaving Painting, and selecting the active tool again clears it. Painting applies on left click and drag while the primary button is held, not on hover. Zoom (wheel) works in every state and does not change state. The hand holds at most eight imps; a left press on another imp while holding picks it up too. A right press while holding drops the most recently picked imp, or stays holding when the tile is not walkable. A Shift+left press on an imp while Idle queues `slap` and does not pick it up; Shift has no effect while Holding or Painting. A left click on a tile with an intact door while Idle queues a zero-cost `toggleDoor` that flips the door open or closed without changing its HP.
 
-`POSSESS_CREATURE` carries a `creatureId` and is accepted from Idle for a live creature: double-clicking a live creature tile, or the panel Possess button picking the first sleeping or live creature, queues `possess` and enters Possessed. While Possessed, tagging, painting and hand pickup are disabled: `LEFT_DOWN_TILE`, `LEFT_DOWN_IMP`, `SELECT_ROOM_TOOL` and the camera gestures are ignored, and the panel paint buttons are disabled. WASD and arrow keys queue at most one `possessMove` for the possessed id per tick; the sim refuses diagonal, non-possessed, non-walkable and out-of-bounds moves. The camera follows the possessed creature and returns to the orbit pose on `EXIT_POSSESS` or Escape, which queue `releasePossess`. If the possessed creature dies, the sim clears possession and the input bind returns to Idle on its next tick.
+`POSSESS_CREATURE` carries a `creatureId` and is accepted from Idle for a live creature: double-clicking a live creature tile, or the panel Possess button picking the first sleeping or live creature, queues `possess` and enters Possessed. While Possessed, tagging, painting and hand pickup are disabled: `LEFT_DOWN_TILE`, `LEFT_DOWN_IMP`, `SELECT_ROOM_TOOL` and the camera gestures are ignored, and the panel paint buttons are disabled. WASD and arrow keys queue at most one `possessMove` for the possessed id per tick; the sim refuses diagonal, non-possessed, non-walkable and out-of-bounds moves. The camera follows the possessed creature and returns to the orbit pose on `EXIT_POSSESS` or Escape, which queue `releasePossess`. If the possessed creature dies, the sim clears possession and the input bind returns to Idle on its next tick. `RESET` is accepted from any input state, returns to Idle and clears pan keys, pointer pan, held imps, the paint tool and possession; restart sends it before rebuilding the world.
 
 ### Chart 3: tile lifecycle (hand-rolled, sim)
 

@@ -35,6 +35,7 @@ import {
   MAX_STEPS_PER_FRAME,
   parseSave,
   replaySave,
+  restartWorld,
   ROOM_KIND,
   SAVE_STORAGE_KEY,
   serializeSave,
@@ -120,6 +121,9 @@ declare global {
       breachTicks: number;
       defeated: boolean;
       defeatTicks: number;
+      seed: number;
+      freshHash: number;
+      commandCount: number;
       wavesCleared: number;
       victorious: boolean;
       victoryWaves: number;
@@ -163,6 +167,7 @@ declare global {
       possess(creatureId: number): void;
       exitPossess(): void;
       repairHeart(): void;
+      restart(): void;
       setWavesCleared(n: number): void;
       clearWave(): void;
       step(n: number): void;
@@ -214,6 +219,8 @@ syncTorchLights(world, torchLights);
 const screenPoint = new Vector3();
 
 const pauseOverlay = document.getElementById("pause-overlay");
+const pauseTitle = document.getElementById("pause-title");
+const restartButton = document.getElementById("restart-game");
 const proof = new URLSearchParams(window.location.search).has("proof");
 
 function placeCamera(alpha = 1): void {
@@ -344,6 +351,35 @@ function loadSave(save: Save): void {
   }
 }
 
+function restartGame(): void {
+  const snapshot = actor.getSnapshot();
+  if (!isDefeated(snapshot) && !isVictorious(snapshot)) {
+    return;
+  }
+  const seed = world.seed;
+  const restarted = restartWorld(seed);
+  world = restarted.world;
+  commands = restarted.commands;
+  commandLog = restarted.commandLog;
+  cameraInput.actor.send({ type: "RESET" });
+  syncMap(world, map, world.tick);
+  syncProps(world, props);
+  syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual, world.tick);
+  syncCreatures(world.creatures, world.heroes, 1, creaturesVisual);
+  syncTorchLights(world, torchLights);
+  flickerTorchLights(torchLights, world.tick * TICK_DT);
+  placeCamera();
+  actor.send({ type: "RESTART" });
+  syncHud();
+  render();
+}
+
+if (restartButton !== null) {
+  restartButton.addEventListener("click", () => {
+    restartGame();
+  });
+}
+
 const sandboxPanel = createSandboxPanel(
   document.getElementById("sandbox-panel"),
   () => world.tick,
@@ -391,8 +427,12 @@ function syncHud(): void {
   sandboxPanel.setPaused(paused || defeated || victorious);
   sandboxPanel.setReplaying(isReplaying(snapshot));
   if (pauseOverlay !== null) {
-    pauseOverlay.classList.toggle("visible", paused || defeated || victorious);
-    pauseOverlay.textContent = victorious ? "Victory" : defeated ? "Defeat" : "Pause";
+    const endScreen = defeated || victorious;
+    pauseOverlay.classList.toggle("visible", paused || endScreen);
+    pauseOverlay.classList.toggle("end-screen", endScreen);
+    if (pauseTitle !== null) {
+      pauseTitle.textContent = victorious ? "Victory" : defeated ? "Defeat" : "Pause";
+    }
   }
 }
 
@@ -584,6 +624,15 @@ if (proof) {
     },
     get worldHash() {
       return hashWorld(world);
+    },
+    get seed() {
+      return world.seed;
+    },
+    get freshHash() {
+      return hashWorld(createWorld(world.seed));
+    },
+    get commandCount() {
+      return commands.length;
     },
     get drawCalls() {
       return renderer.info.render.calls;
@@ -911,6 +960,9 @@ if (proof) {
     },
     repairHeart() {
       commands.push({ kind: "repairHeart", tick: world.tick });
+    },
+    restart() {
+      restartGame();
     },
     setWavesCleared(n: number) {
       world.wavesCleared = n;

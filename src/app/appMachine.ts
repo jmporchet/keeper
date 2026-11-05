@@ -10,6 +10,7 @@ export type AppEvent =
   | { type: "RESUME" }
   | { type: "DEFEAT" }
   | { type: "VICTORY" }
+  | { type: "RESTART" }
   | { type: "TAB_HIDDEN" }
   | { type: "TAB_VISIBLE" }
   | { type: "CONTEXT_LOST" }
@@ -62,8 +63,16 @@ export const appMachine = setup({
             RESUME: "Running",
           },
         },
-        Defeated: {},
-        Victorious: {},
+        Defeated: {
+          on: {
+            RESTART: "Running",
+          },
+        },
+        Victorious: {
+          on: {
+            RESTART: "Running",
+          },
+        },
         Replaying: {
           on: {
             REPLAY_DONE: "Running",

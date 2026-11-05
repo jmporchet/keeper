@@ -101,6 +101,50 @@ describe("app chart", () => {
     expect(isSimStepping(actor.getSnapshot())).toBe(false);
   });
 
+  it("restarts from defeated into running and remembers running across tab hide and show", () => {
+    const actor = startSandbox();
+    actor.send({ type: "DEFEAT" });
+    actor.send({ type: "PAUSE" });
+    actor.send({ type: "RESUME" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Defeated" });
+    actor.send({ type: "RESTART" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Running" });
+    expect(isDefeated(actor.getSnapshot())).toBe(false);
+    expect(isSimStepping(actor.getSnapshot())).toBe(true);
+    actor.send({ type: "TAB_HIDDEN" });
+    expect(actor.getSnapshot().value).toBe("Hidden");
+    actor.send({ type: "TAB_VISIBLE" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Running" });
+    expect(isSimStepping(actor.getSnapshot())).toBe(true);
+  });
+
+  it("restarts from victorious into running and remembers running across tab hide and show", () => {
+    const actor = startSandbox();
+    actor.send({ type: "VICTORY" });
+    actor.send({ type: "PAUSE" });
+    actor.send({ type: "RESUME" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Victorious" });
+    actor.send({ type: "RESTART" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Running" });
+    expect(isVictorious(actor.getSnapshot())).toBe(false);
+    expect(isSimStepping(actor.getSnapshot())).toBe(true);
+    actor.send({ type: "TAB_HIDDEN" });
+    expect(actor.getSnapshot().value).toBe("Hidden");
+    actor.send({ type: "TAB_VISIBLE" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Running" });
+    expect(isSimStepping(actor.getSnapshot())).toBe(true);
+  });
+
+  it("ignores restart while running or paused", () => {
+    const running = startSandbox();
+    running.send({ type: "RESTART" });
+    expect(running.getSnapshot().value).toEqual({ Sandbox: "Running" });
+    const paused = startSandbox();
+    paused.send({ type: "PAUSE" });
+    paused.send({ type: "RESTART" });
+    expect(paused.getSnapshot().value).toEqual({ Sandbox: "Paused" });
+  });
+
   it("keeps a manual pause across tab hide and show", () => {
     const actor = startSandbox();
     actor.send({ type: "PAUSE" });

@@ -369,6 +369,9 @@ export function bindCameraInput(
     if (!isPainting(snapshot)) {
       resetPaint();
     }
+    if (snapshot.matches("Idle")) {
+      heldStack.length = 0;
+    }
   });
 
   canvas.addEventListener("contextmenu", (event) => {

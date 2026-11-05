@@ -233,6 +233,7 @@ export {
   syncPossession,
   type Possession,
 } from "./possession";
+export { restartWorld, type RestartState } from "./restart";
 export {
   buildSave,
   MAX_GOLD_AMOUNT,

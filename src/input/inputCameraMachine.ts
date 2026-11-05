@@ -18,7 +18,8 @@ export type InputCameraEvent =
   | { type: "SLAP_IMP" }
   | { type: "POSSESS_CREATURE"; creatureId: CreatureId }
   | { type: "EXIT_POSSESS" }
-  | { type: "POSSESS_MOVE"; dx: number; dy: number };
+  | { type: "POSSESS_MOVE"; dx: number; dy: number }
+  | { type: "RESET" };
 
 export type InputCameraContext = {
   panKeys: number;
@@ -55,11 +56,21 @@ export const inputCameraMachine = setup({
     }),
     clearPossession: assign({ possession: (): Possession => ({ kind: "none" }) }),
     resetPan: assign({ panKeys: 0, pointerPan: false }),
+    resetAll: assign({
+      panKeys: 0,
+      pointerPan: false,
+      heldCount: 0,
+      tool: "treasury",
+      possession: (): Possession => ({ kind: "none" }),
+    }),
   },
 }).createMachine({
   id: "inputCamera",
   initial: "Idle",
   context: { panKeys: 0, pointerPan: false, heldCount: 0, tool: "treasury", possession: { kind: "none" } },
+  on: {
+    RESET: { target: ".Idle", actions: "resetAll" },
+  },
   states: {
     Idle: {
       on: {
