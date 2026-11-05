@@ -11,10 +11,35 @@
         height: 100%;
         overflow: hidden;
         background: #000;
+        font-family: sans-serif;
+      }
+      #tick {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        color: #f4e6c4;
+        font-size: 18px;
+        pointer-events: none;
+      }
+      #pause-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        align-items: center;
+        justify-content: center;
+        color: #f4e6c4;
+        font-size: 32px;
+        background: rgba(0, 0, 0, 0.35);
+        pointer-events: none;
+      }
+      #pause-overlay.visible {
+        display: flex;
       }
     </style>
   </head>
   <body>
+    <div id="tick">tick 0</div>
+    <div id="pause-overlay">Pause</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

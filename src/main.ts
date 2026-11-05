@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { createActor } from "xstate";
+import { appMachine, isPaused, isSimStepping } from "./app/appMachine";
 import { orbitPosition } from "./orbit";
 import {
   createWorld,
@@ -18,6 +20,9 @@ declare global {
     __keeper: { tick: number; hash: number; step(n: number): void };
   }
 }
+
+const actor = createActor(appMachine);
+actor.start();
 
 const canvas = document.createElement("canvas");
 canvas.style.display = "block";
@@ -114,6 +119,26 @@ const torch = new THREE.PointLight(0xffbb77, 60, 24);
 torch.position.set(0, 5, 0);
 scene.add(torch);
 
+const tickHud = document.getElementById("tick");
+const pauseOverlay = document.getElementById("pause-overlay");
+
+function syncHud(): void {
+  if (tickHud !== null) {
+    tickHud.textContent = `tick ${String(world.tick)}`;
+  }
+  if (pauseOverlay !== null) {
+    pauseOverlay.classList.toggle("visible", isPaused(actor.getSnapshot()));
+  }
+}
+
+actor.subscribe(() => {
+  syncHud();
+});
+
+actor.send({ type: "ASSETS_REQUESTED" });
+actor.send({ type: "ASSETS_READY" });
+syncHud();
+
 const proof = new URLSearchParams(window.location.search).has("proof");
 
 function placeCamera(tick: number): void {
@@ -123,8 +148,45 @@ function placeCamera(tick: number): void {
 }
 
 function render(): void {
+  if (actor.getSnapshot().matches("ContextLost")) {
+    return;
+  }
   renderer.render(scene, camera);
 }
+
+function togglePause(): void {
+  const snapshot = actor.getSnapshot();
+  if (snapshot.matches({ Sandbox: "Running" })) {
+    actor.send({ type: "PAUSE" });
+    return;
+  }
+  if (snapshot.matches({ Sandbox: "Paused" })) {
+    actor.send({ type: "RESUME" });
+  }
+}
+
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" || event.key === "p" || event.key === "P") {
+    togglePause();
+  }
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    actor.send({ type: "PAUSE" });
+    return;
+  }
+  actor.send({ type: "RESUME" });
+});
+
+canvas.addEventListener("webglcontextlost", (event) => {
+  event.preventDefault();
+  actor.send({ type: "CONTEXT_LOST" });
+});
+
+canvas.addEventListener("webglcontextrestored", () => {
+  actor.send({ type: "CONTEXT_RESTORED" });
+});
 
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -146,11 +208,16 @@ if (proof) {
       return hashWorld(world);
     },
     step(n: number) {
+      if (!isSimStepping(actor.getSnapshot())) {
+        syncHud();
+        return;
+      }
       for (let i = 0; i < n; i += 1) {
         step(world, []);
       }
       syncTiles(world);
       placeCamera(world.tick);
+      syncHud();
       render();
     },
   };
@@ -171,12 +238,19 @@ if (proof) {
     accumulator += delta;
     let steps = 0;
     while (accumulator >= TICK_DT && steps < MAX_STEPS_PER_FRAME) {
+      if (!isSimStepping(actor.getSnapshot())) {
+        break;
+      }
       step(world, []);
       accumulator -= TICK_DT;
       steps += 1;
     }
+    if (!isSimStepping(actor.getSnapshot())) {
+      accumulator = 0;
+    }
     syncTiles(world);
     controls.update();
+    syncHud();
     render();
   };
   requestAnimationFrame(loop);
