@@ -14,6 +14,7 @@ import { createImpMeshes, syncImps } from "./render/imps";
 import { addTorchLighting, DUNGEON_EXPOSURE } from "./render/lights";
 import { createMapMeshes, syncMap } from "./render/map";
 import {
+  carryingCount,
   countTagged,
   createWorld,
   hashWorld,
@@ -35,6 +36,8 @@ declare global {
       taggedCount: number;
       dirtCount: number;
       claimedCount: number;
+      goldStored: number;
+      carryingCount: number;
       drawCalls: number;
       camera: { targetX: number; targetZ: number; yaw: number; pitch: number; distance: number };
       canvasPointForTile(tx: number, ty: number): { x: number; y: number } | null;
@@ -78,7 +81,7 @@ const pauseOverlay = document.getElementById("pause-overlay");
 
 function syncHud(): void {
   if (tickHud !== null) {
-    tickHud.textContent = `tick ${String(world.tick)}`;
+    tickHud.textContent = `tick ${String(world.tick)} · gold ${String(world.goldStored)}`;
   }
   if (pauseOverlay !== null) {
     pauseOverlay.classList.toggle("visible", isPaused(actor.getSnapshot()));
@@ -233,6 +236,12 @@ if (proof) {
         }
       }
       return n;
+    },
+    get goldStored() {
+      return world.goldStored;
+    },
+    get carryingCount() {
+      return carryingCount(world.imps);
     },
     canvasPointForTile,
     step(n: number) {

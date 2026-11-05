@@ -13,6 +13,7 @@ export type World = {
   readonly tiles: TileRead;
   tilesVersion: number;
   goldStored: number;
+  goldStock: Uint32Array;
   commandCursor: number;
   jobs: JobBoard;
   imps: ImpBoard;

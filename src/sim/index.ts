@@ -11,6 +11,7 @@ export {
   type WorkerId,
 } from "./ids";
 export {
+  carryingCount,
   CLAIM_TICKS,
   DIG_TICKS,
   findPath,
@@ -18,6 +19,8 @@ export {
   hashImps,
   IMP_CAPACITY,
   liveImpCount,
+  MINE_CHUNK,
+  MINE_TICKS,
   occupyWalkable,
   reserveBestReachableJob,
   STARTING_IMP_COUNT,
@@ -25,6 +28,7 @@ export {
   workerOf,
   type Imp,
   type ImpBoard,
+  type ImpCarry,
   type ImpSlot,
   type ImpState,
   type ImpWorking,
@@ -54,7 +58,10 @@ export { createPathScratch, isWalkableCode } from "./path";
 export {
   countTagged,
   createWorld,
+  GOLD_PER_TILE,
   hashWorld,
+  HEART_X,
+  HEART_Y,
   MAP_HALF,
   MAP_HEIGHT,
   MAP_WIDTH,

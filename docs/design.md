@@ -133,17 +133,17 @@ Illegal states this design rules out: rock that is tagged, a room on unclaimed f
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Walking: dig or claim job reserved
+    Idle --> Walking: dig, mine or claim job reserved
     Idle --> Wandering: no job
+    Idle --> Carrying: already carrying gold
     Wandering --> Idle: wander done
-    Walking --> Working: reached dig neighbour or claim tile
+    Walking --> Working: reached dig neighbour, seam neighbour or claim tile
     Walking --> Idle: job gone or path lost
     Working --> Idle: dug (earth becomes dirt, claim jobs open)
     Working --> Idle: claimed (dirt becomes claimed, claim jobs open)
     Working --> Idle: job gone
-    Working --> Carrying: gold mined
-    Carrying --> Idle: gold dropped in treasury
-    Carrying --> Idle: no treasury (gold dropped on floor)
+    Working --> Carrying: gold mined (seam dirt when exhausted, job freed)
+    Carrying --> Idle: gold dropped at heart
     Idle --> HeldByHand: picked up
     Walking --> HeldByHand: picked up
     Working --> HeldByHand: picked up

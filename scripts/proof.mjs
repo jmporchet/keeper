@@ -186,15 +186,12 @@ async function run() {
       const cy = box.y + box.height / 2;
       await page.mouse.move(cx, cy);
 
-      const dirtAtStart = await page.evaluate(() => globalThis.__keeper.dirtCount);
-      const claimedAtStart = await page.evaluate(() => globalThis.__keeper.claimedCount);
-
-      const sweepXs = [25, 26, 27, 28, 29];
+      const sweepXs = [35, 36, 37, 38, 39];
       const sweepPts = [];
       for (const tx of sweepXs) {
         const point = await pagePointForTile(page, box, tx, 32);
         if (point === null) {
-          throw new Error(`earth tile ${String(tx)},32 is off screen`);
+          throw new Error(`corridor tile ${String(tx)},32 is off screen`);
         }
         sweepPts.push(point);
       }
@@ -231,7 +228,7 @@ async function run() {
       }
 
       await page.keyboard.up("KeyA");
-      await panToTileCenter(page, box, 28.5, 32);
+      await panToTileCenter(page, box, 34.5, 32);
       await page.mouse.move(cx, cy);
       for (let i = 0; i < 6; i += 1) {
         await page.mouse.wheel(0, -240);
@@ -243,7 +240,8 @@ async function run() {
         await stepOnce(page, 3);
       }
       await page.mouse.up({ button: "right" });
-      for (let x = 25; x <= 30; x += 1) {
+      await panToTileCenter(page, box, 34.5, 32);
+      for (let x = 30; x <= 39; x += 1) {
         const point = await pagePointForTile(page, box, x, 32);
         if (point === null) {
           throw new Error(`corridor tile ${String(x)},32 is off screen`);
@@ -270,23 +268,30 @@ async function run() {
       }
 
       let extraTicks = 0;
+      let maxCarrying = 0;
+      let carryingSeen = false;
       for (;;) {
         const counts = await page.evaluate(() => ({
-          tagged: globalThis.__keeper.taggedCount,
-          claimed: globalThis.__keeper.claimedCount,
+          goldStored: globalThis.__keeper.goldStored,
+          carryingCount: globalThis.__keeper.carryingCount,
         }));
+        if (counts.carryingCount > maxCarrying) {
+          maxCarrying = counts.carryingCount;
+        }
+        if (counts.carryingCount > 0) {
+          carryingSeen = true;
+        }
         const elapsed = Date.now() - recordStart;
-        if (counts.tagged === 0 && counts.claimed === claimedAtStart + 5 && elapsed >= 12000) {
+        if (counts.goldStored >= 40 && carryingSeen && elapsed >= 12000) {
           break;
         }
-        if (extraTicks >= 3000) {
-          const dirtNow = await page.evaluate(() => globalThis.__keeper.dirtCount);
+        if (extraTicks >= 4000) {
           throw new Error(
-            `claim proof not complete after ${String(extraTicks)} extra ticks: tagged ${String(counts.tagged)}, claimed ${String(counts.claimed)} (start ${String(claimedAtStart)}), dirt ${String(dirtNow)}, elapsed ${String(elapsed)} ms`,
+            `gold proof not complete after ${String(extraTicks)} extra ticks: goldStored ${String(counts.goldStored)}, maxCarrying ${String(maxCarrying)}, elapsed ${String(elapsed)} ms`,
           );
         }
-        await stepOnce(page, 3, 50);
-        extraTicks += 3;
+        await stepOnce(page, 2, 30);
+        extraTicks += 2;
       }
 
       const result = await page.evaluate(() => ({
@@ -295,6 +300,8 @@ async function run() {
         taggedCount: globalThis.__keeper.taggedCount,
         dirtCount: globalThis.__keeper.dirtCount,
         claimedCount: globalThis.__keeper.claimedCount,
+        goldStored: globalThis.__keeper.goldStored,
+        carryingCount: globalThis.__keeper.carryingCount,
         drawCalls: globalThis.__keeper.drawCalls,
         camera: globalThis.__keeper.camera,
       }));
@@ -304,18 +311,10 @@ async function run() {
       if (result.drawCalls > 8) {
         throw new Error(`tile draw calls ${String(result.drawCalls)} exceed 8`);
       }
-      if (result.taggedCount !== 0) {
-        throw new Error(`tagged count ended at ${String(result.taggedCount)}`);
+      if (result.goldStored < 40) {
+        throw new Error(`goldStored ended at ${String(result.goldStored)}`);
       }
-      if (result.claimedCount !== claimedAtStart + 5) {
-        throw new Error(
-          `claimed count ended at ${String(result.claimedCount)} instead of ${String(claimedAtStart + 5)}`,
-        );
-      }
-      if (result.dirtCount !== dirtAtStart) {
-        throw new Error(`dirt count ended at ${String(result.dirtCount)} instead of ${String(dirtAtStart)}`);
-      }
-      for (let x = 25; x <= 30; x += 1) {
+      for (let x = 30; x <= 39; x += 1) {
         const point = await pagePointForTile(page, box, x, 32);
         if (point === null) {
           throw new Error(`corridor tile ${String(x)},32 is off screen at the end`);
@@ -330,6 +329,8 @@ async function run() {
         result.taggedCount,
         result.dirtCount,
         result.claimedCount,
+        result.goldStored,
+        maxCarrying,
         result.camera.targetX,
         result.camera.targetZ,
         result.camera.distance,

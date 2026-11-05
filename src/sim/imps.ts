@@ -1,7 +1,7 @@
 import { openClaimJobsAround } from "./claims";
 import { asImpId, asTileIndex, asWorkerId, type ImpId, type TileIndex, type WorkerId } from "./ids";
-import { betterJob, completeJob, jobForFilledSlot, jobHeldBy, reserveJob, type Job } from "./jobs";
-import { MAP_WIDTH, TILE_KIND, type TileRead } from "./map";
+import { betterJob, completeJob, jobForFilledSlot, jobHeldBy, releaseWorker, reserveJob, type Job } from "./jobs";
+import { HEART_X, HEART_Y, MAP_WIDTH, TILE_KIND, type TileRead } from "./map";
 import { bumpPathGen, isWalkableCode, PATH_CELL_COUNT, type PathScratch } from "./path";
 import { bfsToGoal, floodWalkable, reconstructPath } from "./path.hot";
 import { advanceRng } from "./rng";
@@ -12,6 +12,8 @@ export const STARTING_IMP_COUNT = 4;
 export const STEPS_PER_TILE = 6;
 export const DIG_TICKS = 40;
 export const CLAIM_TICKS = 30;
+export const MINE_TICKS = 30;
+export const MINE_CHUNK = 20;
 
 export type ImpIdle = { kind: "idle" };
 export type ImpWandering = {
@@ -27,14 +29,24 @@ export type ImpWalking = {
   pathLength: number;
   progress: number;
 };
-export type WorkKind = "dig" | "claim";
+export type ImpDelivering = {
+  kind: "delivering";
+  tile: TileIndex;
+  pathStep: number;
+  pathLength: number;
+  progress: number;
+};
+export type WorkKind = "dig" | "claim" | "mine";
 export type ImpWorking = {
   kind: "working";
   tile: TileIndex;
   work: WorkKind;
   remaining: number;
 };
-export type ImpState = ImpIdle | ImpWandering | ImpWalking | ImpWorking;
+export type ImpCarryEmpty = { kind: "empty" };
+export type ImpCarryGold = { kind: "gold"; amount: number };
+export type ImpCarry = ImpCarryEmpty | ImpCarryGold;
+export type ImpState = ImpIdle | ImpWandering | ImpWalking | ImpWorking | ImpDelivering;
 
 export type Imp = {
   id: ImpId;
@@ -51,6 +63,10 @@ export type Imp = {
   wandering: ImpWandering;
   walking: ImpWalking;
   working: ImpWorking;
+  delivering: ImpDelivering;
+  carry: ImpCarry;
+  carryEmpty: ImpCarryEmpty;
+  carryGold: ImpCarryGold;
   state: ImpState;
 };
 
@@ -79,6 +95,15 @@ export function createImp(index: number, tileX: number, tileY: number): Imp {
     work: "dig",
     remaining: 0,
   };
+  const delivering: ImpDelivering = {
+    kind: "delivering",
+    tile: asTileIndex(tileY * MAP_WIDTH + tileX),
+    pathStep: 0,
+    pathLength: 0,
+    progress: 0,
+  };
+  const carryEmpty: ImpCarryEmpty = { kind: "empty" };
+  const carryGold: ImpCarryGold = { kind: "gold", amount: 0 };
   return {
     id: asImpId(index),
     tileX,
@@ -94,6 +119,10 @@ export function createImp(index: number, tileX: number, tileY: number): Imp {
     wandering,
     walking,
     working,
+    delivering,
+    carry: carryEmpty,
+    carryEmpty,
+    carryGold,
     state: idle,
   };
 }
@@ -229,10 +258,10 @@ function digTarget(world: ImpWorld, jobTile: TileIndex, gen: number): number | u
 function targetForJob(world: ImpWorld, job: Job, gen: number): number | undefined {
   switch (job.jobKind) {
     case "dig":
+    case "mineGold":
       return digTarget(world, job.tile, gen);
     case "claim":
       return isReached(world, job.tile, gen) ? job.tile : undefined;
-    case "mineGold":
     case "carryGold":
     case "reinforce":
       return undefined;
@@ -312,6 +341,10 @@ export function reserveBestReachableJob(world: ImpWorld, imp: Imp): Job | undefi
 }
 
 export function beginIdle(world: ImpWorld, imp: Imp): void {
+  if (imp.carry.kind === "gold") {
+    beginDelivering(world, imp);
+    return;
+  }
   if (reserveBestReachableJob(world, imp) !== undefined) {
     return;
   }
@@ -342,6 +375,9 @@ export function beginWorking(world: ImpWorld, imp: Imp, tile: TileIndex): void {
       imp.working.remaining = CLAIM_TICKS;
       break;
     case "mineGold":
+      imp.working.work = "mine";
+      imp.working.remaining = MINE_TICKS;
+      break;
     case "carryGold":
     case "reinforce":
       goIdle(imp);
@@ -377,6 +413,89 @@ export function finishClaim(world: ImpWorld, imp: Imp, tile: TileIndex): void {
   goIdle(imp);
 }
 
+export function beginDelivering(world: ImpWorld, imp: Imp): void {
+  const start = tileIndex(imp.tileX, imp.tileY, world.width);
+  const heart = tileIndex(HEART_X, HEART_Y, world.width);
+  const length = findPath(world.tiles, world.width, world.height, start, heart, world.pathScratch, imp.path);
+  if (length <= 0) {
+    finishDelivery(world, imp);
+    return;
+  }
+  imp.delivering.tile = asTileIndex(heart);
+  imp.delivering.pathStep = 0;
+  imp.delivering.pathLength = length;
+  imp.delivering.progress = 0;
+  imp.state = imp.delivering;
+  setHeading(imp, world.width);
+}
+
+export function finishDelivery(world: ImpWorld, imp: Imp): void {
+  const carry = imp.carry;
+  switch (carry.kind) {
+    case "gold":
+      world.goldStored += carry.amount;
+      carry.amount = 0;
+      imp.carry = imp.carryEmpty;
+      break;
+    case "empty":
+      break;
+    default: {
+      const never: never = carry;
+      throw never;
+    }
+  }
+  goIdle(imp);
+}
+
+export function finishMine(world: ImpWorld, imp: Imp, tile: TileIndex): void {
+  const stock = world.goldStock[tile];
+  const available = stock === undefined ? 0 : stock;
+  const chunk = available < MINE_CHUNK ? available : MINE_CHUNK;
+  if (chunk <= 0) {
+    setTile(world, tile, TILE_KIND.dirt);
+    completeJob(world.jobs, workerOf(imp));
+    openClaimJobsAround(world, tile);
+    goIdle(imp);
+    return;
+  }
+  world.goldStock[tile] = available - chunk;
+  imp.carryGold.amount = chunk;
+  imp.carry = imp.carryGold;
+  const remaining = world.goldStock[tile];
+  if (remaining === 0) {
+    setTile(world, tile, TILE_KIND.dirt);
+    completeJob(world.jobs, workerOf(imp));
+    openClaimJobsAround(world, tile);
+  } else {
+    releaseWorker(world.jobs, workerOf(imp));
+  }
+  beginDelivering(world, imp);
+}
+
+export function carryingCount(board: ImpBoard): number {
+  let n = 0;
+  for (let i = 0; i < board.slots.length; i += 1) {
+    const slot = board.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "live":
+        if (slot.imp.carry.kind === "gold") {
+          n += 1;
+        }
+        break;
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+  return n;
+}
+
 export function setHeading(imp: Imp, width: number): void {
   const moving = movingState(imp);
   if (moving === undefined) {
@@ -402,7 +521,7 @@ export function setHeading(imp: Imp, width: number): void {
   imp.headingY = ny - imp.tileY;
 }
 
-export function movingState(imp: Imp): ImpWandering | ImpWalking | undefined {
+export function movingState(imp: Imp): ImpWandering | ImpWalking | ImpDelivering | undefined {
   const state = imp.state;
   switch (state.kind) {
     case "idle":
@@ -413,6 +532,8 @@ export function movingState(imp: Imp): ImpWandering | ImpWalking | undefined {
       return state;
     case "working":
       return undefined;
+    case "delivering":
+      return state;
     default: {
       const never: never = state;
       return never;
@@ -475,6 +596,8 @@ function impStateCode(kind: ImpState["kind"]): number {
       return 3;
     case "working":
       return 4;
+    case "delivering":
+      return 5;
     default: {
       const never: never = kind;
       return never;
@@ -488,8 +611,23 @@ function workCode(work: WorkKind): number {
       return 1;
     case "claim":
       return 2;
+    case "mine":
+      return 3;
     default: {
       const never: never = work;
+      return never;
+    }
+  }
+}
+
+function carryCode(carry: ImpCarry): number {
+  switch (carry.kind) {
+    case "empty":
+      return 1;
+    case "gold":
+      return 2;
+    default: {
+      const never: never = carry;
       return never;
     }
   }
@@ -513,6 +651,10 @@ export function hashImps(board: ImpBoard): number {
         h = mix(h, imp.id);
         h = mix(h, imp.tileX);
         h = mix(h, imp.tileY);
+        h = mix(h, carryCode(imp.carry));
+        if (imp.carry.kind === "gold") {
+          h = mix(h, imp.carry.amount);
+        }
         h = mix(h, impStateCode(imp.state.kind));
         const moving = imp.state;
         switch (moving.kind) {
@@ -535,6 +677,13 @@ export function hashImps(board: ImpBoard): number {
             h = mix(h, moving.tile);
             h = mix(h, workCode(moving.work));
             h = mix(h, moving.remaining);
+            break;
+          case "delivering":
+            h = mix(h, moving.tile);
+            h = mix(h, moving.pathStep);
+            h = mix(h, moving.pathLength);
+            h = mix(h, moving.progress);
+            h = mixPath(h, imp.path, moving.pathLength);
             break;
           default: {
             const never: never = moving;

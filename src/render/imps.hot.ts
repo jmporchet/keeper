@@ -1,4 +1,4 @@
-import type { InstancedMesh, Object3D } from "three";
+import type { Color, InstancedMesh, Object3D } from "three";
 import { MAP_HALF } from "../sim";
 import type { ImpSlot } from "../sim/imps";
 
@@ -7,6 +7,7 @@ export function syncImpInstances(
   alpha: number,
   mesh: InstancedMesh,
   dummy: Object3D,
+  color: Color,
 ): void {
   let drawn = 0;
   for (let i = 0; i < slots.length; i += 1) {
@@ -27,7 +28,19 @@ export function syncImpInstances(
         dummy.rotation.set(0, 0, 0);
         dummy.updateMatrix();
         mesh.setMatrixAt(drawn, dummy.matrix);
+        color.setHex(0xe03030);
+        mesh.setColorAt(drawn, color);
         drawn += 1;
+        if (imp.carry.kind === "gold") {
+          dummy.position.set(x - MAP_HALF, 1.2, z - MAP_HALF);
+          dummy.scale.set(0.85, 0.85, 0.85);
+          dummy.rotation.set(0, 0, 0);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(drawn, dummy.matrix);
+          color.setHex(0xffd23f);
+          mesh.setColorAt(drawn, color);
+          drawn += 1;
+        }
         break;
       }
       default: {
@@ -38,4 +51,7 @@ export function syncImpInstances(
   }
   mesh.count = drawn;
   mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor !== null) {
+    mesh.instanceColor.needsUpdate = true;
+  }
 }
