@@ -1,10 +1,132 @@
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
+import { noComments } from "./eslint-rules/no-comments.js";
+
+const local = {
+  rules: {
+    "no-comments": noComments,
+  },
+};
+
+const simRestrictedImports = [
+  "error",
+  {
+    paths: [
+      {
+        name: "three",
+        message: "src/sim cannot import three.",
+      },
+    ],
+    patterns: [
+      {
+        group: ["three/*", "three/**"],
+        message: "src/sim cannot import three.",
+      },
+      {
+        regex: "(^|/)render(/|$)",
+        message: "src/sim cannot import render.",
+      },
+    ],
+  },
+];
+
+const simRestrictedGlobals = [
+  "error",
+  {
+    name: "window",
+    message: "src/sim cannot use DOM globals.",
+  },
+  {
+    name: "document",
+    message: "src/sim cannot use DOM globals.",
+  },
+  {
+    name: "navigator",
+    message: "src/sim cannot use DOM globals.",
+  },
+  {
+    name: "self",
+    message: "src/sim cannot use DOM globals.",
+  },
+  {
+    name: "localStorage",
+    message: "src/sim cannot use DOM globals.",
+  },
+  {
+    name: "sessionStorage",
+    message: "src/sim cannot use DOM globals.",
+  },
+  {
+    name: "requestAnimationFrame",
+    message: "src/sim cannot use DOM globals.",
+  },
+  {
+    name: "HTMLElement",
+    message: "src/sim cannot use DOM globals.",
+  },
+  {
+    name: "Element",
+    message: "src/sim cannot use DOM globals.",
+  },
+  {
+    name: "Node",
+    message: "src/sim cannot use DOM globals.",
+  },
+];
+
+const hotRestrictedSyntax = [
+  "error",
+  {
+    selector: "ObjectExpression",
+    message: "Do not allocate object literals in *.hot.ts.",
+  },
+  {
+    selector: "ArrayExpression",
+    message: "Do not allocate array literals in *.hot.ts.",
+  },
+  {
+    selector: "NewExpression",
+    message: "Do not allocate with new in *.hot.ts.",
+  },
+  {
+    selector: "ArrowFunctionExpression",
+    message: "Do not allocate closures in *.hot.ts.",
+  },
+  {
+    selector: "FunctionExpression",
+    message: "Do not allocate closures in *.hot.ts.",
+  },
+  {
+    selector: "SpreadElement",
+    message: "Do not allocate with spread in *.hot.ts.",
+  },
+  {
+    selector: "CallExpression[callee.property.name='map']",
+    message: "Do not allocate with Array#map in *.hot.ts.",
+  },
+  {
+    selector: "CallExpression[callee.property.name='filter']",
+    message: "Do not allocate with Array#filter in *.hot.ts.",
+  },
+  {
+    selector: "CallExpression[callee.property.name='slice']",
+    message: "Do not allocate with Array#slice in *.hot.ts.",
+  },
+  {
+    selector: "CallExpression[callee.property.name='concat']",
+    message: "Do not allocate with Array#concat in *.hot.ts.",
+  },
+];
 
 export default tseslint.config(
-  { ignores: ["dist", "proof", "node_modules"] },
+  { ignores: ["dist", "proof", "node_modules", "fixtures/eslint"] },
+  {
+    plugins: { local },
+    rules: {
+      "local/no-comments": "error",
+    },
+  },
   eslint.configs.recommended,
-  ...tseslint.configs.recommended,
   {
     files: ["**/*.mjs"],
     languageOptions: {
@@ -14,6 +136,36 @@ export default tseslint.config(
         process: "readonly",
         fetch: "readonly",
       },
+    },
+  },
+  {
+    files: ["**/*.ts"],
+    extends: [...tseslint.configs.recommended],
+    languageOptions: {
+      parserOptions: {
+        project: "./tsconfig.eslint.json",
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/switch-exhaustiveness-check": [
+        "error",
+        { considerDefaultExhaustiveForUnions: false },
+      ],
+    },
+  },
+  {
+    files: ["src/sim/**/*.ts", "fixtures/eslint/sim/**/*.ts"],
+    rules: {
+      "no-restricted-globals": simRestrictedGlobals,
+      "no-restricted-imports": simRestrictedImports,
+    },
+  },
+  {
+    files: ["**/*.hot.ts"],
+    rules: {
+      "no-restricted-syntax": hotRestrictedSyntax,
     },
   },
 );
