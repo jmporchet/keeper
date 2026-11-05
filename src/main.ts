@@ -84,6 +84,7 @@ import {
 } from "./sim";
 import { createHud, hudGold } from "./ui/hud";
 import { createSandboxPanel } from "./ui/sandboxPanel";
+import { createSpellPanel } from "./ui/spellPanel";
 import { max, median, percentile } from "./perf/stats";
 
 type JobDebug = { tileX: number; tileY: number; kind: string; state: string; holder: number | null };
@@ -151,6 +152,10 @@ declare global {
       speedImpsCost: number;
       speedImpsDurationTicks: number;
       speedImpsCooldownTicks: number;
+      spellArm: "none" | "lightning" | "heal";
+      spellTargetValue: string;
+      castLightningAt(heroId: number): void;
+      castHealAt(creatureId: number): void;
       doorCount: number;
       trapCount: number;
       liveCreatureCount: number;
@@ -284,6 +289,14 @@ function placeCamera(alpha = 1): void {
   camera.lookAt(pose.targetX, 0, pose.targetZ);
 }
 
+const spellPanel = createSpellPanel(
+  document.getElementById("sandbox-panel"),
+  () => world.tick,
+  enqueueCastLightning,
+  enqueueCastHeal,
+  enqueueCastSpeedImps,
+);
+
 const cameraInput = bindCameraInput(
   canvas,
   pose,
@@ -297,6 +310,15 @@ const cameraInput = bindCameraInput(
     if (proof) {
       render();
     }
+  },
+  {
+    arm: () => spellPanel.armed(),
+    castLightning: (heroId) => {
+      spellPanel.tryCastLightningAt(heroId);
+    },
+    castHeal: (creatureId) => {
+      spellPanel.tryCastHealAt(creatureId);
+    },
   },
 );
 
@@ -354,63 +376,15 @@ function possessFirstCreature(): void {
   }
 }
 
-function firstLiveHeroId(): HeroId | undefined {
-  for (let i = 0; i < world.heroes.slots.length; i += 1) {
-    const slot = world.heroes.slots[i];
-    if (slot === undefined) {
-      continue;
-    }
-    switch (slot.kind) {
-      case "empty":
-        break;
-      case "live":
-        return slot.hero.id;
-      default: {
-        const never: never = slot;
-        return never;
-      }
-    }
-  }
-  return undefined;
-}
-
-function castLightningAtFirstHero(): void {
-  const heroId = firstLiveHeroId();
-  if (heroId === undefined) {
-    return;
-  }
+function enqueueCastLightning(heroId: HeroId): void {
   commands.push({ kind: "castLightning", tick: world.tick, heroId });
 }
 
-function firstLiveCreatureId(): CreatureId | undefined {
-  for (let i = 0; i < world.creatures.slots.length; i += 1) {
-    const slot = world.creatures.slots[i];
-    if (slot === undefined) {
-      continue;
-    }
-    switch (slot.kind) {
-      case "empty":
-        break;
-      case "live":
-        return slot.creature.id;
-      default: {
-        const never: never = slot;
-        return never;
-      }
-    }
-  }
-  return undefined;
-}
-
-function castHealAtFirstCreature(): void {
-  const creatureId = firstLiveCreatureId();
-  if (creatureId === undefined) {
-    return;
-  }
+function enqueueCastHeal(creatureId: CreatureId): void {
   commands.push({ kind: "castHeal", tick: world.tick, creatureId });
 }
 
-function castSpeedImps(): void {
+function enqueueCastSpeedImps(): void {
   commands.push({ kind: "castSpeedImps", tick: world.tick });
 }
 
@@ -486,9 +460,6 @@ const sandboxPanel = createSandboxPanel(
   () => buildSave(world, commands),
   loadSave,
   possessFirstCreature,
-  castLightningAtFirstHero,
-  castHealAtFirstCreature,
-  castSpeedImps,
 );
 
 function syncPaintMode(): void {
@@ -504,6 +475,84 @@ syncPaintMode();
 
 function hudText(): string {
   return hudElement === null ? "" : hudElement.textContent ?? "";
+}
+
+function spellHeroes(): { id: number; tileX: number; tileY: number; hp: number }[] {
+  const heroes: { id: number; tileX: number; tileY: number; hp: number }[] = [];
+  for (let i = 0; i < world.heroes.slots.length; i += 1) {
+    const slot = world.heroes.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "live": {
+        const hero = slot.hero;
+        heroes.push({ id: hero.id, tileX: hero.tileX, tileY: hero.tileY, hp: hero.hp });
+        break;
+      }
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+  return heroes;
+}
+
+function spellCreatures(): { id: number; tileX: number; tileY: number; hp: number; kind: string }[] {
+  const creatures: { id: number; tileX: number; tileY: number; hp: number; kind: string }[] = [];
+  for (let i = 0; i < world.creatures.slots.length; i += 1) {
+    const slot = world.creatures.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "live": {
+        const creature = slot.creature;
+        creatures.push({
+          id: creature.id,
+          tileX: creature.tileX,
+          tileY: creature.tileY,
+          hp: creature.hp,
+          kind: creature.kind,
+        });
+        break;
+      }
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+  return creatures;
+}
+
+function eligibleSpellImpCount(): number {
+  let count = 0;
+  for (let i = 0; i < world.imps.slots.length; i += 1) {
+    const slot = world.imps.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "live":
+        if (slot.imp.state.kind !== "held") {
+          count += 1;
+        }
+        break;
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+  return count;
 }
 
 function syncHud(): void {
@@ -540,6 +589,19 @@ function syncHud(): void {
   const victorious = isVictorious(snapshot);
   sandboxPanel.setPaused(paused || defeated || victorious);
   sandboxPanel.setReplaying(isReplaying(snapshot));
+  spellPanel.setPaused(paused);
+  spellPanel.setReplaying(isReplaying(snapshot));
+  spellPanel.sync({
+    gold: hudGold(world.goldStored, treasuryStockTotal(world)),
+    lightningCooldown: world.lightningCooldown,
+    healCooldown: world.healCooldown,
+    speedImpsCooldown: world.speedImpsCooldown,
+    defeated: world.defeated,
+    victorious: world.victorious,
+    heroes: spellHeroes(),
+    creatures: spellCreatures(),
+    eligibleImpCount: eligibleSpellImpCount(),
+  });
   if (pauseOverlay !== null) {
     const endScreen = defeated || victorious;
     pauseOverlay.classList.toggle("visible", paused || endScreen);
@@ -578,6 +640,10 @@ function togglePause(): void {
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    if (spellPanel.armed() !== "none") {
+      spellPanel.cancelArm();
+      return;
+    }
     if (isPossessed(cameraInput.actor.getSnapshot())) {
       exitPossess();
       return;
@@ -864,6 +930,19 @@ if (proof) {
     },
     get speedImpsCooldownTicks() {
       return SPEED_IMPS_COOLDOWN_TICKS;
+    },
+    get spellArm() {
+      return spellPanel.armed();
+    },
+    get spellTargetValue() {
+      const select = document.getElementById("spell-target");
+      return select instanceof HTMLSelectElement ? select.value : "";
+    },
+    castLightningAt(heroId: number) {
+      spellPanel.tryCastLightningAt(heroId);
+    },
+    castHealAt(creatureId: number) {
+      spellPanel.tryCastHealAt(creatureId);
     },
     get doorCount() {
       return doorCount(world);

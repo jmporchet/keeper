@@ -66,9 +66,6 @@ describe("sandbox panel paint buttons", () => {
       () => emptySave,
       () => undefined,
       () => undefined,
-      () => undefined,
-      () => undefined,
-      () => undefined,
     );
     const click = libraryButton.clicks[0];
     if (click === undefined) {
@@ -101,9 +98,6 @@ describe("sandbox panel door and trap tools", () => {
       () => emptySave,
       () => undefined,
       () => undefined,
-      () => undefined,
-      () => undefined,
-      () => undefined,
     );
     const doorClick = doorButton.clicks[0];
     const trapClick = trapButton.clicks[0];
@@ -121,111 +115,6 @@ describe("sandbox panel door and trap tools", () => {
     expect(trapButton.pressed).toBe("true");
     panel.setPainting(false, "trap");
     expect(trapButton.pressed).toBe("false");
-  });
-});
-
-describe("sandbox panel lightning", () => {
-  it("wires the lightning button to the cast callback and disables it when paused", () => {
-    const { root, buttons } = fakePanelRoot();
-    const lightningButton = fakeButton();
-    buttons.set("#cast-lightning", lightningButton);
-    let casts = 0;
-    const panel = createSandboxPanel(
-      root,
-      () => asTick(0),
-      () => undefined,
-      () => undefined,
-      () => emptySave,
-      () => undefined,
-      () => undefined,
-      () => {
-        casts += 1;
-      },
-      () => undefined,
-      () => undefined,
-    );
-    const click = lightningButton.clicks[0];
-    if (click === undefined) {
-      throw new Error("lightning click handler was not registered");
-    }
-    click();
-    expect(casts).toBe(1);
-    panel.setPaused(true);
-    expect(lightningButton.disabled).toBe(true);
-    click();
-    expect(casts).toBe(1);
-    panel.setPaused(false);
-    expect(lightningButton.disabled).toBe(false);
-  });
-});
-
-describe("sandbox panel heal", () => {
-  it("wires the heal button to the cast callback and disables it when paused", () => {
-    const { root, buttons } = fakePanelRoot();
-    const healButton = fakeButton();
-    buttons.set("#cast-heal", healButton);
-    let casts = 0;
-    const panel = createSandboxPanel(
-      root,
-      () => asTick(0),
-      () => undefined,
-      () => undefined,
-      () => emptySave,
-      () => undefined,
-      () => undefined,
-      () => undefined,
-      () => {
-        casts += 1;
-      },
-      () => undefined,
-    );
-    const click = healButton.clicks[0];
-    if (click === undefined) {
-      throw new Error("heal click handler was not registered");
-    }
-    click();
-    expect(casts).toBe(1);
-    panel.setPaused(true);
-    expect(healButton.disabled).toBe(true);
-    click();
-    expect(casts).toBe(1);
-    panel.setPaused(false);
-    expect(healButton.disabled).toBe(false);
-  });
-});
-
-describe("sandbox panel speed imps", () => {
-  it("wires the speed button to the cast callback and disables it when paused", () => {
-    const { root, buttons } = fakePanelRoot();
-    const speedButton = fakeButton();
-    buttons.set("#cast-speed-imps", speedButton);
-    let casts = 0;
-    const panel = createSandboxPanel(
-      root,
-      () => asTick(0),
-      () => undefined,
-      () => undefined,
-      () => emptySave,
-      () => undefined,
-      () => undefined,
-      () => undefined,
-      () => undefined,
-      () => {
-        casts += 1;
-      },
-    );
-    const click = speedButton.clicks[0];
-    if (click === undefined) {
-      throw new Error("speed click handler was not registered");
-    }
-    click();
-    expect(casts).toBe(1);
-    panel.setPaused(true);
-    expect(speedButton.disabled).toBe(true);
-    click();
-    expect(casts).toBe(1);
-    panel.setPaused(false);
-    expect(speedButton.disabled).toBe(false);
   });
 });
 

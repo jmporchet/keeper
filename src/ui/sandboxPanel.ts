@@ -38,16 +38,10 @@ export function createSandboxPanel(
   getSave: () => Save,
   onLoad: (save: Save) => void,
   onPossess: () => void,
-  onLightning: () => void,
-  onHeal: () => void,
-  onSpeedImps: () => void,
 ): SandboxPanel {
   const spawnButton = root === null ? null : root.querySelector<HTMLButtonElement>("#spawn-imp");
   const goldButton = root === null ? null : root.querySelector<HTMLButtonElement>("#add-gold");
   const repairHeartButton = root === null ? null : root.querySelector<HTMLButtonElement>("#repair-heart");
-  const lightningButton = root === null ? null : root.querySelector<HTMLButtonElement>("#cast-lightning");
-  const healButton = root === null ? null : root.querySelector<HTMLButtonElement>("#cast-heal");
-  const speedImpsButton = root === null ? null : root.querySelector<HTMLButtonElement>("#cast-speed-imps");
   const paintTreasuryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-treasury");
   const paintLairButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-lair");
   const paintHatcheryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-hatchery");
@@ -73,15 +67,6 @@ export function createSandboxPanel(
     }
     if (repairHeartButton !== null) {
       repairHeartButton.disabled = paused || replaying;
-    }
-    if (lightningButton !== null) {
-      lightningButton.disabled = paused || replaying;
-    }
-    if (healButton !== null) {
-      healButton.disabled = paused || replaying;
-    }
-    if (speedImpsButton !== null) {
-      speedImpsButton.disabled = paused || replaying;
     }
     if (paintTreasuryButton !== null) {
       paintTreasuryButton.disabled = paused || replaying || possessed;
@@ -140,30 +125,6 @@ export function createSandboxPanel(
         return;
       }
       enqueue(sandboxCommand("repairHeart", getTick()));
-    });
-  }
-  if (lightningButton !== null) {
-    lightningButton.addEventListener("click", () => {
-      if (paused || replaying) {
-        return;
-      }
-      onLightning();
-    });
-  }
-  if (healButton !== null) {
-    healButton.addEventListener("click", () => {
-      if (paused || replaying) {
-        return;
-      }
-      onHeal();
-    });
-  }
-  if (speedImpsButton !== null) {
-    speedImpsButton.addEventListener("click", () => {
-      if (paused || replaying) {
-        return;
-      }
-      onSpeedImps();
     });
   }
   if (paintTreasuryButton !== null) {

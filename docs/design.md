@@ -75,11 +75,13 @@ Axes:
 - **Sound:** minimal dig, combat and payday SFX plus cave ambience, generated at runtime; no analytics SDKs.
 - **Perf:** pathfinding bench at 200 imps choosing between a flow field and A*, and an optional sim Web Worker.
 
-Spell lightning (item 49): a replayable `castLightning` command targets a live hero. It costs `LIGHTNING_COST = 60` through `spendGold`, deals `LIGHTNING_DAMAGE = 3` once, clears the hero slot at zero HP, and sets `lightningCooldown = LIGHTNING_COOLDOWN_TICKS = 40`. The cooldown decrements by one each step and is hashed. Casts are refused without payment when gold is short, the hero slot is empty, the cooldown is positive, or the game is defeated or victorious. The sandbox panel casts at the first live hero, the HUD shows the cooldown, and a brief flash marks a successful cast.
+Spell lightning (item 49): a replayable `castLightning` command targets a live hero. It costs `LIGHTNING_COST = 60` through `spendGold`, deals `LIGHTNING_DAMAGE = 3` once, clears the hero slot at zero HP, and sets `lightningCooldown = LIGHTNING_COOLDOWN_TICKS = 40`. The cooldown decrements by one each step and is hashed. Casts are refused without payment when gold is short, the hero slot is empty, the cooldown is positive, or the game is defeated or victorious. The spell panel targets a chosen live hero, the HUD shows the cooldown, and a brief flash marks a successful cast.
 
-Spell heal (item 50): a replayable `castHeal` command targets a live creature. It costs `HEAL_COST = 50` through `spendGold`, adds `HEAL_AMOUNT = 2` to the creature's HP capped at `maxHp`, and sets `healCooldown = HEAL_COOLDOWN_TICKS = 40`. The cooldown decrements by one each step and is hashed. Casts are refused without payment when gold is short, the creature slot is empty, the cooldown is positive, or the game is defeated or victorious. The sandbox panel casts at the first live creature, the HUD shows the cooldown, and a brief flash marks a successful cast.
+Spell heal (item 50): a replayable `castHeal` command targets a live creature. It costs `HEAL_COST = 50` through `spendGold`, adds `HEAL_AMOUNT = 2` to the creature's HP capped at `maxHp`, and sets `healCooldown = HEAL_COOLDOWN_TICKS = 40`. The cooldown decrements by one each step and is hashed. Casts are refused without payment when gold is short, the creature slot is empty, the cooldown is positive, or the game is defeated or victorious. The spell panel targets a chosen live creature, the HUD shows the cooldown, and a brief flash marks a successful cast.
 
-Spell speed imps (item 51): a replayable `castSpeedImps` command has no target and costs `SPEED_IMPS_COST = 40` through `spendGold`. It applies the existing slap imp boost path for `SPEED_IMPS_DURATION_TICKS = 80` to every live non-held imp, doubling move and work speed, and sets `speedImpsCooldown = SPEED_IMPS_COOLDOWN_TICKS = 40`. The cooldown decrements by one each step and is hashed. Casts are refused without payment when gold is short, the cooldown is positive, the game is defeated or victorious, or no live non-held imp exists. The sandbox panel casts at all eligible imps, the HUD shows the cooldown, and a brief flash marks a successful cast.
+Spell speed imps (item 51): a replayable `castSpeedImps` command has no target and costs `SPEED_IMPS_COST = 40` through `spendGold`. It applies the existing slap imp boost path for `SPEED_IMPS_DURATION_TICKS = 80` to every live non-held imp, doubling move and work speed, and sets `speedImpsCooldown = SPEED_IMPS_COOLDOWN_TICKS = 40`. The cooldown decrements by one each step and is hashed. Casts are refused without payment when gold is short, the cooldown is positive, the game is defeated or victorious, or no live non-held imp exists. The spell panel casts at all eligible imps, the HUD shows the cooldown, and a brief flash marks a successful cast.
+
+Spell panel (item 52): a dedicated Spells section in the sandbox panel shows `LIGHTNING_COST = 60`, `HEAL_COST = 50` and `SPEED_IMPS_COST = 40` with a ready or cooldown status. It disables a spell when gold is short, the spell is cooling, the run is paused, replaying, defeated or victorious, the target list is empty, or no eligible imp exists. Lightning and heal arm a target select listing live heroes or creatures; the spell button's second click or a canvas click on a matching unit queues the existing `castLightning` or `castHeal` command at the chosen id, while speed queues `castSpeedImps` immediately. Escape cancels an arm. Casts remain plain commands in the replay log, and the panel adds no sim rules, cooldowns, meshes or draw calls.
 
 Constraints:
 
@@ -196,6 +198,9 @@ stateDiagram-v2
     Holding --> Holding: drop refused (not walkable)
     Idle --> Idle: Shift+left press on imp (slap)
     Idle --> Idle: left click on a door tile (toggleDoor)
+    Idle --> Idle: arm lightning or heal (live target list)
+    Idle --> Idle: click armed spell or matching unit (cast command)
+    Idle --> Idle: Escape cancels spell arm
     Idle --> Possessed: POSSESS_CREATURE (live creature)
     Possessed --> Possessed: POSSESS_MOVE (one tile per tick)
     Possessed --> Idle: EXIT_POSSESS / Escape
