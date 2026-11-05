@@ -153,6 +153,7 @@ export {
   openClaimJobsAround,
   PORTAL_X,
   PORTAL_Y,
+  REPAIR_HEART_COST,
   requireSorted,
   ROOM_KIND,
   ROOM_KIND_COUNT,

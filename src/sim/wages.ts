@@ -14,7 +14,7 @@ export function ticksUntilPayday(tick: number): number {
   return PAY_TICKS - remainder;
 }
 
-function availableGold(world: World): number {
+export function availableGold(world: World): number {
   let total = world.goldStored;
   for (let i = 0; i < world.treasuryStock.length; i += 1) {
     const stock = world.treasuryStock[i];
@@ -26,7 +26,7 @@ function availableGold(world: World): number {
   return total;
 }
 
-function drainTreasury(world: World, amount: number): number {
+export function drainTreasury(world: World, amount: number): number {
   let remaining = amount;
   for (let i = 0; i < world.treasuryStock.length && remaining > 0; i += 1) {
     const stock = world.treasuryStock[i];

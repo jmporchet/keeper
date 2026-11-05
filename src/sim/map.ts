@@ -5,6 +5,7 @@ export const HEART_X = 32;
 export const HEART_Y = 32;
 export const HEART_HP = 20;
 export const HEART_DAMAGE_TICKS = 2;
+export const REPAIR_HEART_COST = 100;
 
 export const TILE_KINDS = [
   "earth",

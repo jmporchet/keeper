@@ -6,7 +6,7 @@ import {
   type Save,
 } from "../sim/save";
 
-export type SandboxAction = "spawnImp" | "addGold";
+export type SandboxAction = "spawnImp" | "addGold" | "repairHeart";
 
 export function sandboxCommand(action: SandboxAction, tick: Tick): Command {
   switch (action) {
@@ -14,6 +14,8 @@ export function sandboxCommand(action: SandboxAction, tick: Tick): Command {
       return { kind: "spawnImp", tick };
     case "addGold":
       return { kind: "addGold", tick, amount: 100 };
+    case "repairHeart":
+      return { kind: "repairHeart", tick };
     default: {
       const never: never = action;
       return never;
@@ -39,6 +41,7 @@ export function createSandboxPanel(
 ): SandboxPanel {
   const spawnButton = root === null ? null : root.querySelector<HTMLButtonElement>("#spawn-imp");
   const goldButton = root === null ? null : root.querySelector<HTMLButtonElement>("#add-gold");
+  const repairHeartButton = root === null ? null : root.querySelector<HTMLButtonElement>("#repair-heart");
   const paintTreasuryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-treasury");
   const paintLairButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-lair");
   const paintHatcheryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-hatchery");
@@ -59,6 +62,9 @@ export function createSandboxPanel(
     }
     if (goldButton !== null) {
       goldButton.disabled = paused || replaying;
+    }
+    if (repairHeartButton !== null) {
+      repairHeartButton.disabled = paused || replaying;
     }
     if (paintTreasuryButton !== null) {
       paintTreasuryButton.disabled = paused || replaying || possessed;
@@ -103,6 +109,14 @@ export function createSandboxPanel(
         return;
       }
       enqueue(sandboxCommand("addGold", getTick()));
+    });
+  }
+  if (repairHeartButton !== null) {
+    repairHeartButton.addEventListener("click", () => {
+      if (paused || replaying) {
+        return;
+      }
+      enqueue(sandboxCommand("repairHeart", getTick()));
     });
   }
   if (paintTreasuryButton !== null) {

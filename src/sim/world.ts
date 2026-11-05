@@ -37,6 +37,7 @@ import {
   MAP_WIDTH,
   PORTAL_X,
   PORTAL_Y,
+  REPAIR_HEART_COST,
   ROOM_KIND,
   TILE_KIND,
   TRAINING_COST,
@@ -55,7 +56,7 @@ import {
   syncPossession,
 } from "./possession";
 import { advanceRng } from "./rng";
-import { runPayday } from "./wages";
+import { availableGold, drainTreasury, runPayday } from "./wages";
 import { attachTiles, setTile, type World } from "./worldCore";
 
 export {
@@ -71,6 +72,7 @@ export {
   MAP_WIDTH,
   PORTAL_X,
   PORTAL_Y,
+  REPAIR_HEART_COST,
   ROOM_KIND,
   ROOM_KIND_COUNT,
   ROOM_KINDS,
@@ -128,7 +130,8 @@ export type Command =
   | { kind: "slap"; tick: Tick; impId: ImpId }
   | { kind: "possess"; tick: Tick; creatureId: CreatureId }
   | { kind: "releasePossess"; tick: Tick }
-  | { kind: "possessMove"; tick: Tick; creatureId: CreatureId; dx: number; dy: number };
+  | { kind: "possessMove"; tick: Tick; creatureId: CreatureId; dx: number; dy: number }
+  | { kind: "repairHeart"; tick: Tick };
 
 export type CommandLog = readonly Command[] & { readonly __brand: "CommandLog" };
 
@@ -708,6 +711,21 @@ function applyDrop(world: World, impId: ImpId, tileX: number, tileY: number): vo
   }
 }
 
+function applyRepairHeart(world: World): void {
+  if (!world.heartBreached) {
+    return;
+  }
+  if (availableGold(world) < REPAIR_HEART_COST) {
+    return;
+  }
+  const fromStored = world.goldStored < REPAIR_HEART_COST ? world.goldStored : REPAIR_HEART_COST;
+  world.goldStored -= fromStored;
+  drainTreasury(world, REPAIR_HEART_COST - fromStored);
+  world.goldSpent += REPAIR_HEART_COST;
+  world.heartHp = HEART_HP;
+  world.heartBreached = false;
+}
+
 function applyCommand(world: World, command: Command): void {
   switch (command.kind) {
     case "noop":
@@ -744,6 +762,9 @@ function applyCommand(world: World, command: Command): void {
       return;
     case "possessMove":
       applyPossessMove(world, command.creatureId, command.dx, command.dy);
+      return;
+    case "repairHeart":
+      applyRepairHeart(world);
       return;
     default: {
       const never: never = command;

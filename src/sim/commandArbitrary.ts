@@ -11,7 +11,7 @@ export function commandList(maxTick: number): fc.Arbitrary<Command[]> {
         fc.integer({ min: 0, max: maxTick - 1 }),
         fc.integer({ min: 1, max: 8 }),
         fc.integer({ min: 0, max: MAP_WIDTH * MAP_WIDTH - 1 }),
-        fc.integer({ min: 0, max: 15 }),
+        fc.integer({ min: 0, max: 16 }),
       )
       .map(([tick, amount, tile, kind]) => {
         switch (kind) {
@@ -88,6 +88,8 @@ export function commandList(maxTick: number): fc.Arbitrary<Command[]> {
               room: "workshop",
             };
           }
+          case 16:
+            return { kind: "repairHeart", tick: asTick(tick) };
           case 14: {
             const direction = tile % 4;
             if (direction === 0) {

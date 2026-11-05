@@ -123,6 +123,8 @@ function parseCommand(value: unknown): CommandResult {
     }
     case "releasePossess":
       return { ok: true, command: { kind: "releasePossess", tick } };
+    case "repairHeart":
+      return { ok: true, command: { kind: "repairHeart", tick } };
     case "possessMove": {
       if (!isIntegerInRange(value.creatureId, 0, CREATURE_CAPACITY - 1)) {
         return { ok: false, reason: "invalidCreatureId" };
