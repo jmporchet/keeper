@@ -4,6 +4,7 @@ import {
   inputCameraMachine,
   isOrbiting,
   isPanning,
+  isTagging,
 } from "./inputCameraMachine";
 
 function startInput() {
@@ -58,12 +59,14 @@ describe("input and camera chart", () => {
     expect(actor.getSnapshot().value).toBe("Idle");
   });
 
-  it("tags on left press on rock and returns on release", () => {
+  it("tags on left press on a tile and returns on release", () => {
     const actor = startInput();
-    actor.send({ type: "LEFT_DOWN_ROCK" });
+    actor.send({ type: "LEFT_DOWN_TILE" });
     expect(actor.getSnapshot().value).toBe("Tagging");
+    expect(isTagging(actor.getSnapshot())).toBe(true);
     actor.send({ type: "TAG_RELEASE" });
     expect(actor.getSnapshot().value).toBe("Idle");
+    expect(isTagging(actor.getSnapshot())).toBe(false);
   });
 
   it("paints until the tool is cleared", () => {
@@ -94,7 +97,7 @@ describe("input and camera chart", () => {
     expect(actor.getSnapshot().value).toBe("Idle");
     actor.send({ type: "RIGHT_DOWN" });
     actor.send({ type: "PAN_KEY_DOWN" });
-    actor.send({ type: "LEFT_DOWN_ROCK" });
+    actor.send({ type: "LEFT_DOWN_TILE" });
     expect(actor.getSnapshot().value).toBe("Orbiting");
   });
 });

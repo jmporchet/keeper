@@ -5,15 +5,28 @@ import { createCameraPose, eyeFromPose } from "./camera/pose";
 import { bindCameraInput } from "./input/bindCamera";
 import { addTorchLighting, DUNGEON_EXPOSURE } from "./render/lights";
 import { createMapMeshes, syncMap } from "./render/map";
-import { createWorld, hashWorld, MAX_FRAME_DELTA, MAX_STEPS_PER_FRAME, step, TICK_DT } from "./sim";
+import {
+  countTagged,
+  createWorld,
+  hashWorld,
+  MAP_HALF,
+  MAP_WIDTH,
+  MAX_FRAME_DELTA,
+  MAX_STEPS_PER_FRAME,
+  step,
+  TICK_DT,
+  type Command,
+} from "./sim";
 
 declare global {
   interface Window {
     __keeper: {
       tick: number;
       hash: number;
+      taggedCount: number;
       drawCalls: number;
       camera: { targetX: number; targetZ: number; yaw: number; pitch: number; distance: number };
+      canvasPointForTile(tx: number, ty: number): { x: number; y: number } | null;
       step(n: number): void;
     };
   }
@@ -41,9 +54,11 @@ const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerH
 const pose = createCameraPose();
 
 const world = createWorld(1);
+const commands: Command[] = [];
 const map = createMapMeshes(scene);
 syncMap(world.tiles, world.width, world.tilesVersion, map);
 addTorchLighting(scene);
+const screenPoint = new THREE.Vector3();
 
 const tickHud = document.getElementById("tick");
 const pauseOverlay = document.getElementById("pause-overlay");
@@ -73,12 +88,21 @@ function placeCamera(): void {
   camera.lookAt(pose.targetX, 0, pose.targetZ);
 }
 
-const cameraInput = bindCameraInput(canvas, pose, () => {
-  placeCamera();
-  if (proof) {
-    render();
-  }
-});
+const cameraInput = bindCameraInput(
+  canvas,
+  pose,
+  camera,
+  world,
+  (command) => {
+    commands.push(command);
+  },
+  () => {
+    placeCamera();
+    if (proof) {
+      render();
+    }
+  },
+);
 
 function render(): void {
   if (actor.getSnapshot().matches("ContextLost")) {
@@ -146,6 +170,20 @@ function cameraSnapshot(): {
   };
 }
 
+function canvasPointForTile(tx: number, ty: number): { x: number; y: number } | null {
+  if (tx < 0 || ty < 0 || tx >= MAP_WIDTH || ty >= world.height) {
+    return null;
+  }
+  screenPoint.set(tx - MAP_HALF, 0, ty - MAP_HALF);
+  screenPoint.project(camera);
+  const x = (screenPoint.x * 0.5 + 0.5) * canvas.clientWidth;
+  const y = (-screenPoint.y * 0.5 + 0.5) * canvas.clientHeight;
+  if (x < 0 || y < 0 || x > canvas.clientWidth || y > canvas.clientHeight) {
+    return null;
+  }
+  return { x, y };
+}
+
 if (proof) {
   placeCamera();
   render();
@@ -162,13 +200,17 @@ if (proof) {
     get camera() {
       return cameraSnapshot();
     },
+    get taggedCount() {
+      return countTagged(world);
+    },
+    canvasPointForTile,
     step(n: number) {
       if (!isSimStepping(actor.getSnapshot())) {
         syncHud();
         return;
       }
       for (let i = 0; i < n; i += 1) {
-        step(world, []);
+        step(world, commands);
         cameraInput.tickHeldKeys();
       }
       syncMap(world.tiles, world.width, world.tilesVersion, map);
@@ -194,7 +236,7 @@ if (proof) {
       if (!isSimStepping(actor.getSnapshot())) {
         break;
       }
-      step(world, []);
+      step(world, commands);
       accumulator -= TICK_DT;
       steps += 1;
     }

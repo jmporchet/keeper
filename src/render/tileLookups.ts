@@ -16,6 +16,10 @@ export function colorForKind(kind: TileKind): number {
       return 0xa08a70;
     case "room":
       return 0x9a6a48;
+    case "taggedEarth":
+      return 0xff7a38;
+    case "taggedGold":
+      return 0xfff06a;
     default: {
       const never: never = kind;
       return never;
@@ -31,6 +35,8 @@ export function heightForKind(kind: TileKind): number {
       return 0.2;
     case "earth":
     case "goldSeam":
+    case "taggedEarth":
+    case "taggedGold":
       return 1;
     case "rock":
       return 1.4;

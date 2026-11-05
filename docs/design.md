@@ -96,8 +96,8 @@ stateDiagram-v2
     Orbiting --> Idle: release
     Idle --> Panning: middle drag or WASD
     Panning --> Idle: release
-    Idle --> Tagging: left press on rock
-    Tagging --> Idle: release (tags the swept tiles)
+    Idle --> Tagging: left press on a tile
+    Tagging --> Idle: release (tag/untag commands for the sweep)
     Idle --> Painting: room tool selected
     Painting --> Idle: escape or tool cleared
     Idle --> Holding: left press on imp
@@ -179,7 +179,7 @@ Job priority follows KeeperFX's digger stack in spirit: dig tagged tiles, then m
 
 ### Chart 0: sim step and render loop
 
-The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a command log; `hashWorld` is stable for that pair. Sim core currently applies `noop` and `addGold` only.
+The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a command log; `hashWorld` is stable for that pair. Sim core currently applies `noop`, `addGold`, `tag` and `untag`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag.
 
 Live play uses a fixed-step accumulator (dt 1/20 s, frame delta clamped to 100 ms, at most 4 sim steps per frame). Proof mode (`?proof=1`) never reads real time: Playwright calls `window.__keeper.step(n)`, which advances n sim ticks and draws once.
 
@@ -199,7 +199,7 @@ stateDiagram-v2
 ### Rendering
 
 - Tile drawing lives in `src/render/`. It reads the sim `Uint8Array` grid and never writes sim state.
-- One `InstancedMesh` per tile kind (six kinds today). Sync packs live tiles densely and sets `mesh.count` to the number of tiles of that kind, so tile draw calls stay at most 8. `syncMap` skips when `world.tilesVersion` matches the last packed version.
+- One `InstancedMesh` per tile kind (eight kinds, including tagged earth and tagged gold). Sync packs live tiles densely and sets `mesh.count` to the number of tiles of that kind, so tile draw calls stay at most 8. `syncMap` skips when `world.tilesVersion` matches the last packed version. Tagged kinds use a brighter emissive material. Picking maps a camera ray to the ground plane, then to a tile index.
 - A later pass can switch to tile-index instances with scale 0 for removed blocks; counts must still match the grid.
 - Imps are instanced too. Animation is cheap vertex or transform motion, no skinned meshes in milestone 1.
 - Camera: perspective, orbit around a ground target. Pitch is clamped to `[0.2, 1.35]` rad, zoom (distance) to `[12, 90]`, and the ground target to the map rectangle `[-MAP_HALF, MAP_WIDTH - MAP_HALF]` × `[-MAP_HALF, MAP_HEIGHT - MAP_HALF]`. Modes follow chart 2 in `src/input`; pose math lives in `src/camera`.

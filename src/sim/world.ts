@@ -1,4 +1,4 @@
-import { asTick, type Tick } from "./ids";
+import { asTick, asTileIndex, type Tick, type TileIndex } from "./ids";
 
 export const TICK_HZ = 20;
 export const TICK_DT = 1 / TICK_HZ;
@@ -9,25 +9,52 @@ export const MAP_WIDTH = 64;
 export const MAP_HEIGHT = 64;
 export const MAP_HALF = 32;
 
-export const TILE_KINDS = ["earth", "goldSeam", "rock", "dirt", "claimed", "room"] as const;
+export const TILE_KINDS = [
+  "earth",
+  "goldSeam",
+  "rock",
+  "dirt",
+  "claimed",
+  "room",
+  "taggedEarth",
+  "taggedGold",
+] as const;
+
+export type TileKind = (typeof TILE_KINDS)[number];
+
+function kindCode(kind: TileKind): number {
+  const index = TILE_KINDS.indexOf(kind);
+  if (index < 0) {
+    throw new Error("unknown tile kind");
+  }
+  return index;
+}
 
 export const TILE_KIND = {
-  earth: 0,
-  goldSeam: 1,
-  rock: 2,
-  dirt: 3,
-  claimed: 4,
-  room: 5,
+  earth: kindCode("earth"),
+  goldSeam: kindCode("goldSeam"),
+  rock: kindCode("rock"),
+  dirt: kindCode("dirt"),
+  claimed: kindCode("claimed"),
+  room: kindCode("room"),
+  taggedEarth: kindCode("taggedEarth"),
+  taggedGold: kindCode("taggedGold"),
 } as const;
 
 export const TILE_KIND_COUNT = TILE_KINDS.length;
 
-export type TileKind = (typeof TILE_KINDS)[number];
 export type TileKindCode = (typeof TILE_KIND)[TileKind];
+
+export type TileRead = {
+  readonly length: number;
+  readonly [index: number]: number;
+};
 
 export type Command =
   | { kind: "noop"; tick: Tick }
-  | { kind: "addGold"; tick: Tick; amount: number };
+  | { kind: "addGold"; tick: Tick; amount: number }
+  | { kind: "tag"; tick: Tick; tile: TileIndex }
+  | { kind: "untag"; tick: Tick; tile: TileIndex };
 
 export type World = {
   seed: number;
@@ -35,13 +62,23 @@ export type World = {
   rng: number;
   width: number;
   height: number;
-  tiles: Uint8Array;
+  readonly tiles: TileRead;
   tilesVersion: number;
   goldStored: number;
   commandCursor: number;
 };
 
-export function tileKindAt(tiles: Uint8Array, index: number): TileKind {
+const TILE_BUFFERS = new WeakMap<World, Uint8Array>();
+
+function tilesBuffer(world: World): Uint8Array {
+  const tiles = TILE_BUFFERS.get(world);
+  if (tiles === undefined) {
+    throw new Error("missing tiles");
+  }
+  return tiles;
+}
+
+export function tileKindAt(tiles: TileRead, index: number): TileKind {
   const code = tiles[index];
   if (code === undefined) {
     throw new Error("tile index out of range");
@@ -51,6 +88,41 @@ export function tileKindAt(tiles: Uint8Array, index: number): TileKind {
     throw new Error("invalid tile kind");
   }
   return kind;
+}
+
+export function tileIndexFromWorld(x: number, z: number): TileIndex | undefined {
+  const tx = Math.floor(x + MAP_HALF + 0.5);
+  const ty = Math.floor(z + MAP_HALF + 0.5);
+  if (tx < 0 || ty < 0 || tx >= MAP_WIDTH || ty >= MAP_HEIGHT) {
+    return undefined;
+  }
+  return asTileIndex(ty * MAP_WIDTH + tx);
+}
+
+export function countTagged(world: World): number {
+  const tiles = world.tiles;
+  let n = 0;
+  for (let i = 0; i < tiles.length; i += 1) {
+    const kind = tileKindAt(tiles, i);
+    switch (kind) {
+      case "taggedEarth":
+      case "taggedGold":
+        n += 1;
+        break;
+      case "earth":
+      case "goldSeam":
+      case "rock":
+      case "dirt":
+      case "claimed":
+      case "room":
+        break;
+      default: {
+        const never: never = kind;
+        return never;
+      }
+    }
+  }
+  return n;
 }
 
 function isBorder(x: number, y: number, width: number, height: number): boolean {
@@ -89,7 +161,7 @@ export function createWorld(seed: number): World {
   const height = MAP_HEIGHT;
   const tiles = new Uint8Array(width * height);
   fillStartingMap(tiles, width, height);
-  return {
+  const world: World = {
     seed: seed >>> 0,
     tick: asTick(0),
     rng: seed >>> 0,
@@ -100,6 +172,8 @@ export function createWorld(seed: number): World {
     goldStored: 0,
     commandCursor: 0,
   };
+  TILE_BUFFERS.set(world, tiles);
+  return world;
 }
 
 function nextRng(world: World): void {
@@ -114,10 +188,14 @@ function mix(h: number, v: number): number {
 }
 
 export function setTile(world: World, index: number, code: TileKindCode): void {
-  if (index < 0 || index >= world.tiles.length) {
+  const tiles = tilesBuffer(world);
+  if (index < 0 || index >= tiles.length) {
     throw new Error("tile index out of range");
   }
-  world.tiles[index] = code;
+  if (tiles[index] === code) {
+    return;
+  }
+  tiles[index] = code;
   world.tilesVersion += 1;
 }
 
@@ -129,6 +207,7 @@ export function hashWorld(world: World): number {
   h = mix(h, world.width);
   h = mix(h, world.height);
   h = mix(h, world.goldStored);
+  h = mix(h, world.tilesVersion);
   const tiles = world.tiles;
   for (let i = 0; i < tiles.length; i += 1) {
     const cell = tiles[i];
@@ -140,12 +219,64 @@ export function hashWorld(world: World): number {
   return h >>> 0;
 }
 
+function applyTag(world: World, tile: TileIndex): void {
+  const kind = tileKindAt(world.tiles, tile);
+  switch (kind) {
+    case "earth":
+      setTile(world, tile, TILE_KIND.taggedEarth);
+      return;
+    case "goldSeam":
+      setTile(world, tile, TILE_KIND.taggedGold);
+      return;
+    case "taggedEarth":
+    case "taggedGold":
+    case "rock":
+    case "dirt":
+    case "claimed":
+    case "room":
+      return;
+    default: {
+      const never: never = kind;
+      return never;
+    }
+  }
+}
+
+function applyUntag(world: World, tile: TileIndex): void {
+  const kind = tileKindAt(world.tiles, tile);
+  switch (kind) {
+    case "taggedEarth":
+      setTile(world, tile, TILE_KIND.earth);
+      return;
+    case "taggedGold":
+      setTile(world, tile, TILE_KIND.goldSeam);
+      return;
+    case "earth":
+    case "goldSeam":
+    case "rock":
+    case "dirt":
+    case "claimed":
+    case "room":
+      return;
+    default: {
+      const never: never = kind;
+      return never;
+    }
+  }
+}
+
 function applyCommand(world: World, command: Command): void {
   switch (command.kind) {
     case "noop":
       return;
     case "addGold":
       world.goldStored += command.amount;
+      return;
+    case "tag":
+      applyTag(world, command.tile);
+      return;
+    case "untag":
+      applyUntag(world, command.tile);
       return;
     default: {
       const never: never = command;
@@ -154,44 +285,15 @@ function applyCommand(world: World, command: Command): void {
   }
 }
 
-function compareCommands(a: Command, b: Command): number {
-  if (a.kind !== b.kind) {
-    if (a.kind === "noop") {
-      return -1;
-    }
-    return 1;
-  }
-  switch (a.kind) {
-    case "noop":
-      return 0;
-    case "addGold": {
-      switch (b.kind) {
-        case "addGold":
-          return a.amount - b.amount;
-        case "noop":
-          return 0;
-        default: {
-          const never: never = b;
-          return never;
-        }
-      }
-    }
-    default: {
-      const never: never = a;
-      return never;
-    }
-  }
-}
-
 export function sortCommands(commands: readonly Command[]): Command[] {
-  const sorted = commands.slice();
-  sorted.sort((a, b) => {
-    if (a.tick !== b.tick) {
-      return a.tick - b.tick;
+  const indexed = commands.map((command, index) => ({ command, index }));
+  indexed.sort((a, b) => {
+    if (a.command.tick !== b.command.tick) {
+      return a.command.tick - b.command.tick;
     }
-    return compareCommands(a, b);
+    return a.index - b.index;
   });
-  return sorted;
+  return indexed.map((entry) => entry.command);
 }
 
 export function step(world: World, commands: readonly Command[]): void {

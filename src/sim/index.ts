@@ -9,6 +9,7 @@ export {
   type TileIndex,
 } from "./ids";
 export {
+  countTagged,
   createWorld,
   hashWorld,
   MAP_HALF,
@@ -17,14 +18,15 @@ export {
   MAX_FRAME_DELTA,
   MAX_STEPS_PER_FRAME,
   run,
+  setTile,
   sortCommands,
   step,
-  setTile,
   TILE_KIND,
   TILE_KIND_COUNT,
   TILE_KINDS,
+  tileIndexFromWorld,
   tileKindAt,
   TICK_DT,
   TICK_HZ,
 } from "./world";
-export type { Command, TileKind, TileKindCode, World } from "./world";
+export type { Command, TileKind, TileKindCode, TileRead, World } from "./world";

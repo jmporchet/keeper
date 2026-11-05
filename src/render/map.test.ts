@@ -23,6 +23,8 @@ describe("map instances", () => {
     expect(map.counts[TILE_KIND.claimed]).toBe(expected[TILE_KIND.claimed]);
     expect(map.counts[TILE_KIND.dirt]).toBe(0);
     expect(map.counts[TILE_KIND.room]).toBe(0);
+    expect(map.counts[TILE_KIND.taggedEarth]).toBe(0);
+    expect(map.counts[TILE_KIND.taggedGold]).toBe(0);
     setTile(world, 0, TILE_KIND.dirt);
     syncMap(world.tiles, world.width, world.tilesVersion, map);
     const after = countTilesByKind(world.tiles);
