@@ -122,6 +122,10 @@ export function matchesMode(kind: TileKind, mode: "tag" | "untag"): boolean {
   }
 }
 
+export function paintMoveApplies(buttons: number): boolean {
+  return (buttons & 1) !== 0;
+}
+
 export function bindCameraInput(
   canvas: HTMLCanvasElement,
   pose: CameraPose,
@@ -519,7 +523,7 @@ export function bindCameraInput(
       }
       return;
     }
-    if (isPainting(snapshot)) {
+    if (isPainting(snapshot) && paintMoveApplies(event.buttons)) {
       const tile = pickFromEvent(event);
       if (tile !== undefined) {
         applyPaintTo(tile);
