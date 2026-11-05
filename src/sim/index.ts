@@ -11,14 +11,6 @@ export {
 export {
   createWorld,
   hashWorld,
-  KIND_CLAIMED,
-  KIND_DIRT,
-  KIND_EARTH,
-  KIND_GOLD_SEAM,
-  KIND_ROCK,
-  KIND_ROOM,
-  KIND_TAGGED_EARTH,
-  KIND_TAGGED_GOLD,
   MAP_HALF,
   MAP_HEIGHT,
   MAP_WIDTH,
@@ -28,7 +20,5 @@ export {
   step,
   TICK_DT,
   TICK_HZ,
-  tileIndexAt,
-  tileKindName,
 } from "./world";
 export type { Command, TileKind, World } from "./world";

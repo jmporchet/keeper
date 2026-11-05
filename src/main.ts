@@ -4,19 +4,12 @@ import { orbitPosition } from "./orbit";
 import {
   createWorld,
   hashWorld,
-  KIND_CLAIMED,
-  KIND_DIRT,
-  KIND_EARTH,
-  KIND_GOLD_SEAM,
-  KIND_ROCK,
-  KIND_ROOM,
-  KIND_TAGGED_EARTH,
-  KIND_TAGGED_GOLD,
   MAP_HALF,
   MAX_FRAME_DELTA,
   MAX_STEPS_PER_FRAME,
   step,
   TICK_DT,
+  type TileKind,
   type World,
 } from "./sim";
 
@@ -46,47 +39,36 @@ const world = createWorld(1);
 const meshes: THREE.Mesh[] = [];
 const meshHeights = new Float32Array(world.width * world.height);
 
-function colorFor(kind: number): number {
+function colorFor(kind: TileKind): number {
   switch (kind) {
-    case KIND_GOLD_SEAM:
+    case "goldSeam":
       return 0xc9a227;
-    case KIND_TAGGED_GOLD:
-      return 0xe8c547;
-    case KIND_CLAIMED:
+    case "claimed":
       return 0x6a5340;
-    case KIND_ROOM:
-      return 0x8a6a50;
-    case KIND_DIRT:
-      return 0x4a382c;
-    case KIND_ROCK:
-      return 0x1a1210;
-    case KIND_TAGGED_EARTH:
-      return 0x3d2a1c;
-    case KIND_EARTH:
+    case "earth":
       return 0x2a1d14;
-    default:
-      return 0x2a1d14;
+    default: {
+      const never: never = kind;
+      return never;
+    }
   }
 }
 
-function heightFor(kind: number): number {
+function heightFor(kind: TileKind): number {
   switch (kind) {
-    case KIND_CLAIMED:
-    case KIND_DIRT:
-    case KIND_ROOM:
+    case "claimed":
       return 0.2;
-    case KIND_EARTH:
-    case KIND_GOLD_SEAM:
-    case KIND_ROCK:
-    case KIND_TAGGED_EARTH:
-    case KIND_TAGGED_GOLD:
+    case "earth":
+    case "goldSeam":
       return 1;
-    default:
-      return 1;
+    default: {
+      const never: never = kind;
+      return never;
+    }
   }
 }
 
-function addTileMesh(x: number, y: number, kind: number): void {
+function addTileMesh(x: number, y: number, kind: TileKind): void {
   const height = heightFor(kind);
   const geometry = new THREE.BoxGeometry(1, height, 1);
   const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: colorFor(kind) }));

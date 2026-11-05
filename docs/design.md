@@ -179,7 +179,7 @@ Job priority follows KeeperFX's digger stack in spirit: dig tagged tiles, then m
 
 ### Chart 0: sim step and render loop
 
-The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a command log; `hashWorld` is stable for that pair.
+The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a command log; `hashWorld` is stable for that pair. Sim core currently applies `noop` and `addGold` only.
 
 Live play uses a fixed-step accumulator (dt 1/20 s, frame delta clamped to 100 ms, at most 4 sim steps per frame). Proof mode (`?proof=1`) never reads real time: Playwright calls `window.__keeper.step(n)`, which advances n sim ticks and draws once.
 
@@ -202,7 +202,7 @@ stateDiagram-v2
 - Imps are instanced too. Animation is cheap vertex or transform motion, no skinned meshes in milestone 1.
 - Camera: perspective, orbit around a ground target, pitch clamped, zoom clamped, target clamped to the map. Scaffold uses a fixed-radius orbit from `src/orbit.ts`; later PRs replace it with chart 2.
 - Visual style: low-poly blocks, warm torchlight, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
-- Placeholder map: a 9×9 tile grid owned by the sim (earth, a claimed patch, one gold seam). Three.js only reads that grid.
+- Placeholder map: a 9×9 tile grid owned by the sim (`earth` | `goldSeam` | `claimed`). Three.js only reads that grid.
 
 ## Open questions
 
