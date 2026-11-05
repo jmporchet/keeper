@@ -267,6 +267,28 @@
         outline: 2px solid var(--gold);
         outline-offset: 2px;
       }
+      #lightning-flash {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0;
+        background: radial-gradient(circle at 50% 45%, rgba(206, 228, 255, 0.78) 0%, rgba(122, 170, 255, 0.3) 38%, rgba(122, 170, 255, 0) 72%);
+        z-index: 5;
+      }
+      #lightning-flash.flash {
+        animation: lightning-flash 260ms ease-out;
+      }
+      @keyframes lightning-flash {
+        0% {
+          opacity: 0;
+        }
+        15% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
       #pause-overlay {
         display: none;
         position: fixed;
@@ -385,6 +407,7 @@
         <button id="spawn-imp" type="button">Spawn imp</button>
         <button id="add-gold" type="button">Add 100 gold</button>
         <button id="repair-heart" type="button">Repair heart</button>
+        <button id="cast-lightning" type="button">Lightning</button>
       </div>
       <div class="panel-section">
         <div class="panel-section-title">Rooms</div>
@@ -411,6 +434,7 @@
         <button id="restart-game" type="button">Restart</button>
       </div>
     </div>
+    <div id="lightning-flash"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

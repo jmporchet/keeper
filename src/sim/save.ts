@@ -1,5 +1,6 @@
 import { CREATURE_CAPACITY } from "./creatures";
-import { asCreatureId, asImpId, asTick, asTileIndex } from "./ids";
+import { HERO_CAPACITY } from "./heroes";
+import { asCreatureId, asHeroId, asImpId, asTick, asTileIndex } from "./ids";
 import { IMP_CAPACITY } from "./imps";
 import { MAP_HEIGHT, MAP_WIDTH } from "./map";
 import {
@@ -36,6 +37,7 @@ export type CommandErrorReason =
   | "invalidImpId"
   | "invalidDropTile"
   | "invalidCreatureId"
+  | "invalidHeroId"
   | "invalidMove";
 
 export type SaveError =
@@ -133,6 +135,12 @@ function parseCommand(value: unknown): CommandResult {
       return { ok: true, command: { kind: "releasePossess", tick } };
     case "repairHeart":
       return { ok: true, command: { kind: "repairHeart", tick } };
+    case "castLightning": {
+      if (!isIntegerInRange(value.heroId, 0, HERO_CAPACITY - 1)) {
+        return { ok: false, reason: "invalidHeroId" };
+      }
+      return { ok: true, command: { kind: "castLightning", tick, heroId: asHeroId(value.heroId) } };
+    }
     case "possessMove": {
       if (!isIntegerInRange(value.creatureId, 0, CREATURE_CAPACITY - 1)) {
         return { ok: false, reason: "invalidCreatureId" };

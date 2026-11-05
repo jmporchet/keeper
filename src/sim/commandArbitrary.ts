@@ -1,6 +1,7 @@
 import * as fc from "fast-check";
 import { CREATURE_CAPACITY } from "./creatures";
-import { asCreatureId, asImpId, asTick, asTileIndex } from "./ids";
+import { HERO_CAPACITY } from "./heroes";
+import { asCreatureId, asHeroId, asImpId, asTick, asTileIndex } from "./ids";
 import { MAP_WIDTH } from "./map";
 import type { Command } from "./world";
 
@@ -11,7 +12,7 @@ export function commandList(maxTick: number): fc.Arbitrary<Command[]> {
         fc.integer({ min: 0, max: maxTick - 1 }),
         fc.integer({ min: 1, max: 8 }),
         fc.integer({ min: 0, max: MAP_WIDTH * MAP_WIDTH - 1 }),
-        fc.integer({ min: 0, max: 20 }),
+        fc.integer({ min: 0, max: 21 }),
       )
       .map(([tick, amount, tile, kind]) => {
         switch (kind) {
@@ -127,6 +128,12 @@ export function commandList(maxTick: number): fc.Arbitrary<Command[]> {
               tile: asTileIndex(tileY * MAP_WIDTH + tileX),
             };
           }
+          case 21:
+            return {
+              kind: "castLightning",
+              tick: asTick(tick),
+              heroId: asHeroId(tile % HERO_CAPACITY),
+            };
           case 14: {
             const direction = tile % 4;
             if (direction === 0) {

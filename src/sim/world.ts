@@ -10,7 +10,8 @@ import { createHeroBoard, hashHeroes } from "./heroes";
 import { resolveCombat, stepHeroes } from "./heroes.hot";
 import { stepCreatures } from "./creatures.hot";
 import { addHeld, createHand, hashHand, isHeld, removeHeld } from "./hand";
-import { asTick, asTileIndex, type CreatureId, type ImpId, type Tick, type TileIndex } from "./ids";
+import { asTick, asTileIndex, type CreatureId, type HeroId, type ImpId, type Tick, type TileIndex } from "./ids";
+import { applyCastLightning, stepLightningCooldown } from "./lightning";
 import {
   addOccupancy,
   boostImp,
@@ -154,7 +155,8 @@ export type Command =
   | { kind: "possess"; tick: Tick; creatureId: CreatureId }
   | { kind: "releasePossess"; tick: Tick }
   | { kind: "possessMove"; tick: Tick; creatureId: CreatureId; dx: number; dy: number }
-  | { kind: "repairHeart"; tick: Tick };
+  | { kind: "repairHeart"; tick: Tick }
+  | { kind: "castLightning"; tick: Tick; heroId: HeroId };
 
 export type CommandLog = readonly Command[] & { readonly __brand: "CommandLog" };
 
@@ -321,6 +323,7 @@ export function createWorld(seed: number): World {
     victorious: false,
     waveActive: false,
     repairsDone: 0,
+    lightningCooldown: 0,
     commandCursor: 0,
     jobs: createJobBoard(width * height),
     imps,
@@ -359,6 +362,7 @@ export function hashWorld(world: World): number {
   h = mix(h, world.victorious ? 1 : 0);
   h = mix(h, world.waveActive ? 1 : 0);
   h = mix(h, world.repairsDone);
+  h = mix(h, world.lightningCooldown);
   h = mix(h, world.goldStock.length);
   for (let i = 0; i < world.goldStock.length; i += 1) {
     const stock = world.goldStock[i];
@@ -971,6 +975,9 @@ function applyCommand(world: World, command: Command): void {
     case "repairHeart":
       applyRepairHeart(world);
       return;
+    case "castLightning":
+      applyCastLightning(world, command.heroId);
+      return;
     default: {
       const never: never = command;
       return never;
@@ -1006,6 +1013,7 @@ export function step(world: World, commands: CommandLog): void {
     i += 1;
   }
   world.commandCursor = i;
+  stepLightningCooldown(world);
   runPayday(world);
   stepImps(world);
   hatchChickens(world);

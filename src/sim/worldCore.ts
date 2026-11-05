@@ -60,6 +60,7 @@ export type World = {
   victorious: boolean;
   waveActive: boolean;
   repairsDone: number;
+  lightningCooldown: number;
   commandCursor: number;
   jobs: JobBoard;
   imps: ImpBoard;
