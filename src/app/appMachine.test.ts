@@ -1,6 +1,9 @@
 import { createActor } from "xstate";
 import { describe, expect, it } from "vitest";
-import { appMachine, isPaused, isSimStepping } from "./appMachine";
+import type { Save } from "../sim/save";
+import { appMachine, isPaused, isReplaying, isSimStepping } from "./appMachine";
+
+const save: Save = { version: 1, seed: 1, tick: 0, commands: [] };
 
 function startApp() {
   const actor = createActor(appMachine);
@@ -65,6 +68,34 @@ describe("app chart", () => {
     expect(actor.getSnapshot().value).toBe("ContextLost");
     actor.send({ type: "CONTEXT_RESTORED" });
     expect(actor.getSnapshot().value).toEqual({ Sandbox: "Running" });
+  });
+
+  it("replays a loaded save from running and returns to running", () => {
+    const actor = startApp();
+    actor.send({ type: "ASSETS_REQUESTED" });
+    actor.send({ type: "ASSETS_READY" });
+    actor.send({ type: "LOAD_SAVE", save });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Replaying" });
+    expect(isReplaying(actor.getSnapshot())).toBe(true);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+    actor.send({ type: "REPLAY_DONE" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Running" });
+    expect(isReplaying(actor.getSnapshot())).toBe(false);
+    expect(isSimStepping(actor.getSnapshot())).toBe(true);
+  });
+
+  it("replays a loaded save from paused and pauses after a replay error", () => {
+    const actor = startApp();
+    actor.send({ type: "ASSETS_REQUESTED" });
+    actor.send({ type: "ASSETS_READY" });
+    actor.send({ type: "PAUSE" });
+    actor.send({ type: "LOAD_SAVE", save });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Replaying" });
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+    actor.send({ type: "REPLAY_ERROR" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Paused" });
+    expect(isPaused(actor.getSnapshot())).toBe(true);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
   });
 
   it("ignores events that are not on the chart", () => {

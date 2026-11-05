@@ -95,6 +95,7 @@ export {
 export type { Job, JobBoard, JobKind, JobLifecycle } from "./jobs";
 export { createPathScratch, isWalkableCode } from "./path";
 export {
+  asCommandLog,
   countTagged,
   createWorld,
   GOLD_PER_TILE,
@@ -110,6 +111,7 @@ export {
   openClaimJobsAround,
   PORTAL_X,
   PORTAL_Y,
+  requireSorted,
   ROOM_KIND,
   ROOM_KIND_COUNT,
   ROOM_KINDS,
@@ -132,6 +134,7 @@ export {
 } from "./world";
 export type {
   Command,
+  CommandLog,
   RoomKind,
   RoomKindCode,
   RoomTool,
@@ -140,3 +143,23 @@ export type {
   TileRead,
   World,
 } from "./world";
+export {
+  buildSave,
+  MAX_GOLD_AMOUNT,
+  MAX_SAVE_COMMANDS,
+  MAX_SAVE_SEED,
+  MAX_SAVE_TICK,
+  parseSave,
+  parseSaveValue,
+  replaySave,
+  SAVE_STORAGE_KEY,
+  SAVE_VERSION,
+  saveCommandLog,
+  serializeSave,
+} from "./save";
+export type {
+  CommandErrorReason,
+  Save,
+  SaveError,
+  SaveResult,
+} from "./save";

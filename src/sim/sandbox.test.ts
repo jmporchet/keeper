@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { asTick } from "./ids";
 import { IMP_CAPACITY, liveImpCount, STARTING_IMP_COUNT } from "./imps";
 import {
+  asCommandLog,
   createWorld,
   hashWorld,
   HEART_X,
@@ -51,9 +52,9 @@ describe("sandbox commands", () => {
               log.push(command);
             }
           }
-          step(world, log);
+          step(world, asCommandLog(log));
         }
-        const replay = run(seed, log, TICKS);
+        const replay = run(seed, asCommandLog(log), TICKS);
         expect(hashWorld(replay)).toBe(hashWorld(world));
       }),
       { numRuns: 25 },
@@ -61,7 +62,7 @@ describe("sandbox commands", () => {
   });
 
   it("spawns a new imp at the heart tile", () => {
-    const world = run(1, [{ kind: "spawnImp", tick: asTick(0) }], 1);
+    const world = run(1, asCommandLog([{ kind: "spawnImp", tick: asTick(0) }]), 1);
     expect(liveImpCount(world.imps)).toBe(STARTING_IMP_COUNT + 1);
     const slot = world.imps.slots[STARTING_IMP_COUNT];
     expect(slot?.kind).toBe("live");
@@ -77,7 +78,7 @@ describe("sandbox commands", () => {
     for (let i = 0; i < IMP_CAPACITY + 10; i += 1) {
       commands.push({ kind: "spawnImp", tick: asTick(0) });
     }
-    const world = run(1, commands, 1);
+    const world = run(1, asCommandLog(commands), 1);
     expect(liveImpCount(world.imps)).toBe(IMP_CAPACITY);
   });
 });

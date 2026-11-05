@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { asTick, asTileIndex } from "./ids";
 import { carryingCount, type Imp } from "./imps";
 import {
+  asCommandLog,
   createWorld,
   MAP_WIDTH,
   run,
@@ -119,10 +120,10 @@ describe("gold", () => {
     for (let x = 35; x <= 38; x += 1) {
       commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(32 * MAP_WIDTH + x) });
     }
-    const world = run(1, commands, 1);
+    const world = run(1, asCommandLog(commands), 1);
     let carrier: Imp | undefined;
     for (let t = 0; t < 2000; t += 1) {
-      step(world, []);
+      step(world, asCommandLog([]));
       carrier = findCarrying(world);
       if (carrier !== undefined) {
         break;
@@ -137,11 +138,11 @@ describe("gold", () => {
     const stockBefore = world.goldStock[tile];
     const storedBefore = world.goldStored;
     world.commandCursor = 0;
-    step(world, [{ kind: "untag", tick: asTick(world.tick), tile }]);
+    step(world, asCommandLog([{ kind: "untag", tick: asTick(world.tick), tile }]));
     expect(tileKindAt(world.tiles, tile)).toBe("goldSeam");
     expect(world.goldStock[tile]).toBe(stockBefore);
     for (let t = 0; t < 200; t += 1) {
-      step(world, []);
+      step(world, asCommandLog([]));
       if (carryEmpty(carrier)) {
         break;
       }

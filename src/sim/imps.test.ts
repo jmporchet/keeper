@@ -4,6 +4,7 @@ import { asTick, asTileIndex, asWorkerId } from "./ids";
 import { liveImpCount, occupyWalkable, STARTING_IMP_COUNT, type Imp } from "./imps";
 import { jobAtTile, jobHeldBy, listJobs } from "./jobs";
 import {
+  asCommandLog,
   createWorld,
   hashWorld,
   MAP_WIDTH,
@@ -42,7 +43,7 @@ function formatImpLog(seed: number, ticks: number, impIndex: number): string {
   const lines: string[] = [];
   lines.push(formatImpLine(0, liveImp(world, impIndex)));
   for (let t = 0; t < ticks; t += 1) {
-    step(world, []);
+    step(world, asCommandLog([]));
     lines.push(formatImpLine(world.tick, liveImp(world, impIndex)));
   }
   return lines.join("\n");
@@ -205,7 +206,7 @@ function runUntilHolderState(world: ReturnType<typeof createWorld>, target: "wal
     if (holder !== undefined && holder.state.kind === target) {
       return holder;
     }
-    step(world, []);
+    step(world, asCommandLog([]));
   }
   throw new Error("imp did not reach job state");
 }
@@ -230,7 +231,7 @@ describe("imps", () => {
       fc.property(fc.integer({ min: 0, max: 0xffffffff }), (seed) => {
         const world = createWorld(seed);
         for (let t = 0; t < TICKS; t += 1) {
-          step(world, []);
+          step(world, asCommandLog([]));
           for (let i = 0; i < world.imps.slots.length; i += 1) {
             const slot = world.imps.slots[i];
             if (slot === undefined) {
@@ -263,10 +264,10 @@ describe("imps", () => {
   }, 20_000);
 
   it("keeps determinism with wandering imps", () => {
-    const a = hashWorld(run(7, [], TICKS));
-    const b = hashWorld(run(7, [], TICKS));
+    const a = hashWorld(run(7, asCommandLog([]), TICKS));
+    const b = hashWorld(run(7, asCommandLog([]), TICKS));
     expect(a).toBe(b);
-    expect(a).not.toBe(hashWorld(run(8, [], TICKS)));
+    expect(a).not.toBe(hashWorld(run(8, asCommandLog([]), TICKS)));
   });
 
   it("digs a tagged corridor into dirt", () => {
@@ -274,7 +275,7 @@ describe("imps", () => {
     for (let x = 35; x <= 37; x += 1) {
       commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(32 * MAP_WIDTH + x) });
     }
-    const world = run(1, commands, 1);
+    const world = run(1, asCommandLog(commands), 1);
     for (let t = 0; t < 600; t += 1) {
       let tagged = false;
       for (let x = 35; x <= 37; x += 1) {
@@ -285,7 +286,7 @@ describe("imps", () => {
       if (!tagged) {
         break;
       }
-      step(world, []);
+      step(world, asCommandLog([]));
     }
     expect(mapRows(world, 28, 36)).toMatchSnapshot();
     for (let x = 35; x <= 37; x += 1) {
@@ -299,7 +300,7 @@ describe("imps", () => {
     for (let x = 25; x <= 29; x += 1) {
       commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(32 * MAP_WIDTH + x) });
     }
-    const world = run(1, commands, 1500);
+    const world = run(1, asCommandLog(commands), 1500);
     for (let x = 25; x <= 29; x += 1) {
       const kind = tileKindAt(world.tiles, 32 * MAP_WIDTH + x);
       expect(kind === "dirt" || kind === "claimed").toBe(true);
@@ -309,7 +310,7 @@ describe("imps", () => {
   it("keeps every claimed tile connected to the heart after random tagging", () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 0xffffffff }), earthTagCommands(), (seed, commands) => {
-        const world = run(seed, commands, 1500);
+        const world = run(seed, asCommandLog(commands), 1500);
         assertClaimedConnected(world);
       }),
       { numRuns: 50 },
@@ -321,7 +322,7 @@ describe("imps", () => {
     for (let x = 25; x <= 29; x += 1) {
       commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(32 * MAP_WIDTH + x) });
     }
-    const world = run(1, commands, 2500);
+    const world = run(1, asCommandLog(commands), 2500);
     expect(mapRows(world, 28, 36)).toMatchSnapshot();
     for (let x = 25; x <= 29; x += 1) {
       expect(tileKindAt(world.tiles, 32 * MAP_WIDTH + x)).toBe("claimed");
@@ -350,30 +351,30 @@ describe("imps", () => {
 
   it("untagging a walking job returns the imp to idle and leaves earth", () => {
     const tile = asTileIndex(32 * MAP_WIDTH + 35);
-    const world = run(1, [{ kind: "tag", tick: asTick(0), tile }], 1);
+    const world = run(1, asCommandLog([{ kind: "tag", tick: asTick(0), tile }]), 1);
     const holder = runUntilHolderState(world, "walking");
     world.commandCursor = 0;
-    step(world, [{ kind: "untag", tick: asTick(world.tick), tile }]);
+    step(world, asCommandLog([{ kind: "untag", tick: asTick(world.tick), tile }]));
     expect(jobAtTile(world.jobs, tile)).toBeUndefined();
     expect(tileKindAt(world.tiles, tile)).toBe("earth");
     expect(holder.state.kind).toBe("idle");
     for (let t = 0; t < 60; t += 1) {
-      step(world, []);
+      step(world, asCommandLog([]));
     }
     expect(tileKindAt(world.tiles, tile)).toBe("earth");
   });
 
   it("untagging a working job returns the imp to idle and leaves earth", () => {
     const tile = asTileIndex(32 * MAP_WIDTH + 35);
-    const world = run(1, [{ kind: "tag", tick: asTick(0), tile }], 1);
+    const world = run(1, asCommandLog([{ kind: "tag", tick: asTick(0), tile }]), 1);
     const holder = runUntilHolderState(world, "working");
     world.commandCursor = 0;
-    step(world, [{ kind: "untag", tick: asTick(world.tick), tile }]);
+    step(world, asCommandLog([{ kind: "untag", tick: asTick(world.tick), tile }]));
     expect(jobAtTile(world.jobs, tile)).toBeUndefined();
     expect(tileKindAt(world.tiles, tile)).toBe("earth");
     expect(holder.state.kind).toBe("idle");
     for (let t = 0; t < 60; t += 1) {
-      step(world, []);
+      step(world, asCommandLog([]));
     }
     expect(tileKindAt(world.tiles, tile)).toBe("earth");
   });

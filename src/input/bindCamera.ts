@@ -78,7 +78,7 @@ export function bindCameraInput(
   canvas: HTMLCanvasElement,
   pose: CameraPose,
   camera: Camera,
-  world: World,
+  getWorld: () => World,
   enqueue: (command: Command) => void,
   onChange: () => void,
 ): {
@@ -93,8 +93,8 @@ export function bindCameraInput(
   let lastX = 0;
   let lastY = 0;
   let sweepMode: SweepMode;
-  const swept = new Uint8Array(world.width * world.height);
-  const painted = new Uint8Array(world.width * world.height);
+  const swept = new Uint8Array(getWorld().width * getWorld().height);
+  const painted = new Uint8Array(getWorld().width * getWorld().height);
 
   function resetSweep(): void {
     sweepMode = undefined;
@@ -110,6 +110,7 @@ export function bindCameraInput(
       return;
     }
     painted[tile] = 1;
+    const world = getWorld();
     enqueue({
       kind: "paintRoom",
       tick: world.tick,
@@ -123,6 +124,7 @@ export function bindCameraInput(
       return;
     }
     swept[tile] = 1;
+    const world = getWorld();
     const kind = tileKindAt(world.tiles, tile);
     if (sweepMode === undefined) {
       sweepMode = sweepModeFor(kind);
@@ -149,6 +151,7 @@ export function bindCameraInput(
     if (tile === undefined) {
       return undefined;
     }
+    const world = getWorld();
     const y = (tile / world.width) | 0;
     const x = tile - y * world.width;
     for (let i = 0; i < world.imps.slots.length; i += 1) {
@@ -187,6 +190,7 @@ export function bindCameraInput(
     lastX = event.clientX;
     lastY = event.clientY;
     canvas.setPointerCapture(event.pointerId);
+    const world = getWorld();
     const snapshot = actor.getSnapshot();
     if (event.button === 2) {
       if (isHolding(snapshot)) {

@@ -3,6 +3,7 @@ import { asImpId, asTick, asTileIndex } from "./ids";
 import { IMP_CAPACITY, SLAP_TICKS, STEPS_PER_TILE, workerOf, type Imp } from "./imps";
 import { jobHeldBy } from "./jobs";
 import {
+  asCommandLog,
   createWorld,
   hashWorld,
   MAP_WIDTH,
@@ -32,7 +33,7 @@ function liveImp(world: World, index: number): Imp {
 
 function applyNow(world: World, command: Command): void {
   world.commandCursor = 0;
-  step(world, [command]);
+  step(world, asCommandLog([command]));
 }
 
 function findWalkingHolder(world: World): Imp | undefined {
@@ -80,7 +81,7 @@ function advanceOf(imp: Imp): number {
 
 describe("slap", () => {
   it("boosts a live imp for SLAP_TICKS", () => {
-    const world = run(1, [{ kind: "slap", tick: asTick(0), impId: asImpId(0) }], 1);
+    const world = run(1, asCommandLog([{ kind: "slap", tick: asTick(0), impId: asImpId(0) }]), 1);
     const imp = liveImp(world, 0);
     expect(imp.boost.kind).toBe("boosted");
     if (imp.boost.kind !== "boosted") {
@@ -90,28 +91,28 @@ describe("slap", () => {
   });
 
   it("expires the boost after SLAP_TICKS ticks", () => {
-    const world = run(1, [{ kind: "slap", tick: asTick(0), impId: asImpId(0) }], 1);
+    const world = run(1, asCommandLog([{ kind: "slap", tick: asTick(0), impId: asImpId(0) }]), 1);
     const imp = liveImp(world, 0);
     for (let t = 0; t < SLAP_TICKS - 2; t += 1) {
-      step(world, []);
+      step(world, asCommandLog([]));
     }
     expect(imp.boost.kind).toBe("boosted");
-    step(world, []);
+    step(world, asCommandLog([]));
     expect(imp.boost.kind).toBe("none");
   });
 
   it("refuses a slap on an empty slot", () => {
-    const world = run(1, [{ kind: "slap", tick: asTick(0), impId: asImpId(IMP_CAPACITY - 1) }], 1);
+    const world = run(1, asCommandLog([{ kind: "slap", tick: asTick(0), impId: asImpId(IMP_CAPACITY - 1) }]), 1);
     expect(world.imps.slots[IMP_CAPACITY - 1]?.kind).toBe("empty");
   });
 
   it("refuses a slap on a held imp", () => {
     const world = run(
       1,
-      [
+      asCommandLog([
         { kind: "pickUp", tick: asTick(0), impId: asImpId(0) },
         { kind: "slap", tick: asTick(0), impId: asImpId(0) },
-      ],
+      ]),
       1,
     );
     const imp = liveImp(world, 0);
@@ -122,10 +123,10 @@ describe("slap", () => {
   it("clears the boost when an imp is picked up", () => {
     const world = run(
       1,
-      [
+      asCommandLog([
         { kind: "slap", tick: asTick(0), impId: asImpId(0) },
         { kind: "pickUp", tick: asTick(1), impId: asImpId(0) },
-      ],
+      ]),
       2,
     );
     const imp = liveImp(world, 0);
@@ -134,10 +135,10 @@ describe("slap", () => {
   });
 
   it("resets the timer instead of stacking it", () => {
-    const world = run(1, [{ kind: "slap", tick: asTick(0), impId: asImpId(0) }], 1);
+    const world = run(1, asCommandLog([{ kind: "slap", tick: asTick(0), impId: asImpId(0) }]), 1);
     const imp = liveImp(world, 0);
     for (let t = 0; t < 30; t += 1) {
-      step(world, []);
+      step(world, asCommandLog([]));
     }
     applyNow(world, { kind: "slap", tick: asTick(world.tick), impId: imp.id });
     expect(imp.boost.kind).toBe("boosted");
@@ -165,24 +166,24 @@ describe("slap", () => {
       throw new Error("no imp started walking");
     }
     const targetId = target.id;
-    const boostedWorld = run(1, commands, ticks);
-    const plainWorld = run(1, commands, ticks);
+    const boostedWorld = run(1, asCommandLog(commands), ticks);
+    const plainWorld = run(1, asCommandLog(commands), ticks);
     const boostedImp = liveImp(boostedWorld, targetId);
     const plainImp = liveImp(plainWorld, targetId);
     expect(boostedImp.state.kind).toBe("walking");
     expect(plainImp.state.kind).toBe("walking");
     applyNow(boostedWorld, { kind: "slap", tick: asTick(boostedWorld.tick), impId: boostedImp.id });
-    step(plainWorld, []);
+    step(plainWorld, asCommandLog([]));
     for (let t = 0; t < 4; t += 1) {
-      step(boostedWorld, []);
-      step(plainWorld, []);
+      step(boostedWorld, asCommandLog([]));
+      step(plainWorld, asCommandLog([]));
     }
     expect(advanceOf(boostedImp)).toBeGreaterThan(advanceOf(plainImp));
   });
 
   it("includes the boost in the world hash", () => {
-    const slapped = hashWorld(run(1, [{ kind: "slap", tick: asTick(0), impId: asImpId(0) }], 1));
-    const plain = hashWorld(run(1, [], 1));
+    const slapped = hashWorld(run(1, asCommandLog([{ kind: "slap", tick: asTick(0), impId: asImpId(0) }]), 1));
+    const plain = hashWorld(run(1, asCommandLog([]), 1));
     expect(slapped).not.toBe(plain);
   });
 });

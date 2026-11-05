@@ -81,12 +81,16 @@ stateDiagram-v2
         [*] --> Running
         Running --> Paused: pause key or tab hidden
         Paused --> Running: resume
+        Running --> Replaying: LOAD_SAVE
+        Paused --> Replaying: LOAD_SAVE
+        Replaying --> Running: REPLAY_DONE
+        Replaying --> Paused: REPLAY_ERROR
     }
     Sandbox --> ContextLost: WebGL context lost
     ContextLost --> Sandbox: context restored
 ```
 
-While `Paused` or `ContextLost`, the sim does not step. The sim tick counter proves it in tests.
+While `Paused`, `Replaying` or `ContextLost`, the sim does not step. The sim tick counter proves it in tests. Loading a save enters `Replaying`, replaces the world, seed and command log, steps the imported `CommandLog` to the saved tick through the chart, then sends `REPLAY_DONE` (or `REPLAY_ERROR`).
 
 ### Chart 2: input and camera mode (XState)
 
@@ -201,11 +205,13 @@ A creature spawns only as a sim effect of `step`, never as a command. The portal
 - `Hand`: fixed-size pool of empty or held slots carrying an `ImpId`, capped at eight; `hashWorld` includes it.
 - `Creature`: slot union `empty | live` in a fixed `CREATURE_CAPACITY` pool, branded `CreatureId`, with `bedTile`, tile position, path and a state union `arriving | toBed | sleeping`. Creatures are hashed with their bed claims.
 - `Command`: discriminated union (`tag`, `untag`, `paintRoom`, `pickUp`, `drop`, `slap`, `spawnImp`, `addGold`), each with `tick`. Tag and untag update tiles and the job board together. `paintRoom` carries `room: "treasury" | "lair"`.
+- `CommandLog`: a branded, sorted command list. `sortCommands` returns a `CommandLog`; `step` and `run` accept only a `CommandLog`, so an unsorted `Command[]` cannot reach the sim. `asCommandLog` and `requireSorted` are the boundary helpers.
+- `Save`: `{ version: 1, seed, tick, commands }` with commands sorted by `(tick, original index)`. `buildSave` exports the live seed, tick and command log; `parseSave` validates unknown JSON into `{ ok: true, save } | { ok: false, error }`; `replaySave` recreates the world from the seed and steps the imported log to the saved tick. Export, import and replay live in `src/sim/save.ts`.
 - Branded ids: `TileIndex`, `ImpId`, `JobId`, `WorkerId`, `CreatureId`, `Tick`. A raw number cannot be passed where an id is expected.
 
 ### Chart 0: sim step and render loop
 
-The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step imps, step creatures, step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a command log; `hashWorld` is stable for that pair and includes jobs, live imps, creatures, bed claims and the hand. Sim core currently applies `noop`, `addGold`, `tag`, `untag`, `paintRoom`, `spawnImp`, `pickUp`, `drop` and `slap`. `paintRoom` carries `room: "treasury" | "lair"`; a lair costs `LAIR_COST = 30`, a treasury costs `TREASURY_COST = 25`. Each tick then steps imps, steps creatures (including the `ARRIVE_TICKS` portal arrival effect) and the seeded PRNG. The sandbox panel queues `spawnImp` and `addGold` commands through the same command list as the input layer; `spawnImp` fills the first empty imp slot at the heart and is refused at `IMP_CAPACITY`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. `pickUp` releases the imp's reserved job and clears any boost; `drop` writes no tile and only moves the imp onto a walkable tile; `slap` sets the boost timer on a live non-held imp and is refused otherwise. Reserve and release are job-board operations, not commands yet. Pathfinding reads the grid through `TileRead`.
+The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step imps, step creatures, step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a `CommandLog`; `hashWorld` is stable for that pair and includes jobs, live imps, creatures, bed claims and the hand. A `Save` stores `{ version: 1, seed, tick, commands }`; replaying it from a fresh world must reproduce the live hash and tick. Sim core currently applies `noop`, `addGold`, `tag`, `untag`, `paintRoom`, `spawnImp`, `pickUp`, `drop` and `slap`. `paintRoom` carries `room: "treasury" | "lair"`; a lair costs `LAIR_COST = 30`, a treasury costs `TREASURY_COST = 25`. Each tick then steps imps, steps creatures (including the `ARRIVE_TICKS` portal arrival effect) and the seeded PRNG. The sandbox panel queues `spawnImp` and `addGold` commands through the same command list as the input layer; `spawnImp` fills the first empty imp slot at the heart and is refused at `IMP_CAPACITY`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. `pickUp` releases the imp's reserved job and clears any boost; `drop` writes no tile and only moves the imp onto a walkable tile; `slap` sets the boost timer on a live non-held imp and is refused otherwise. Reserve and release are job-board operations, not commands yet. Pathfinding reads the grid through `TileRead`.
 
 Live play uses a fixed-step accumulator (dt 1/20 s, frame delta clamped to 100 ms, at most 4 sim steps per frame). Proof mode (`?proof=1`) never reads real time: Playwright calls `window.__keeper.step(n)`, which advances n sim ticks and draws once.
 

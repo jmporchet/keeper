@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import {
+  asCommandLog,
   asImpId,
   asTick,
   asTileIndex,
@@ -112,7 +113,7 @@ describe("map instances", () => {
 
   it("skips held imps on the grid and draws them near the cursor", () => {
     const world = createWorld(1);
-    step(world, [{ kind: "pickUp", tick: asTick(0), impId: asImpId(0) }]);
+    step(world, asCommandLog([{ kind: "pickUp", tick: asTick(0), impId: asImpId(0) }]));
     const scene = new THREE.Scene();
     const visual = createImpMeshes(scene);
     syncImps(world.imps, world.hand, 1, undefined, visual);

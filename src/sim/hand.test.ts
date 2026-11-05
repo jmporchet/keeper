@@ -3,7 +3,7 @@ import { isHeld } from "./hand";
 import { asImpId, asTick, asTileIndex } from "./ids";
 import { createImp, STARTING_IMP_COUNT, workerOf, type Imp } from "./imps";
 import { jobAtTile, jobHeldBy } from "./jobs";
-import { createWorld, hashWorld, MAP_WIDTH, run, step, type Command, type World } from "./world";
+import { asCommandLog, createWorld, hashWorld, MAP_WIDTH, run, step, type Command, type World } from "./world";
 
 const TICKS = 10_000;
 
@@ -26,7 +26,7 @@ function liveImp(world: World, index: number): Imp {
 
 function applyNow(world: World, command: Command): void {
   world.commandCursor = 0;
-  step(world, [command]);
+  step(world, asCommandLog([command]));
 }
 
 function totalGold(world: World): number {
@@ -109,7 +109,7 @@ function runUntilJob(world: World): Imp {
         }
       }
     }
-    step(world, []);
+    step(world, asCommandLog([]));
   }
   throw new Error("imp did not reserve a job");
 }
@@ -117,7 +117,7 @@ function runUntilJob(world: World): Imp {
 describe("hand of evil", () => {
   it("picks up an imp, releases its job and takes it off the grid", () => {
     const tile = asTileIndex(32 * MAP_WIDTH + 35);
-    const world = run(1, [{ kind: "tag", tick: asTick(0), tile }], 1);
+    const world = run(1, asCommandLog([{ kind: "tag", tick: asTick(0), tile }]), 1);
     const imp = runUntilJob(world);
     const job = jobHeldBy(world.jobs, workerOf(imp));
     expect(job?.lifecycle.kind).toBe("reserved");
@@ -139,7 +139,7 @@ describe("hand of evil", () => {
   });
 
   it("refuses a drop onto rock and keeps the imp held", () => {
-    const world = run(1, [{ kind: "pickUp", tick: asTick(0), impId: asImpId(0) }], 1);
+    const world = run(1, asCommandLog([{ kind: "pickUp", tick: asTick(0), impId: asImpId(0) }]), 1);
     const imp = liveImp(world, 0);
     const tileX = imp.tileX;
     const tileY = imp.tileY;
@@ -161,7 +161,7 @@ describe("hand of evil", () => {
       commands.push({ kind: "pickUp", tick: asTick(0), impId: asImpId(i) });
     }
     world.commandCursor = 0;
-    step(world, commands);
+    step(world, asCommandLog(commands));
     expect(world.hand.count).toBe(8);
     for (let i = 0; i < 8; i += 1) {
       expect(isHeld(world.hand, asImpId(i))).toBe(true);
@@ -171,12 +171,12 @@ describe("hand of evil", () => {
   });
 
   it("skips held imps in the tick loop", () => {
-    const world = run(1, [{ kind: "pickUp", tick: asTick(0), impId: asImpId(0) }], 1);
+    const world = run(1, asCommandLog([{ kind: "pickUp", tick: asTick(0), impId: asImpId(0) }]), 1);
     const imp = liveImp(world, 0);
     const tileX = imp.tileX;
     const tileY = imp.tileY;
     for (let t = 0; t < 100; t += 1) {
-      step(world, []);
+      step(world, asCommandLog([]));
     }
     expect(imp.state.kind).toBe("held");
     expect(imp.tileX).toBe(tileX);
@@ -186,7 +186,7 @@ describe("hand of evil", () => {
   });
 
   it("drops a held imp onto a walkable tile", () => {
-    const world = run(1, [{ kind: "pickUp", tick: asTick(0), impId: asImpId(0) }], 1);
+    const world = run(1, asCommandLog([{ kind: "pickUp", tick: asTick(0), impId: asImpId(0) }]), 1);
     const imp = liveImp(world, 0);
     applyNow(world, { kind: "drop", tick: asTick(world.tick), impId: imp.id, tileX: 33, tileY: 33 });
     expect(world.hand.count).toBe(0);
@@ -201,10 +201,10 @@ describe("hand of evil", () => {
     for (let x = 35; x <= 39; x += 1) {
       commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(32 * MAP_WIDTH + x) });
     }
-    const world = run(1, commands, 1);
+    const world = run(1, asCommandLog(commands), 1);
     let carrier: Imp | undefined;
     for (let t = 0; t < 3000; t += 1) {
-      step(world, []);
+      step(world, asCommandLog([]));
       carrier = findCarrying(world);
       if (carrier !== undefined) {
         break;
@@ -235,9 +235,9 @@ describe("hand of evil", () => {
       { kind: "pickUp", tick: asTick(0), impId: asImpId(0) },
       { kind: "drop", tick: asTick(1), impId: asImpId(0), tileX: 33, tileY: 33 },
     ];
-    const a = hashWorld(run(7, commands, TICKS));
-    const b = hashWorld(run(7, commands, TICKS));
+    const a = hashWorld(run(7, asCommandLog(commands), TICKS));
+    const b = hashWorld(run(7, asCommandLog(commands), TICKS));
     expect(a).toBe(b);
-    expect(a).not.toBe(hashWorld(run(7, [], TICKS)));
+    expect(a).not.toBe(hashWorld(run(7, asCommandLog([]), TICKS)));
   });
 });

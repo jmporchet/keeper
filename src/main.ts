@@ -7,7 +7,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { createActor } from "xstate";
-import { appMachine, isPaused, isSimStepping } from "./app/appMachine";
+import { appMachine, isPaused, isReplaying, isSimStepping } from "./app/appMachine";
 import { createCameraPose, eyeFromPose } from "./camera/pose";
 import { bindCameraInput } from "./input/bindCamera";
 import { isPainting } from "./input/inputCameraMachine";
@@ -17,6 +17,8 @@ import { createImpMeshes, syncImps } from "./render/imps";
 import { addTorchLighting, DUNGEON_EXPOSURE } from "./render/lights";
 import { createMapMeshes, syncMap } from "./render/map";
 import {
+  asCommandLog,
+  buildSave,
   carryingCount,
   countTagged,
   createWorld,
@@ -27,7 +29,11 @@ import {
   MAP_WIDTH,
   MAX_FRAME_DELTA,
   MAX_STEPS_PER_FRAME,
+  parseSave,
+  replaySave,
   ROOM_KIND,
+  SAVE_STORAGE_KEY,
+  serializeSave,
   step,
   TICK_DT,
   tileKindAt,
@@ -40,8 +46,10 @@ import {
   liveCreatureCount,
   workerOf,
   type Command,
+  type CommandLog,
   type Job,
   type RoomTool,
+  type Save,
 } from "./sim";
 import { createHud } from "./ui/hud";
 import { createSandboxPanel } from "./ui/sandboxPanel";
@@ -64,6 +72,7 @@ declare global {
     __keeper: {
       tick: number;
       hash: number;
+      worldHash: number;
       taggedCount: number;
       dirtCount: number;
       claimedCount: number;
@@ -89,6 +98,8 @@ declare global {
       dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
       step(n: number): void;
       spawnImps(n: number): void;
+      saveNow(): Save;
+      loadFromStorage(): boolean;
       benchSim(batches: number, ticksPerBatch: number): BenchResult;
       benchFrame(frames: number): BenchResult;
     };
@@ -116,8 +127,9 @@ scene.background = new Color(0x1c1612);
 const camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
 const pose = createCameraPose();
 
-const world = createWorld(1);
-const commands: Command[] = [];
+let world = createWorld(1);
+let commands: Command[] = [];
+let commandLog: CommandLog = asCommandLog(commands);
 const hudElement = document.getElementById("hud");
 const hud = createHud(hudElement);
 const goldPiles = createGoldPileMeshes(scene);
@@ -144,7 +156,7 @@ const cameraInput = bindCameraInput(
   canvas,
   pose,
   camera,
-  world,
+  () => world,
   (command) => {
     commands.push(command);
   },
@@ -165,6 +177,27 @@ function togglePaint(room: RoomTool): void {
   cameraInput.actor.send({ type: "SELECT_ROOM_TOOL", room });
 }
 
+function loadSave(save: Save): void {
+  actor.send({ type: "LOAD_SAVE", save });
+  if (!isReplaying(actor.getSnapshot())) {
+    return;
+  }
+  try {
+    const replayed = replaySave(save);
+    world = replayed;
+    commands = save.commands.slice();
+    commandLog = asCommandLog(commands);
+    syncMap(world, map);
+    syncGoldPiles(world, goldPiles);
+    syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual);
+    syncCreatures(world.creatures, 1, creaturesVisual);
+    placeCamera();
+    actor.send({ type: "REPLAY_DONE" });
+  } catch {
+    actor.send({ type: "REPLAY_ERROR" });
+  }
+}
+
 const sandboxPanel = createSandboxPanel(
   document.getElementById("sandbox-panel"),
   () => world.tick,
@@ -172,6 +205,8 @@ const sandboxPanel = createSandboxPanel(
     commands.push(command);
   },
   togglePaint,
+  () => buildSave(world, commands),
+  loadSave,
 );
 
 function syncPaintMode(): void {
@@ -190,8 +225,10 @@ function hudText(): string {
 
 function syncHud(): void {
   hud.update(world.goldStored, liveImpCount(world.imps), world.tick);
-  const paused = isPaused(actor.getSnapshot());
+  const snapshot = actor.getSnapshot();
+  const paused = isPaused(snapshot);
   sandboxPanel.setPaused(paused);
+  sandboxPanel.setReplaying(isReplaying(snapshot));
   if (pauseOverlay !== null) {
     pauseOverlay.classList.toggle("visible", paused);
   }
@@ -322,6 +359,9 @@ if (proof) {
       return world.tick;
     },
     get hash() {
+      return hashWorld(world);
+    },
+    get worldHash() {
       return hashWorld(world);
     },
     get drawCalls() {
@@ -486,7 +526,7 @@ if (proof) {
         return;
       }
       for (let i = 0; i < n; i += 1) {
-        step(world, commands);
+        step(world, commandLog);
         cameraInput.tickHeldKeys();
       }
       syncMap(world, map);
@@ -503,12 +543,29 @@ if (proof) {
         commands.push({ kind: "spawnImp", tick });
       }
     },
+    saveNow() {
+      const save = buildSave(world, commands);
+      localStorage.setItem(SAVE_STORAGE_KEY, serializeSave(save));
+      return save;
+    },
+    loadFromStorage() {
+      const stored = localStorage.getItem(SAVE_STORAGE_KEY);
+      if (stored === null) {
+        return false;
+      }
+      const parsed = parseSave(stored);
+      if (!parsed.ok) {
+        return false;
+      }
+      loadSave(parsed.save);
+      return true;
+    },
     benchSim(batches: number, ticksPerBatch: number) {
       const perTickMs: number[] = [];
       for (let b = 0; b < batches; b += 1) {
         const start = performance.now();
         for (let t = 0; t < ticksPerBatch; t += 1) {
-          step(world, commands);
+          step(world, commandLog);
         }
         const elapsed = performance.now() - start;
         perTickMs.push(elapsed / ticksPerBatch);
@@ -567,7 +624,7 @@ if (proof) {
       if (!isSimStepping(actor.getSnapshot())) {
         break;
       }
-      step(world, commands);
+      step(world, commandLog);
       accumulator -= TICK_DT;
       steps += 1;
     }

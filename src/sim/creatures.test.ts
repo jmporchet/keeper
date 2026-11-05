@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ARRIVE_TICKS, CREATURE_CAPACITY, lairTileCount, liveCreatureCount, type Creature } from "./creatures";
 import { asTick, asTileIndex, type TileIndex } from "./ids";
 import {
+  asCommandLog,
   hashWorld,
   MAP_WIDTH,
   PORTAL_X,
@@ -85,7 +86,7 @@ function creatures(world: World): Creature[] {
 
 describe("creature portal", () => {
   it("arrives at the portal and claims the smallest free lair tile", () => {
-    const world = run(1, lairSetup(3), ARRIVE_TICKS + 1);
+    const world = run(1, asCommandLog(lairSetup(3)), ARRIVE_TICKS + 1);
     expect(liveCreatureCount(world.creatures)).toBe(1);
     expect(lairTileCount(world)).toBe(3);
     const creature = liveCreature(world, 0);
@@ -100,7 +101,7 @@ describe("creature portal", () => {
   });
 
   it("walks to its bed and sleeps there", () => {
-    const world = run(1, lairSetup(2), ARRIVE_TICKS + 80);
+    const world = run(1, asCommandLog(lairSetup(2)), ARRIVE_TICKS + 80);
     const creature = liveCreature(world, 0);
     expect(creature.state.kind).toBe("sleeping");
     const bedY = (creature.bedTile / MAP_WIDTH) | 0;
@@ -110,25 +111,25 @@ describe("creature portal", () => {
   });
 
   it("does not arrive without a free bed", () => {
-    const world = run(1, lairSetup(1), ARRIVE_TICKS * 3 + 1);
+    const world = run(1, asCommandLog(lairSetup(1)), ARRIVE_TICKS * 3 + 1);
     expect(liveCreatureCount(world.creatures)).toBe(1);
     expect(lairTileCount(world)).toBe(1);
   });
 
   it("does not arrive without a lair", () => {
-    const world = run(1, [], ARRIVE_TICKS * 5 + 1);
+    const world = run(1, asCommandLog([]), ARRIVE_TICKS * 5 + 1);
     expect(liveCreatureCount(world.creatures)).toBe(0);
     expect(lairTileCount(world)).toBe(0);
   });
 
   it("stops at CREATURE_CAPACITY even with spare beds", () => {
-    const world = run(1, lairSetup(CREATURE_CAPACITY + 2), ARRIVE_TICKS * (CREATURE_CAPACITY + 1) + 1);
+    const world = run(1, asCommandLog(lairSetup(CREATURE_CAPACITY + 2)), ARRIVE_TICKS * (CREATURE_CAPACITY + 1) + 1);
     expect(lairTileCount(world)).toBe(CREATURE_CAPACITY + 2);
     expect(liveCreatureCount(world.creatures)).toBe(CREATURE_CAPACITY);
   });
 
   it("never lets two creatures claim the same bed", () => {
-    const world = run(1, lairSetup(4), ARRIVE_TICKS * 12 + 1);
+    const world = run(1, asCommandLog(lairSetup(4)), ARRIVE_TICKS * 12 + 1);
     const live = creatures(world);
     expect(live.length).toBe(4);
     const seen = new Set<number>();
@@ -146,16 +147,16 @@ describe("creature portal", () => {
   it("is deterministic after 10000 ticks with lair paint and arrivals", () => {
     const commands: Command[] = lairSetup(4);
     commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(32 * MAP_WIDTH + 38) });
-    const a = hashWorld(run(7, commands, 10000));
-    const b = hashWorld(run(7, commands, 10000));
+    const a = hashWorld(run(7, asCommandLog(commands), 10000));
+    const b = hashWorld(run(7, asCommandLog(commands), 10000));
     expect(a).toBe(b);
-    expect(a).not.toBe(hashWorld(run(7, [addGold(0, 1000)], 10000)));
+    expect(a).not.toBe(hashWorld(run(7, asCommandLog([addGold(0, 1000)]), 10000)));
   });
 
   it("includes creatures and bed claims in the world hash", () => {
     const commands = lairSetup(2);
-    const before = hashWorld(run(1, commands, ARRIVE_TICKS));
-    const after = hashWorld(run(1, commands, ARRIVE_TICKS + 1));
+    const before = hashWorld(run(1, asCommandLog(commands), ARRIVE_TICKS));
+    const after = hashWorld(run(1, asCommandLog(commands), ARRIVE_TICKS + 1));
     expect(before).not.toBe(after);
   });
 });
