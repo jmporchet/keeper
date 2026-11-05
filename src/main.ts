@@ -36,9 +36,11 @@ import {
 } from "./sim";
 import { createHud } from "./ui/hud";
 import { createSandboxPanel } from "./ui/sandboxPanel";
+import { max, median, percentile } from "./perf/stats";
 
 type JobDebug = { tileX: number; tileY: number; kind: string; state: string };
 type ImpDebug = { id: number; tileX: number; tileY: number; state: string; job: JobDebug | null };
+type BenchResult = { samples: number[]; median: number; p95: number; max: number };
 
 declare global {
   interface Window {
@@ -61,6 +63,9 @@ declare global {
       impSnapshot(): ImpDebug[];
       dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
       step(n: number): void;
+      spawnImps(n: number): void;
+      benchSim(batches: number, ticksPerBatch: number): BenchResult;
+      benchFrame(frames: number): BenchResult;
     };
   }
 }
@@ -367,6 +372,56 @@ if (proof) {
       placeCamera();
       syncHud();
       render();
+    },
+    spawnImps(n: number) {
+      const tick = world.tick;
+      for (let i = 0; i < n; i += 1) {
+        commands.push({ kind: "spawnImp", tick });
+      }
+    },
+    benchSim(batches: number, ticksPerBatch: number) {
+      const perTickMs: number[] = [];
+      for (let b = 0; b < batches; b += 1) {
+        const start = performance.now();
+        for (let t = 0; t < ticksPerBatch; t += 1) {
+          step(world, commands);
+        }
+        const elapsed = performance.now() - start;
+        perTickMs.push(elapsed / ticksPerBatch);
+      }
+      return {
+        samples: perTickMs,
+        median: median(perTickMs),
+        p95: percentile(perTickMs, 95),
+        max: max(perTickMs),
+      };
+    },
+    benchFrame(frames: number) {
+      const gl = renderer.getContext();
+      const pixel = new Uint8Array(4);
+      const perFrameMs: number[] = [];
+      const startFrame = renderer.info.render.frame;
+      for (let f = 0; f < frames; f += 1) {
+        const start = performance.now();
+        syncMap(world.tiles, world.width, world.tilesVersion, map);
+        syncImps(world.imps, world.hand, 1, undefined, impsVisual);
+        placeCamera();
+        syncHud();
+        renderer.render(scene, camera);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        const elapsed = performance.now() - start;
+        perFrameMs.push(elapsed);
+      }
+      const advanced = renderer.info.render.frame - startFrame;
+      if (advanced !== frames) {
+        throw new Error(`benchFrame rendered ${String(advanced)} of ${String(frames)} frames`);
+      }
+      return {
+        samples: perFrameMs,
+        median: median(perFrameMs),
+        p95: percentile(perFrameMs, 95),
+        max: max(perFrameMs),
+      };
     },
   };
 } else {

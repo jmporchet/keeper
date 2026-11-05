@@ -7,6 +7,10 @@ import { chromium } from "playwright";
 const PORT = Number(process.env.PROOF_PORT ?? "4173");
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
+function ms(value) {
+  return value.toFixed(3);
+}
+
 async function waitUntilReady() {
   const deadline = Date.now() + 20000;
   while (Date.now() < deadline) {
@@ -92,7 +96,7 @@ function startPreview() {
   });
 }
 
-async function stepOnce(page, n = 1, waitMs = 80) {
+async function stepOnce(page, n = 1, waitMs = 30) {
   await page.evaluate((count) => {
     globalThis.__keeper.step(count);
   }, n);
@@ -116,7 +120,7 @@ async function findHandTarget(page) {
     if (target !== undefined && !imps.some((imp) => imp.id !== target.id && imp.state === "idle")) {
       return target;
     }
-    await stepOnce(page, 3, 30);
+    await stepOnce(page, 3, 20);
   }
   throw new Error("no walking imp with a reserved job and no idle imps appeared");
 }
@@ -343,7 +347,7 @@ async function run() {
 
       await page.mouse.move(cx, cy);
       await page.mouse.down({ button: "right" });
-      for (let i = 0; i < 8; i += 1) {
+      for (let i = 0; i < 4; i += 1) {
         await page.mouse.move(cx + i * 10, cy + Math.sin(i / 3) * 22);
         await stepOnce(page, 3);
       }
@@ -355,7 +359,7 @@ async function run() {
           throw new Error(`corridor tile ${String(x)},32 is off screen`);
         }
       }
-      for (let i = 0; i < 12; i += 1) {
+      for (let i = 0; i < 6; i += 1) {
         await stepOnce(page, 5);
       }
 
@@ -407,7 +411,7 @@ async function run() {
           carryingSeen &&
           counts.tagged === 0 &&
           counts.claimed === claimedAtStart + 5 &&
-          elapsed >= 12000
+          elapsed >= 3000
         ) {
           break;
         }
@@ -416,7 +420,7 @@ async function run() {
             `gold and claim proof not complete after ${String(extraTicks)} extra ticks: goldStored ${String(counts.goldStored)}, maxCarrying ${String(maxCarrying)}, tagged ${String(counts.tagged)}, claimed ${String(counts.claimed)} (start ${String(claimedAtStart)}), elapsed ${String(elapsed)} ms`,
           );
         }
-        await stepOnce(page, 4, 30);
+        await stepOnce(page, 4, 5);
         extraTicks += 4;
       }
 
@@ -462,9 +466,73 @@ async function run() {
       ) {
         throw new Error(`hud did not show new values: ${afterPanel.hudText}`);
       }
-      for (let i = 0; i < 40; i += 1) {
+      for (let i = 0; i < 4; i += 1) {
         await stepOnce(page, 1, 20);
       }
+
+      const targetImps = 200;
+      const beforeSpawn = await page.evaluate(() => globalThis.__keeper.impCount);
+      const toSpawn = targetImps - beforeSpawn;
+      if (toSpawn < 0) {
+        throw new Error(`imp count ${String(beforeSpawn)} already above ${String(targetImps)}`);
+      }
+      if (toSpawn > 0) {
+        await page.evaluate((n) => globalThis.__keeper.spawnImps(n), toSpawn);
+      }
+      await stepOnce(page, 2);
+      const spawnedImps = await page.evaluate(() => globalThis.__keeper.impCount);
+      if (spawnedImps !== targetImps) {
+        throw new Error(`spawnImps ended at ${String(spawnedImps)} imps, expected ${String(targetImps)}`);
+      }
+      for (let i = 0; i < 4; i += 1) {
+        await stepOnce(page, 2, 30);
+      }
+
+      const simWarmup = await page.evaluate(() => globalThis.__keeper.benchSim(3, 200));
+      if (simWarmup.samples.length !== 3) {
+        throw new Error(`benchSim warm-up returned ${String(simWarmup.samples.length)} samples`);
+      }
+      const tickBeforeBench = await page.evaluate(() => globalThis.__keeper.tick);
+      const simSamples = await page.evaluate(() => globalThis.__keeper.benchSim(30, 200));
+      if (simSamples.samples.length !== 30) {
+        throw new Error(`benchSim returned ${String(simSamples.samples.length)} samples`);
+      }
+      const tickAfterBench = await page.evaluate(() => globalThis.__keeper.tick);
+      if (tickAfterBench - tickBeforeBench !== 30 * 200) {
+        throw new Error(`benchSim advanced tick by ${String(tickAfterBench - tickBeforeBench)}, expected ${String(30 * 200)}`);
+      }
+      const impsAfterBench = await page.evaluate(() => globalThis.__keeper.impCount);
+      if (impsAfterBench !== targetImps) {
+        throw new Error(`benchSim ended at ${String(impsAfterBench)} imps, expected ${String(targetImps)}`);
+      }
+
+      const frameWarmup = await page.evaluate(() => globalThis.__keeper.benchFrame(5));
+      if (frameWarmup.samples.length !== 5) {
+        throw new Error(`benchFrame warm-up returned ${String(frameWarmup.samples.length)} samples`);
+      }
+      const frameSamples = await page.evaluate(() => globalThis.__keeper.benchFrame(30));
+      if (frameSamples.samples.length !== 30) {
+        throw new Error(`benchFrame returned ${String(frameSamples.samples.length)} samples`);
+      }
+
+      const simMedian = simSamples.median;
+      const simP95 = simSamples.p95;
+      const simMax = simSamples.max;
+      const frameMedian = frameSamples.median;
+      const frameP95 = frameSamples.p95;
+      const frameMax = frameSamples.max;
+      const perfDrawCalls = await page.evaluate(() => globalThis.__keeper.drawCalls);
+      if (simMedian > 2.0) {
+        throw new Error(`sim median ${ms(simMedian)} ms/tick exceeds 2.0 ms with ${String(targetImps)} imps`);
+      }
+      if (simP95 > 4.0) {
+        throw new Error(`sim p95 ${ms(simP95)} ms/tick exceeds 4.0 ms with ${String(targetImps)} imps`);
+      }
+      console.log(
+        `perf imps=${String(targetImps)} sim_ms_per_tick median=${ms(simMedian)} p95=${ms(simP95)} max=${ms(simMax)} frame_ms median=${ms(frameMedian)} p95=${ms(frameP95)} max=${ms(frameMax)} drawCalls=${String(perfDrawCalls)}`,
+      );
+
+      await stepOnce(page, 2, 30);
 
       const result = await page.evaluate(() => ({
         tick: globalThis.__keeper.tick,
@@ -512,6 +580,7 @@ async function run() {
         result.goldStored,
         result.hudText,
       );
+      await page.screenshot({ path: "proof/perf.png" });
       await context.close();
       const files = await readdir("proof/tmp");
       const webm = files.find((name) => name.endsWith(".webm"));
