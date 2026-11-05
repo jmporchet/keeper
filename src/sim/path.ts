@@ -1,4 +1,4 @@
-import { MAP_HEIGHT, MAP_WIDTH, TILE_KIND } from "./world";
+import { MAP_HEIGHT, MAP_WIDTH, TILE_KIND } from "./map";
 
 export const PATH_CELL_COUNT = MAP_WIDTH * MAP_HEIGHT;
 

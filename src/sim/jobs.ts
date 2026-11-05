@@ -1,6 +1,4 @@
 import { asJobId, type JobId, type TileIndex, type WorkerId } from "./ids";
-import { isWalkableCode } from "./path";
-import type { TileRead } from "./world";
 
 export const JOB_KINDS = ["dig", "mineGold", "carryGold", "claim", "reinforce"] as const;
 
@@ -366,7 +364,7 @@ export function cancelJobAtTile(board: JobBoard, tile: TileIndex): boolean {
   }
 }
 
-function betterJob(best: Job, candidate: Job): boolean {
+export function betterJob(best: Job, candidate: Job): boolean {
   const pb = jobPriority(best.jobKind);
   const pc = jobPriority(candidate.jobKind);
   if (pc !== pb) {
@@ -375,43 +373,15 @@ function betterJob(best: Job, candidate: Job): boolean {
   return candidate.id < best.id;
 }
 
-function hasWalkableNeighbour(tiles: TileRead, width: number, tile: TileIndex): boolean {
-  const height = (tiles.length / width) | 0;
-  const y = (tile / width) | 0;
-  const x = tile - y * width;
-  if (y > 0) {
-    const code = tiles[(y - 1) * width + x];
-    if (code !== undefined && isWalkableCode(code)) {
-      return true;
-    }
+export function jobForFilledSlot(board: JobBoard, filledIndex: number): Job | undefined {
+  const id = board.filled[filledIndex];
+  if (id === undefined) {
+    return undefined;
   }
-  if (x + 1 < width) {
-    const code = tiles[y * width + x + 1];
-    if (code !== undefined && isWalkableCode(code)) {
-      return true;
-    }
-  }
-  if (y + 1 < height) {
-    const code = tiles[(y + 1) * width + x];
-    if (code !== undefined && isWalkableCode(code)) {
-      return true;
-    }
-  }
-  if (x > 0) {
-    const code = tiles[y * width + x - 1];
-    if (code !== undefined && isWalkableCode(code)) {
-      return true;
-    }
-  }
-  return false;
+  return slotJobAt(board, id);
 }
 
-function pickOpenJob(
-  board: JobBoard,
-  jobKind: JobKind | undefined,
-  tiles: TileRead | undefined,
-  width: number | undefined,
-): Job | undefined {
+function pickOpenJob(board: JobBoard, jobKind: JobKind | undefined): Job | undefined {
   let best: Job | undefined;
   for (let i = 0; i < board.filledCount; i += 1) {
     const id = board.filled[i];
@@ -425,14 +395,6 @@ function pickOpenJob(
     switch (job.lifecycle.kind) {
       case "open":
         if (jobKind === undefined || job.jobKind === jobKind) {
-          if (
-            tiles !== undefined &&
-            width !== undefined &&
-            job.jobKind === "dig" &&
-            !hasWalkableNeighbour(tiles, width, job.tile)
-          ) {
-            break;
-          }
           if (best === undefined || betterJob(best, job)) {
             best = job;
           }
@@ -449,23 +411,39 @@ function pickOpenJob(
   return best;
 }
 
-export function reserveOpenJob(
-  board: JobBoard,
-  worker: WorkerId,
-  jobKind?: JobKind,
-  tiles?: TileRead,
-  width?: number,
-): Job | undefined {
+export function reserveOpenJob(board: JobBoard, worker: WorkerId, jobKind?: JobKind): Job | undefined {
   if (jobHeldBy(board, worker) !== undefined) {
     return undefined;
   }
-  const job = pickOpenJob(board, jobKind, tiles, width);
+  const job = pickOpenJob(board, jobKind);
   if (job === undefined) {
     return undefined;
   }
   setLifecycle(job, { kind: "reserved", worker });
   writeWorkerSlot(board, worker, { kind: "filled", id: job.id });
   return job;
+}
+
+export function reserveJob(board: JobBoard, worker: WorkerId, job: Job): boolean {
+  if (jobHeldBy(board, worker) !== undefined) {
+    return false;
+  }
+  const current = jobAtTile(board, job.tile);
+  if (current === undefined || current.id !== job.id) {
+    return false;
+  }
+  switch (job.lifecycle.kind) {
+    case "open":
+      setLifecycle(job, { kind: "reserved", worker });
+      writeWorkerSlot(board, worker, { kind: "filled", id: job.id });
+      return true;
+    case "reserved":
+      return false;
+    default: {
+      const never: never = job.lifecycle;
+      return never;
+    }
+  }
 }
 
 export function releaseWorker(board: JobBoard, worker: WorkerId): boolean {

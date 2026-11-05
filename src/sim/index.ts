@@ -11,12 +11,15 @@ export {
   type WorkerId,
 } from "./ids";
 export {
+  CLAIM_TICKS,
   DIG_TICKS,
   findPath,
+  finishClaim,
   hashImps,
   IMP_CAPACITY,
   liveImpCount,
   occupyWalkable,
+  reserveBestReachableJob,
   STARTING_IMP_COUNT,
   STEPS_PER_TILE,
   workerOf,
@@ -25,14 +28,17 @@ export {
   type ImpSlot,
   type ImpState,
   type ImpWorking,
+  type WorkKind,
 } from "./imps";
 export {
   assertJobInvariants,
+  betterJob,
   cancelJobAtTile,
   completeJob,
   createJobBoard,
   hashJobs,
   jobAtTile,
+  jobForFilledSlot,
   jobHeldBy,
   jobPriority,
   JOB_KINDS,
@@ -40,6 +46,7 @@ export {
   openJob,
   printJobs,
   releaseWorker,
+  reserveJob,
   reserveOpenJob,
 } from "./jobs";
 export type { Job, JobBoard, JobKind, JobLifecycle } from "./jobs";
@@ -53,6 +60,7 @@ export {
   MAP_WIDTH,
   MAX_FRAME_DELTA,
   MAX_STEPS_PER_FRAME,
+  openClaimJobsAround,
   run,
   setTile,
   sortCommands,
