@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { IMP_CAPACITY, type Hand, type ImpBoard, type TileIndex } from "../sim";
+import { createImpGeometry } from "./impGeometry";
 import { syncImpInstances } from "./imps.hot";
 
 export type ImpMeshes = {
@@ -9,7 +10,7 @@ export type ImpMeshes = {
 };
 
 export function createImpMeshes(scene: THREE.Scene): ImpMeshes {
-  const geometry = new THREE.ConeGeometry(0.22, 0.72, 6);
+  const geometry = createImpGeometry();
   const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
   const capacity = IMP_CAPACITY * 2;
   const mesh = new THREE.InstancedMesh(geometry, material, capacity);
