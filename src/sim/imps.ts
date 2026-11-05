@@ -1,12 +1,14 @@
-import { asImpId, type ImpId } from "./ids";
+import { asImpId, asTileIndex, asWorkerId, type ImpId, type TileIndex, type WorkerId } from "./ids";
+import { completeJob, jobHeldBy, releaseWorker, reserveOpenJob } from "./jobs";
 import { bumpPathGen, isWalkableCode, PATH_CELL_COUNT, type PathScratch } from "./path";
 import { bfsToGoal, floodWalkable, reconstructPath } from "./path.hot";
 import { advanceRng } from "./rng";
-import type { TileRead } from "./world";
+import { MAP_WIDTH, setTile, TILE_KIND, type TileRead, type World } from "./world";
 
 export const IMP_CAPACITY = 200;
 export const STARTING_IMP_COUNT = 4;
 export const STEPS_PER_TILE = 6;
+export const DIG_TICKS = 40;
 
 export type ImpIdle = { kind: "idle" };
 export type ImpWandering = {
@@ -17,11 +19,17 @@ export type ImpWandering = {
 };
 export type ImpWalking = {
   kind: "walking";
+  tile: TileIndex;
   pathStep: number;
   pathLength: number;
   progress: number;
 };
-export type ImpState = ImpIdle | ImpWandering | ImpWalking;
+export type ImpWorking = {
+  kind: "working";
+  tile: TileIndex;
+  remaining: number;
+};
+export type ImpState = ImpIdle | ImpWandering | ImpWalking | ImpWorking;
 
 export type Imp = {
   id: ImpId;
@@ -37,6 +45,7 @@ export type Imp = {
   idle: ImpIdle;
   wandering: ImpWandering;
   walking: ImpWalking;
+  working: ImpWorking;
   state: ImpState;
 };
 
@@ -52,7 +61,14 @@ const SPAWN_Y = [31, 31, 31, 32];
 export function createImp(index: number, tileX: number, tileY: number): Imp {
   const idle: ImpIdle = { kind: "idle" };
   const wandering: ImpWandering = { kind: "wandering", pathStep: 0, pathLength: 0, progress: 0 };
-  const walking: ImpWalking = { kind: "walking", pathStep: 0, pathLength: 0, progress: 0 };
+  const walking: ImpWalking = {
+    kind: "walking",
+    tile: asTileIndex(tileY * MAP_WIDTH + tileX),
+    pathStep: 0,
+    pathLength: 0,
+    progress: 0,
+  };
+  const working: ImpWorking = { kind: "working", tile: asTileIndex(tileY * MAP_WIDTH + tileX), remaining: 0 };
   return {
     id: asImpId(index),
     tileX,
@@ -67,6 +83,7 @@ export function createImp(index: number, tileX: number, tileY: number): Imp {
     idle,
     wandering,
     walking,
+    working,
     state: idle,
   };
 }
@@ -121,14 +138,11 @@ export function findPath(
   return reconstructPath(start, goal, scratch.cameFrom, scratch.reverseBuf, outPath);
 }
 
-export type ImpWorld = {
-  tiles: TileRead;
-  width: number;
-  height: number;
-  rng: number;
-  imps: ImpBoard;
-  pathScratch: PathScratch;
-};
+export type ImpWorld = World;
+
+export function workerOf(imp: Imp): WorkerId {
+  return asWorkerId(imp.id);
+}
 
 export function beginWander(world: ImpWorld, imp: Imp): void {
   const start = tileIndex(imp.tileX, imp.tileY, world.width);
@@ -167,6 +181,85 @@ export function beginWander(world: ImpWorld, imp: Imp): void {
   setHeading(imp, world.width);
 }
 
+function pathToJobNeighbour(world: ImpWorld, imp: Imp, jobTile: TileIndex): number {
+  const width = world.width;
+  const start = tileIndex(imp.tileX, imp.tileY, width);
+  const jobY = (jobTile / width) | 0;
+  const jobX = jobTile - jobY * width;
+  let length = tryNeighbour(world, imp, start, jobX, jobY - 1);
+  if (length > 0) {
+    return length;
+  }
+  length = tryNeighbour(world, imp, start, jobX + 1, jobY);
+  if (length > 0) {
+    return length;
+  }
+  length = tryNeighbour(world, imp, start, jobX, jobY + 1);
+  if (length > 0) {
+    return length;
+  }
+  return tryNeighbour(world, imp, start, jobX - 1, jobY);
+}
+
+function tryNeighbour(world: ImpWorld, imp: Imp, start: number, x: number, y: number): number {
+  if (x < 0 || y < 0 || x >= world.width || y >= world.height) {
+    return 0;
+  }
+  const n = tileIndex(x, y, world.width);
+  const code = world.tiles[n];
+  if (code === undefined || !isWalkableCode(code)) {
+    return 0;
+  }
+  return findPath(world.tiles, world.width, world.height, start, n, world.pathScratch, imp.path);
+}
+
+export function beginIdle(world: ImpWorld, imp: Imp): void {
+  const worker = workerOf(imp);
+  const job = reserveOpenJob(world.jobs, worker, "dig");
+  if (job !== undefined) {
+    const length = pathToJobNeighbour(world, imp, job.tile);
+    if (length > 0) {
+      imp.walking.tile = job.tile;
+      imp.walking.pathStep = 0;
+      imp.walking.pathLength = length;
+      imp.walking.progress = 0;
+      imp.state = imp.walking;
+      setHeading(imp, world.width);
+      return;
+    }
+    releaseWorker(world.jobs, worker);
+  }
+  beginWander(world, imp);
+}
+
+export function jobHeldOnTile(world: ImpWorld, imp: Imp, tile: TileIndex): boolean {
+  const job = jobHeldBy(world.jobs, workerOf(imp));
+  if (job === undefined) {
+    return false;
+  }
+  return job.tile === tile;
+}
+
+export function beginWorking(imp: Imp, tile: TileIndex): void {
+  imp.working.tile = tile;
+  imp.working.remaining = DIG_TICKS;
+  imp.headingX = 0;
+  imp.headingY = 0;
+  imp.state = imp.working;
+}
+
+export function goIdle(imp: Imp): void {
+  imp.state = imp.idle;
+  imp.headingX = 0;
+  imp.headingY = 0;
+}
+
+export function finishDig(world: ImpWorld, imp: Imp, tile: TileIndex): void {
+  setTile(world, tile, TILE_KIND.dirt);
+  completeJob(world.jobs, workerOf(imp));
+  goIdle(imp);
+}
+
 export function setHeading(imp: Imp, width: number): void {
   const moving = movingState(imp);
   if (moving === undefined) {
@@ -201,6 +294,8 @@ export function movingState(imp: Imp): ImpWandering | ImpWalking | undefined {
       return state;
     case "walking":
       return state;
+    case "working":
+      return undefined;
     default: {
       const never: never = state;
       return never;
@@ -261,6 +356,8 @@ function impStateCode(kind: ImpState["kind"]): number {
       return 2;
     case "walking":
       return 3;
+    case "working":
+      return 4;
     default: {
       const never: never = kind;
       return never;
@@ -298,10 +395,15 @@ export function hashImps(board: ImpBoard): number {
             h = mixPath(h, imp.path, moving.pathLength);
             break;
           case "walking":
+            h = mix(h, moving.tile);
             h = mix(h, moving.pathStep);
             h = mix(h, moving.pathLength);
             h = mix(h, moving.progress);
             h = mixPath(h, imp.path, moving.pathLength);
+            break;
+          case "working":
+            h = mix(h, moving.tile);
+            h = mix(h, moving.remaining);
             break;
           default: {
             const never: never = moving;

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { asTick, asTileIndex, asWorkerId, type TileIndex } from "./ids";
 import {
   assertJobInvariants,
+  completeJob,
   jobAtTile,
   jobHeldBy,
   listJobs,
@@ -79,6 +80,14 @@ describe("job board", () => {
     expect(jobAtTile(after.jobs, EARTH_A)).toBeUndefined();
   });
 
+  it("reserves only dig jobs when a kind filter is given", () => {
+    const world = run(1, [tag(0, GOLD), tag(0, EARTH_A)], 1);
+    const reserved = reserveOpenJob(world.jobs, asWorkerId(0), "dig");
+    expect(reserved?.jobKind).toBe("dig");
+    expect(reserved?.tile).toBe(EARTH_A);
+    expect(jobAtTile(world.jobs, GOLD)?.lifecycle.kind).toBe("open");
+  });
+
   it("rock tag creates no job", () => {
     const world = run(1, [tag(0, ROCK)], 1);
     expect(listJobs(world.jobs).length).toBe(0);
@@ -92,13 +101,13 @@ describe("job board", () => {
     expect(hashWorld(tagged)).toBe(hashWorld(again));
   });
 
-  it("no job reserved twice after random tag/untag/reserve/release", () => {
+  it("keeps invariants after random tag/untag/reserve/release/complete", () => {
     const tiles = [EARTH_A, EARTH_B, GOLD, ROCK];
     const workers = [asWorkerId(0), asWorkerId(1), asWorkerId(2)];
     fc.assert(
       fc.property(
         fc.array(
-          fc.tuple(fc.integer({ min: 0, max: 3 }), fc.integer({ min: 0, max: 3 }), fc.integer({ min: 0, max: 2 })),
+          fc.tuple(fc.integer({ min: 0, max: 4 }), fc.integer({ min: 0, max: 3 }), fc.integer({ min: 0, max: 2 })),
           { minLength: 1, maxLength: 40 },
         ),
         (ops) => {
@@ -124,8 +133,11 @@ describe("job board", () => {
               case 2:
                 reserveOpenJob(world.jobs, worker);
                 break;
-              default:
+              case 3:
                 releaseWorker(world.jobs, worker);
+                break;
+              default:
+                completeJob(world.jobs, worker);
                 break;
             }
             assertJobInvariants(world.jobs);

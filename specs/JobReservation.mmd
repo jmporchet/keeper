@@ -2,8 +2,6 @@ stateDiagram-v2
     [*] --> Open: tile tagged
     Open --> Reserved: worker reserves
     Reserved --> Open: worker releases
-    Reserved --> Done: worker finishes
-    Open --> Cancelled: keeper untags
-    Reserved --> Cancelled: keeper untags
-    Done --> [*]
-    Cancelled --> [*]
+    Reserved --> [*]: worker finishes
+    Open --> [*]: keeper untags
+    Reserved --> [*]: keeper untags

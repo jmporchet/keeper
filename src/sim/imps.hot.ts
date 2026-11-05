@@ -1,7 +1,11 @@
 import {
-  beginWander,
+  beginIdle,
+  beginWorking,
   captureCurr,
   capturePrev,
+  finishDig,
+  goIdle,
+  jobHeldOnTile,
   setHeading,
   STEPS_PER_TILE,
   type Imp,
@@ -34,13 +38,31 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
   const state = imp.state;
   switch (state.kind) {
     case "idle":
-      beginWander(world, imp);
+      beginIdle(world, imp);
       break;
     case "wandering":
-      advanceAlongPath(imp, state, world.width);
+      if (advanceAlongPath(imp, state, world.width)) {
+        goIdle(imp);
+      }
       break;
     case "walking":
-      advanceAlongPath(imp, state, world.width);
+      if (!jobHeldOnTile(world, imp, state.tile)) {
+        goIdle(imp);
+        break;
+      }
+      if (advanceAlongPath(imp, state, world.width)) {
+        beginWorking(imp, state.tile);
+      }
+      break;
+    case "working":
+      if (!jobHeldOnTile(world, imp, state.tile)) {
+        goIdle(imp);
+        break;
+      }
+      state.remaining -= 1;
+      if (state.remaining <= 0) {
+        finishDig(world, imp, state.tile);
+      }
       break;
     default: {
       const never: never = state;
@@ -52,27 +74,21 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
 
 function advanceAlongPath(
   imp: Imp,
-  state: { kind: "wandering" | "walking"; pathStep: number; pathLength: number; progress: number },
+  state: { pathStep: number; pathLength: number; progress: number },
   width: number,
-): void {
+): boolean {
   if (state.pathLength <= 1) {
-    imp.state = imp.idle;
-    imp.headingX = 0;
-    imp.headingY = 0;
-    return;
+    return true;
   }
   state.progress += 1;
   if (state.progress < STEPS_PER_TILE) {
-    return;
+    return false;
   }
   state.progress = 0;
   const nextIndex = state.pathStep + 1;
   const nextTile = imp.path[nextIndex];
   if (nextTile === undefined) {
-    imp.state = imp.idle;
-    imp.headingX = 0;
-    imp.headingY = 0;
-    return;
+    return true;
   }
   const ny = (nextTile / width) | 0;
   const nx = nextTile - ny * width;
@@ -80,10 +96,8 @@ function advanceAlongPath(
   imp.tileY = ny;
   state.pathStep = nextIndex;
   if (state.pathStep + 1 >= state.pathLength) {
-    imp.state = imp.idle;
-    imp.headingX = 0;
-    imp.headingY = 0;
-    return;
+    return true;
   }
   setHeading(imp, width);
+  return false;
 }
