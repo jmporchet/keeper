@@ -14,7 +14,7 @@ import { isPainting, isPossessed } from "./input/inputCameraMachine";
 import { createCreatureMeshes, syncCreatures } from "./render/creatures";
 import { createPropMeshes, syncProps } from "./render/props";
 import { createImpMeshes, syncImps } from "./render/imps";
-import { addTorchLighting, DUNGEON_EXPOSURE } from "./render/lights";
+import { createTorchLighting, DUNGEON_EXPOSURE, flickerTorchLights, syncTorchLights } from "./render/lights";
 import { createMapMeshes, syncMap } from "./render/map";
 import {
   requireSorted,
@@ -199,7 +199,8 @@ syncMap(world, map, world.tick);
 syncProps(world, props);
 syncImps(world.imps, world.hand, 1, undefined, impsVisual, world.tick);
 syncCreatures(world.creatures, world.heroes, 1, creaturesVisual);
-addTorchLighting(scene);
+const torchLights = createTorchLighting(scene);
+syncTorchLights(world, torchLights);
 const screenPoint = new Vector3();
 
 const pauseOverlay = document.getElementById("pause-overlay");
@@ -323,6 +324,8 @@ function loadSave(save: Save): void {
     syncProps(world, props);
     syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual, world.tick);
     syncCreatures(world.creatures, world.heroes, 1, creaturesVisual);
+    syncTorchLights(world, torchLights);
+    flickerTorchLights(torchLights, world.tick * TICK_DT);
     placeCamera();
     actor.send({ type: "REPLAY_DONE" });
   } catch {
@@ -887,6 +890,8 @@ if (proof) {
       syncProps(world, props);
       syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual, world.tick);
       syncCreatures(world.creatures, world.heroes, 1, creaturesVisual);
+      syncTorchLights(world, torchLights);
+      flickerTorchLights(torchLights, world.tick * TICK_DT);
       placeCamera();
       syncHud();
       render();
@@ -944,6 +949,8 @@ if (proof) {
             syncProps(world, props);
             syncImps(world.imps, world.hand, 1, undefined, impsVisual, world.tick);
             syncCreatures(world.creatures, world.heroes, 1, creaturesVisual);
+            syncTorchLights(world, torchLights);
+            flickerTorchLights(torchLights, world.tick * TICK_DT);
             placeCamera();
             syncHud();
             renderer.render(scene, camera);
@@ -996,6 +1003,8 @@ if (proof) {
     syncProps(world, props);
     syncImps(world.imps, world.hand, accumulator / TICK_DT, cameraInput.cursorTile(), impsVisual, now / 1000);
     syncCreatures(world.creatures, world.heroes, accumulator / TICK_DT, creaturesVisual);
+    syncTorchLights(world, torchLights);
+    flickerTorchLights(torchLights, now / 1000);
     placeCamera(accumulator / TICK_DT);
     syncHud();
     render();

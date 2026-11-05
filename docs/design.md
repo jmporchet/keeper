@@ -49,7 +49,7 @@ Axes:
 
 - Floors and walls: floor textures plus cave wall faces on dug edges.
 - Low-poly silhouettes for imps, fly, beetle and heroes.
-- Torch point lights, darker falloff and optional fog.
+- Torch point lights, darker falloff and optional fog: a warm heart light plus a fixed six-light pool at room anchors, short distance and decay 2, unused lights at zero intensity, and optional dark `FogExp2` behind an exported constant.
 - Readable room props: treasury piles, lair beds, hatchery chickens.
 - HUD and panel restyled toward a classic DK dark stone panel using HTML/CSS.
 
@@ -393,7 +393,7 @@ stateDiagram-v2
 - A later pass can switch to tile-index instances with scale 0 for removed blocks; counts must still match the grid.
 - Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Working imps bob and tilt toward their work tile using render time only, without writing sim state. A freshly slapped imp flashes gold and leans. Held imps are skipped on the grid and drawn floating near the cursor through the same imp mesh. Creatures are one separate `InstancedMesh` of octahedra, also interpolated between ticks; flies are flat green-cyan, beetles are darker amber-brown and wider and lower, and a creature with level one is drawn slightly larger and brighter through the same instance mesh. Heroes reuse that creature `InstancedMesh` with a blue-steel tint and a taller scale, so the hero wave adds no draw call. Treasury gold piles and hatchery chickens are drawn by one shared props `InstancedMesh`, dirty-synced by `treasuryVersion` and `chickensVersion`: one instance per stocked treasury tile scaled by `stock / TREASURY_CAPACITY`, and one small white-yellow instance per live chicken on its hatchery tile. The grouped tile meshes plus imps, creatures and props stay within 7 draw calls; room, lair, hatchery, training, workshop, library and portal floors reuse the floor group as per-instance tints rather than adding draw calls.
 - Camera: perspective, orbit around a ground target. Pitch is clamped to `[0.2, 1.35]` rad, zoom (distance) to `[12, 90]`, and the ground target to the map rectangle `[-MAP_HALF, MAP_WIDTH - MAP_HALF]` × `[-MAP_HALF, MAP_HEIGHT - MAP_HALF]`. Modes follow chart 2 in `src/input`; pose math lives in `src/camera`. While Possessed, the camera is placed each frame just behind and above the possessed creature using its interpolated `currX`/`currZ` and heading, with no new meshes or draw calls; exiting restores the orbit pose.
-- Visual style: low-poly blocks, moody dungeon light (one heart point light plus dim hemisphere and ambient), darker per-kind materials, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
+- Visual style: low-poly blocks, moody dungeon light (a warm heart point light, a fixed room-anchor torch pool with dark falloff, low hemisphere and ambient, and optional dark `FogExp2`), darker per-kind materials, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
 
 ## Open questions
 
