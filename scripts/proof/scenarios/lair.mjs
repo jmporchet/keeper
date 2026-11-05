@@ -56,6 +56,14 @@ export async function run(ctx) {
     throw new Error(`portal tile 32,35 was ${String(portalKind)}`);
   }
   await ctx.checkpoint("lair-paint");
+  await ctx.panToTileCenter(31, 31);
+  await page.mouse.move(cx, cy);
+  for (let i = 0; i < 3; i += 1) {
+    await page.mouse.wheel(0, -240);
+    await ctx.stepOnce(1, 10);
+  }
+  await ctx.stepOnce(1, 150);
+  await ctx.screenshot("proof/torches.png", "torches");
 
   let creatureTicks = 0;
   for (;;) {
