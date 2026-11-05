@@ -44,7 +44,7 @@ import { createSandboxPanel } from "./ui/sandboxPanel";
 import { max, median, percentile } from "./perf/stats";
 
 type JobDebug = { tileX: number; tileY: number; kind: string; state: string };
-type ImpDebug = { id: number; tileX: number; tileY: number; state: string; job: JobDebug | null };
+type ImpDebug = { id: number; tileX: number; tileY: number; state: string; boost: number; job: JobDebug | null };
 type BenchResult = { samples: number[]; median: number; p95: number; max: number };
 
 declare global {
@@ -378,6 +378,7 @@ if (proof) {
               tileX: imp.tileX,
               tileY: imp.tileY,
               state: imp.state.kind,
+              boost: imp.boost.kind === "boosted" ? imp.boost.remaining : 0,
               job: job === undefined ? null : jobDebug(job),
             });
             break;

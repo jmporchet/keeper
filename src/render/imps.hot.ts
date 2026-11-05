@@ -1,5 +1,5 @@
 import type { Color, InstancedMesh, Object3D } from "three";
-import { MAP_HALF, MAP_WIDTH, type Hand, type TileIndex } from "../sim";
+import { MAP_HALF, MAP_WIDTH, SLAP_TICKS, type Hand, type TileIndex } from "../sim";
 import type { ImpSlot } from "../sim/imps";
 
 export function syncImpInstances(
@@ -28,12 +28,18 @@ export function syncImpInstances(
         const t = alpha;
         const x = imp.prevX + (imp.currX - imp.prevX) * t;
         const z = imp.prevZ + (imp.currZ - imp.prevZ) * t;
-        dummy.position.set(x - MAP_HALF, 0.56, z - MAP_HALF);
-        dummy.scale.set(1, 1, 1);
-        dummy.rotation.set(0, 0, 0);
+        const freshBoost = imp.boost.kind === "boosted" && imp.boost.remaining > SLAP_TICKS - 4;
+        dummy.position.set(x - MAP_HALF, freshBoost ? 0.48 : 0.56, z - MAP_HALF);
+        if (freshBoost) {
+          dummy.scale.set(1.3, 0.7, 1.3);
+          dummy.rotation.set(0, 0, 0.25);
+        } else {
+          dummy.scale.set(1, 1, 1);
+          dummy.rotation.set(0, 0, 0);
+        }
         dummy.updateMatrix();
         mesh.setMatrixAt(drawn, dummy.matrix);
-        color.setHex(0xe03030);
+        color.setHex(freshBoost ? 0xffb347 : 0xe03030);
         mesh.setColorAt(drawn, color);
         drawn += 1;
         if (imp.carry.kind === "gold") {
