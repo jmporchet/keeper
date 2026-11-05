@@ -164,7 +164,7 @@ describe("doors", () => {
   it("lets a hero damage a door to zero and then march through", () => {
     const world = run(1, sortCommands(wallCommands()), 1);
     clearImps(world);
-    const hero = createHero(0, 32, 34);
+    const hero = createHero(0, 32, 34, HERO_HP);
     world.heroes.slots[0] = { kind: "live", hero };
     const log = sortCommands([]);
     let ticks = 0;
@@ -218,7 +218,7 @@ describe("gas traps", () => {
 
   it("damages a hero once when it steps on a live trap", () => {
     const world = run(1, sortCommands([addGold(0, 100), paintTrap(0, TRAP_A)]), 1);
-    const hero = createHero(0, 32, 34);
+    const hero = createHero(0, 32, 34, HERO_HP);
     world.heroes.slots[0] = { kind: "live", hero };
     step(world, sortCommands([]));
     expect(hero.hp).toBe(HERO_HP - TRAP_DAMAGE);
