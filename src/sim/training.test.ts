@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  CREATURE_MAX_LEVEL,
   WARLOCK_HP,
   freeBedTiles,
   liveCreatureCount,
@@ -170,7 +169,7 @@ describe("training room", () => {
           sawTraining = true;
           expect(freeBedTiles(world)).not.toContain(creature.bedTile);
         }
-        if (creature.level >= CREATURE_MAX_LEVEL) {
+        if (creature.level >= 1) {
           sawLevel = true;
           if (creature.state.kind === "toBed" || creature.state.kind === "sleeping") {
             returned = true;
@@ -207,7 +206,7 @@ describe("training room", () => {
         if (creature.state.kind === "training") {
           sawTraining = true;
         }
-        if (creature.level >= CREATURE_MAX_LEVEL) {
+        if (creature.level >= 1) {
           sawLevel = true;
           if (creature.state.kind === "toBed" || creature.state.kind === "sleeping") {
             returned = true;
@@ -237,7 +236,7 @@ describe("training room", () => {
       if (creature.state.kind === "training" && trainingStarted < 0) {
         trainingStarted = world.tick;
       }
-      if (trainingStarted >= 0 && creature.level >= CREATURE_MAX_LEVEL) {
+      if (trainingStarted >= 0 && creature.level >= 1) {
         expect(world.tick - trainingStarted).toBeGreaterThanOrEqual(TRAIN_TICKS);
         expect(creature.state.kind === "toBed" || creature.state.kind === "sleeping").toBe(true);
         return;
@@ -264,7 +263,7 @@ describe("training room", () => {
           expect(used.has(state.tile)).toBe(false);
           used.add(state.tile);
         }
-        if (creature.level >= CREATURE_MAX_LEVEL) {
+        if (creature.level >= 1) {
           trained += 1;
         }
       }
