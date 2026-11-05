@@ -7,7 +7,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { createActor } from "xstate";
-import { appMachine, appStateName, isDefeated, isPaused, isReplaying, isSimStepping } from "./app/appMachine";
+import { appMachine, appStateName, isDefeated, isPaused, isReplaying, isSimStepping, isVictorious } from "./app/appMachine";
 import { createCameraPose, eyeFromPose } from "./camera/pose";
 import { bindCameraInput } from "./input/bindCamera";
 import { isPainting, isPossessed, paintToolEvent } from "./input/inputCameraMachine";
@@ -58,6 +58,7 @@ import {
   freeBedTiles,
   ticksUntilPayday,
   PAY_TICKS,
+  VICTORY_WAVES,
   workerOf,
   asCreatureId,
   findCreature,
@@ -119,6 +120,9 @@ declare global {
       breachTicks: number;
       defeated: boolean;
       defeatTicks: number;
+      wavesCleared: number;
+      victorious: boolean;
+      victoryWaves: number;
       repairsDone: number;
       waveIndex: number;
       doorCount: number;
@@ -159,6 +163,8 @@ declare global {
       possess(creatureId: number): void;
       exitPossess(): void;
       repairHeart(): void;
+      setWavesCleared(n: number): void;
+      clearWave(): void;
       step(n: number): void;
       spawnImps(n: number): void;
       saveNow(): Save;
@@ -330,6 +336,8 @@ function loadSave(save: Save): void {
     actor.send({ type: "REPLAY_DONE" });
     if (world.defeated) {
       actor.send({ type: "DEFEAT" });
+    } else if (world.victorious) {
+      actor.send({ type: "VICTORY" });
     }
   } catch {
     actor.send({ type: "REPLAY_ERROR" });
@@ -373,16 +381,18 @@ function syncHud(): void {
     world.heartBreached,
     world.breachTicks,
     world.defeated,
+    world.victorious,
     world.repairsDone,
   );
   const snapshot = actor.getSnapshot();
   const paused = isPaused(snapshot);
   const defeated = isDefeated(snapshot);
-  sandboxPanel.setPaused(paused || defeated);
+  const victorious = isVictorious(snapshot);
+  sandboxPanel.setPaused(paused || defeated || victorious);
   sandboxPanel.setReplaying(isReplaying(snapshot));
   if (pauseOverlay !== null) {
-    pauseOverlay.classList.toggle("visible", paused || defeated);
-    pauseOverlay.textContent = defeated ? "Defeat" : "Pause";
+    pauseOverlay.classList.toggle("visible", paused || defeated || victorious);
+    pauseOverlay.textContent = victorious ? "Victory" : defeated ? "Defeat" : "Pause";
   }
 }
 
@@ -641,6 +651,15 @@ if (proof) {
     get defeatTicks() {
       return DEFEAT_TICKS;
     },
+    get wavesCleared() {
+      return world.wavesCleared;
+    },
+    get victorious() {
+      return world.victorious;
+    },
+    get victoryWaves() {
+      return VICTORY_WAVES;
+    },
     get repairsDone() {
       return world.repairsDone;
     },
@@ -893,19 +912,39 @@ if (proof) {
     repairHeart() {
       commands.push({ kind: "repairHeart", tick: world.tick });
     },
+    setWavesCleared(n: number) {
+      world.wavesCleared = n;
+    },
+    clearWave() {
+      let hadLive = false;
+      for (let i = 0; i < world.heroes.slots.length; i += 1) {
+        const slot = world.heroes.slots[i];
+        if (slot !== undefined && slot.kind === "live") {
+          hadLive = true;
+          world.heroes.slots[i] = { kind: "empty" };
+        }
+      }
+      if (hadLive) {
+        world.waveActive = true;
+      }
+    },
     step(n: number) {
       if (!isSimStepping(actor.getSnapshot())) {
         syncHud();
         return;
       }
       for (let i = 0; i < n; i += 1) {
-        if (world.defeated) {
+        if (world.defeated || world.victorious) {
           break;
         }
         step(world, commandLog);
         cameraInput.tickHeldKeys();
         if (world.defeated) {
           actor.send({ type: "DEFEAT" });
+          break;
+        }
+        if (world.victorious) {
+          actor.send({ type: "VICTORY" });
           break;
         }
       }
@@ -1011,17 +1050,19 @@ if (proof) {
     accumulator += delta;
     let steps = 0;
     while (accumulator >= TICK_DT && steps < MAX_STEPS_PER_FRAME) {
-      if (!isSimStepping(actor.getSnapshot()) || world.defeated) {
+      if (!isSimStepping(actor.getSnapshot()) || world.defeated || world.victorious) {
         break;
       }
       step(world, commandLog);
       if (world.defeated) {
         actor.send({ type: "DEFEAT" });
+      } else if (world.victorious) {
+        actor.send({ type: "VICTORY" });
       }
       accumulator -= TICK_DT;
       steps += 1;
     }
-    if (!isSimStepping(actor.getSnapshot()) || world.defeated) {
+    if (!isSimStepping(actor.getSnapshot()) || world.defeated || world.victorious) {
       accumulator = 0;
     }
     cameraInput.tickHeldKeys();

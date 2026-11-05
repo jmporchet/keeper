@@ -48,6 +48,7 @@ import {
   TRAP_NONE,
   TRAINING_COST,
   TREASURY_COST,
+  VICTORY_WAVES,
   WORKSHOP_COST,
   tileKindAt,
   type RoomTool,
@@ -98,6 +99,7 @@ export {
   TRAINING_COST,
   TREASURY_CAPACITY,
   TREASURY_COST,
+  VICTORY_WAVES,
   WORKSHOP_COST,
   tileKindAt,
   type PaintTool,
@@ -315,6 +317,9 @@ export function createWorld(seed: number): World {
     heartBreached: false,
     breachTicks: 0,
     defeated: false,
+    wavesCleared: 0,
+    victorious: false,
+    waveActive: false,
     repairsDone: 0,
     commandCursor: 0,
     jobs: createJobBoard(width * height),
@@ -350,6 +355,9 @@ export function hashWorld(world: World): number {
   h = mix(h, world.heartBreached ? 1 : 0);
   h = mix(h, world.breachTicks);
   h = mix(h, world.defeated ? 1 : 0);
+  h = mix(h, world.wavesCleared);
+  h = mix(h, world.victorious ? 1 : 0);
+  h = mix(h, world.waveActive ? 1 : 0);
   h = mix(h, world.repairsDone);
   h = mix(h, world.goldStock.length);
   for (let i = 0; i < world.goldStock.length; i += 1) {
@@ -848,7 +856,7 @@ function applyDrop(world: World, impId: ImpId, tileX: number, tileY: number): vo
 }
 
 function applyRepairHeart(world: World): void {
-  if (world.defeated || !world.heartBreached) {
+  if (world.defeated || world.victorious || !world.heartBreached) {
     return;
   }
   if (!spendGold(world, REPAIR_HEART_COST)) {
@@ -861,12 +869,56 @@ function applyRepairHeart(world: World): void {
 }
 
 function stepDefeat(world: World): void {
-  if (!world.heartBreached || world.defeated) {
+  if (!world.heartBreached || world.defeated || world.victorious) {
     return;
   }
   world.breachTicks += 1;
   if (world.breachTicks >= DEFEAT_TICKS) {
     world.defeated = true;
+  }
+}
+
+function stepVictory(world: World): void {
+  if (world.defeated || world.victorious) {
+    return;
+  }
+  if (world.heartBreached) {
+    world.waveActive = false;
+    return;
+  }
+  let live = 0;
+  let fightingWave = false;
+  for (let i = 0; i < world.heroes.slots.length; i += 1) {
+    const slot = world.heroes.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "live":
+        live += 1;
+        if (slot.hero.state.kind !== "leaving") {
+          fightingWave = true;
+        }
+        break;
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+  if (fightingWave) {
+    world.waveActive = true;
+    return;
+  }
+  if (live > 0 || !world.waveActive) {
+    return;
+  }
+  world.waveActive = false;
+  world.wavesCleared += 1;
+  if (world.wavesCleared >= VICTORY_WAVES) {
+    world.victorious = true;
   }
 }
 
@@ -961,6 +1013,7 @@ export function step(world: World, commands: CommandLog): void {
   stepHeroes(world);
   resolveCombat(world);
   stepDefeat(world);
+  stepVictory(world);
   syncPossession(world);
   advanceRng(world);
   world.tick = asTick(world.tick + 1);

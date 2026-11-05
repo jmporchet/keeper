@@ -17,7 +17,11 @@ function formatHeart(
   heartBreached: boolean,
   breachTicks: number,
   defeated: boolean,
+  victorious: boolean,
 ): string {
+  if (victorious) {
+    return "victory";
+  }
   if (defeated) {
     return "defeated";
   }
@@ -36,9 +40,10 @@ export function formatHud(
   heartBreached: boolean,
   breachTicks: number,
   defeated: boolean,
+  victorious: boolean,
   repairsDone: number,
 ): string {
-  return `gold ${String(gold)} · imps ${String(imps)} · tick ${String(tick)} · ${formatPay(ticksUntilPayday)} · ${formatHeart(heartHp, heartBreached, breachTicks, defeated)} · wave ${String(repairsDone + 1)}`;
+  return `gold ${String(gold)} · imps ${String(imps)} · tick ${String(tick)} · ${formatPay(ticksUntilPayday)} · ${formatHeart(heartHp, heartBreached, breachTicks, defeated, victorious)} · wave ${String(repairsDone + 1)}`;
 }
 
 export function createHud(element: HudElement | null): {
@@ -51,6 +56,7 @@ export function createHud(element: HudElement | null): {
     heartBreached: boolean,
     breachTicks: number,
     defeated: boolean,
+    victorious: boolean,
     repairsDone: number,
   ): void;
 } {
@@ -62,6 +68,7 @@ export function createHud(element: HudElement | null): {
   let prevHeartBreached: boolean | undefined;
   let prevBreachTicks: number | undefined;
   let prevDefeated: boolean | undefined;
+  let prevVictorious: boolean | undefined;
   let prevRepairsDone: number | undefined;
   return {
     update(
@@ -73,6 +80,7 @@ export function createHud(element: HudElement | null): {
       heartBreached: boolean,
       breachTicks: number,
       defeated: boolean,
+      victorious: boolean,
       repairsDone: number,
     ): void {
       if (
@@ -84,6 +92,7 @@ export function createHud(element: HudElement | null): {
         prevHeartBreached === heartBreached &&
         prevBreachTicks === breachTicks &&
         prevDefeated === defeated &&
+        prevVictorious === victorious &&
         prevRepairsDone === repairsDone
       ) {
         return;
@@ -96,6 +105,7 @@ export function createHud(element: HudElement | null): {
       prevHeartBreached = heartBreached;
       prevBreachTicks = breachTicks;
       prevDefeated = defeated;
+      prevVictorious = victorious;
       prevRepairsDone = repairsDone;
       if (element !== null) {
         element.textContent = formatHud(
@@ -107,6 +117,7 @@ export function createHud(element: HudElement | null): {
           heartBreached,
           breachTicks,
           defeated,
+          victorious,
           repairsDone,
         );
       }

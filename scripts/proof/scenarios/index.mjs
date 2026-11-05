@@ -6,6 +6,7 @@ import * as lair from "./lair.mjs";
 import * as hatchery from "./hatchery.mjs";
 import * as heroes from "./heroes.mjs";
 import * as defeat from "./defeat.mjs";
+import * as victory from "./victory.mjs";
 import * as saveReplay from "./saveReplay.mjs";
 import * as possess from "./possess.mjs";
 import * as workshop from "./workshop.mjs";
@@ -22,6 +23,7 @@ export const scenarios = [
   hatchery,
   heroes,
   defeat,
+  victory,
   saveReplay,
   possess,
   workshop,
