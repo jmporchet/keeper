@@ -7,6 +7,7 @@ import {
   ROOM_LAIR_COLOR,
   ROOM_TRAINING_COLOR,
   ROOM_TREASURY_COLOR,
+  ROOM_WORKSHOP_COLOR,
   TILE_COLOR,
   TILE_HEIGHT,
 } from "./tileLookups";
@@ -64,6 +65,8 @@ export function syncMapInstances(
         hex = ROOM_HATCHERY_COLOR;
       } else if (room === ROOM_KIND.training) {
         hex = ROOM_TRAINING_COLOR;
+      } else if (room === ROOM_KIND.workshop) {
+        hex = ROOM_WORKSHOP_COLOR;
       } else {
         hex = ROOM_FLOOR_COLOR;
       }

@@ -47,6 +47,7 @@ import {
   lairTileCount,
   hatcheryTileCount,
   trainingTileCount,
+  workshopTileCount,
   liveCreatureCount,
   liveHeroCount,
   liveChickenCount,
@@ -111,6 +112,7 @@ declare global {
       lairTileCount: number;
       hatcheryTileCount: number;
       trainingTileCount: number;
+      workshopTileCount: number;
       chickenCount: number;
       carryingCount: number;
       hudText: string;
@@ -611,6 +613,9 @@ if (proof) {
     },
     get trainingTileCount() {
       return trainingTileCount(world);
+    },
+    get workshopTileCount() {
+      return workshopTileCount(world);
     },
     get chickenCount() {
       return liveChickenCount(world.chickens);
