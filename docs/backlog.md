@@ -57,6 +57,31 @@ One feature per PR, in this order. Each item names its acceptance check. "Proof"
 | 43 | ~~**Door & trap meshes.** Give doors and gas traps distinct meshes instead of floor tints.~~ | Proof shows closed and open doors and a live and spent trap; draw calls ≤ 7. |
 | 44 | ~~**HUD/panel restyle.** Restyle the HUD and sandbox panel as a classic DK dark stone panel with HTML/CSS.~~ | Proof screenshot shows the restyled HUD and panel; all panel actions still work; no new gameplay rules. |
 
+# Backlog: milestone 3 (hold the heart)
+
+One feature per PR, in this order. Each item names its acceptance check. "Proof" means the PR proof in [guidelines.md](guidelines.md#6-pr-proof): build, tests, screenshot, gameplay video.
+
+| # | Item | Acceptance check |
+|---|------|------------------|
+| 45 | ~~**M3 brief (docs).** Add the hold-the-heart axes and constraints to `docs/design.md`.~~ | `docs/design.md` has a Milestone 3 section with the pitch, axes, constraints and out-of-scope list; no copied Bullfrog or EA assets. |
+| 46 | **Defeat condition.** The heart stays breached for `DEFEAT_TICKS`; the app enters defeat. | Tests: breach for fewer than `DEFEAT_TICKS` does not defeat, breach for `DEFEAT_TICKS` does, repair resets the timer; determinism hash covers the timer. Proof video shows the breach timer reaching defeat. |
+| 47 | **Victory condition.** Surviving `VICTORY_WAVES` hero waves wins. | Tests: the wave counter increments on cleared waves, victory fires exactly at `VICTORY_WAVES`, earlier clears do not win. Proof video shows the final wave and the victory transition. |
+| 48 | **End screen + restart.** Show defeat or victory and restart from the same seed. | Tests: restart rebuilds the seed and clears the command log, the restarted state matches a fresh run, no stale entities. Proof video shows both end screens and a restart. |
+| 49 | **Spell lightning.** Cast at a hero for gold, damage and cooldown. | Tests: cost is refused when short, cooldown blocks recast until elapsed, damage is applied once, gold is conserved. Proof video shows a cast and a cooldown. |
+| 50 | **Spell heal creature.** Heal a creature for gold and cooldown. | Tests: healing is capped at max HP, cost and cooldown are enforced, dead creatures are refused. Proof video shows a damaged creature healed. |
+| 51 | **Spell speed imps.** Speed up imps for gold and cooldown. | Tests: buff expires after its ticks, cost and cooldown are enforced, job timing reflects the boost. Proof video shows a sped-up imp. |
+| 52 | **Spell panel/casting UX.** Panel shows costs and cooldowns and supports targeting. | Tests: casts are plain commands in the replay log, panel disables unaffordable or cooling spells. Proof screenshot shows the panel and a targeted cast; draw calls ≤ 7. |
+| 53 | **Warlock kind.** Warlock arrives through the portal after library research. | Tests: research gates arrivals, warlock is picked by the seeded roll and hashed, it shares creature lifecycle rules. Proof video shows research and a warlock arriving; draw calls ≤ 7. |
+| 54 | **Troll kind.** Troll arrives through the portal after a workshop is built. | Tests: workshop gates arrivals, troll is picked by the seeded roll and hashed, it shares creature lifecycle rules. Proof video shows a troll arriving; draw calls ≤ 7. |
+| 55 | **Creature levels 2-3.** Training can raise a creature to levels two and three. | Tests: level caps at three, training time and stats scale by level, hashing covers level. Proof video shows a creature reaching level three; draw calls ≤ 7. |
+| 56 | **Blade trap.** A blade trap damages the first hero to step on it; imps and creatures ignore it. | Tests: hero HP drops once, trap becomes spent, non-heroes take no damage. Proof video shows a hero hit by a blade trap; draw calls ≤ 7. |
+| 57 | **Magic door.** A magic door blocks heroes until broken or toggled, with distinct rules from a normal door. | Tests: heroes are blocked while closed, pass when open or broken, imps and creatures pass either way. Proof video shows a magic door blocking and opening; draw calls ≤ 7. |
+| 58 | **Trap repair.** Imps repair spent traps for gold. | Tests: repair job is claimed by one imp, gold is spent, the trap returns to live, non-spent traps are refused. Proof video shows an imp repairing a spent trap; draw calls ≤ 7. |
+| 59 | **SFX dig/combat/payday.** Minimal runtime-generated SFX for dig, combat and payday. | Tests: the sound module is pure and deterministic, each event maps to one cue, no analytics or ads SDK is imported. Proof video includes audible dig, combat and payday cues. |
+| 60 | **Cave ambience.** Runtime-generated cave ambience loop. | Tests: ambience starts and stops with the app chart, no external audio asset is fetched, no analytics SDK. Proof video includes the ambience. |
+| 61 | **Pathfinding bench / flow field decision.** Bench 200 imps and choose flow field or A*. | Tests: the bench prints sim ms per tick for both approaches, the chosen pathfinder stays deterministic, the 200-imp budget passes. Proof video or script output shows the bench and the documented decision. |
+| 62 | **Sim Worker (optional).** Move the sim into a Web Worker behind a flag. | Tests: worker and main-thread sims produce the same hash for the same seed and command log, command ordering is preserved. Proof video shows the worker mode running; draw calls ≤ 7. |
+
 # Bugfix
 
 - Bugfix: room/door/trap/repair costs spend treasury gold too (HUD gold)

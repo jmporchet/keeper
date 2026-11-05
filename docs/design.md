@@ -62,6 +62,31 @@ Constraints:
 - The sim stays pure.
 - No comments and no `any`.
 
+## Milestone 3: hold the heart
+
+Pitch: turn the sandbox into a short hold-the-heart loop. Waves of heroes threaten the dungeon heart; you spend gold on spells, creatures and defenses, survive a fixed number of waves and win, or lose if the heart stays breached too long. Sound and a pathfinding budget round out the milestone.
+
+Axes:
+
+- **Game loop:** defeat if the heart stays breached for `DEFEAT_TICKS`; victory after surviving `VICTORY_WAVES` hero waves; end screen with restart from the same seed.
+- **Basic spells:** lightning, heal creature and speed imps, each with a gold cost and a cooldown.
+- **Creatures:** add the warlock kind (unlocked by library research) and the troll kind (unlocked by a workshop), and allow creature levels 2 and 3.
+- **Defense:** blade trap, magic door, and trap repair by imps.
+- **Sound:** minimal dig, combat and payday SFX plus cave ambience, generated at runtime; no analytics SDKs.
+- **Perf:** pathfinding bench at 200 imps choosing between a flow field and A*, and an optional sim Web Worker.
+
+Constraints:
+
+- drawCalls ≤ 7.
+- First-load JS ≤ 300 KB gzip.
+- The sim stays pure and deterministic.
+- No comments and no `any` in code.
+- No Bullfrog or EA assets.
+- No analytics or ads SDKs.
+- One feature per PR.
+
+Out of scope for milestone 3: enemy keeper AI, multiplayer, localization, a full spell book, and many trap kinds.
+
 ## Tech stack
 
 - **TypeScript (strict)**, built with **Vite**. tibo.dog ships as a Vite (rolldown) build with a separate `sim` chunk, so the same shape is proven for this kind of game.
