@@ -54,7 +54,7 @@ One feature per PR, in this order. Each item names its acceptance check. "Proof"
 | 40 | ~~**Imp silhouette.** Replace the cone with a low-poly DK-inspired imp silhouette.~~ | Proof shows the new imp silhouette while walking, working and held; draw calls ≤ 7. |
 | 41 | ~~**Creature silhouettes (fly, beetle, heroes).** Give fly, beetle and heroes distinct low-poly silhouettes within the existing instanced meshes.~~ | Proof shows fly, beetle and hero silhouettes; draw calls ≤ 7; possession still works. |
 | 42 | ~~**Room props pass.** Make treasury piles, lair beds and hatchery chickens readable props.~~ | Proof shows stocked treasury, occupied lair beds and hatchery chickens; shared props draw calls ≤ 7. |
-| 43 | **Door & trap meshes.** Give doors and gas traps distinct meshes instead of floor tints. | Proof shows closed and open doors and a live and spent trap; draw calls ≤ 7. |
+| 43 | ~~**Door & trap meshes.** Give doors and gas traps distinct meshes instead of floor tints.~~ | Proof shows closed and open doors and a live and spent trap; draw calls ≤ 7. |
 | 44 | ~~**HUD/panel restyle.** Restyle the HUD and sandbox panel as a classic DK dark stone panel with HTML/CSS.~~ | Proof screenshot shows the restyled HUD and panel; all panel actions still work; no new gameplay rules. |
 
 # Bugfix

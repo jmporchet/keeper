@@ -1,10 +1,14 @@
 import type { Color, InstancedMesh, Object3D } from "three";
 import {
+  isWalkableCode,
   MAP_HALF,
   ROOM_KIND,
+  TRAP_GAS_LIVE,
+  TRAP_GAS_SPENT,
   TREASURY_CAPACITY,
   type ChickenSlot,
   type CreatureSlot,
+  type TileRead,
 } from "../sim";
 
 const ROOM_FLOOR_HEIGHT = 0.2;
@@ -21,6 +25,13 @@ const TRAINING_POST_COLOR = 0x8a5a2b;
 const WORKSHOP_ANVIL_COLOR = 0x4a4e58;
 const LIBRARY_BOOK_COLOR_A = 0x7a3b2e;
 const LIBRARY_BOOK_COLOR_B = 0x355070;
+const DOOR_POST_COLOR = 0x3a2416;
+const DOOR_LINTEL_COLOR = 0x2e1c10;
+const DOOR_SLAB_COLOR = 0x8a5a2b;
+const DOOR_BAND_COLOR = 0x2c3138;
+const TRAP_PLATE_LIVE_COLOR = 0x50565e;
+const TRAP_VENT_COLOR = 0x58ff66;
+const TRAP_PLATE_SPENT_COLOR = 0x3a3d42;
 
 function placeInstance(
   mesh: InstancedMesh,
@@ -210,6 +221,219 @@ function drawChicken(
   return drawn;
 }
 
+function isWalkableNeighbour(
+  tiles: TileRead,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+): boolean {
+  if (x < 0 || y < 0 || x >= width || y >= height) {
+    return false;
+  }
+  const code = tiles[y * width + x];
+  return code !== undefined && isWalkableCode(code);
+}
+
+function drawDoor(
+  tile: number,
+  width: number,
+  open: number,
+  tiles: TileRead,
+  mesh: InstancedMesh,
+  dummy: Object3D,
+  color: Color,
+  start: number,
+): number {
+  const tileY = (tile / width) | 0;
+  const tileX = tile - tileY * width;
+  const baseX = tileX - MAP_HALF;
+  const baseZ = tileY - MAP_HALF;
+  const height = (tiles.length / width) | 0;
+  const west = isWalkableNeighbour(tiles, width, height, tileX - 1, tileY);
+  const east = isWalkableNeighbour(tiles, width, height, tileX + 1, tileY);
+  const north = isWalkableNeighbour(tiles, width, height, tileX, tileY - 1);
+  const south = isWalkableNeighbour(tiles, width, height, tileX, tileY + 1);
+  const eastWest = west && east;
+  const northSouth = north && south;
+  const ry = eastWest && !northSouth ? Math.PI / 2 : 0;
+  const cos = Math.cos(ry);
+  const sin = Math.sin(ry);
+  const postOffset = 0.36;
+  const postHeight = 0.8;
+  const postY = ROOM_FLOOR_HEIGHT + postHeight * 0.5;
+  const lintelY = ROOM_FLOOR_HEIGHT + postHeight + 0.06;
+  let drawn = placeInstance(
+    mesh,
+    dummy,
+    color,
+    start,
+    baseX + cos * postOffset,
+    postY,
+    baseZ - sin * postOffset,
+    0.12,
+    postHeight,
+    0.12,
+    ry,
+    DOOR_POST_COLOR,
+  );
+  drawn = placeInstance(
+    mesh,
+    dummy,
+    color,
+    drawn,
+    baseX - cos * postOffset,
+    postY,
+    baseZ + sin * postOffset,
+    0.12,
+    postHeight,
+    0.12,
+    ry,
+    DOOR_POST_COLOR,
+  );
+  drawn = placeInstance(
+    mesh,
+    dummy,
+    color,
+    drawn,
+    baseX,
+    lintelY,
+    baseZ,
+    postOffset * 2 + 0.12,
+    0.12,
+    0.12,
+    ry,
+    DOOR_LINTEL_COLOR,
+  );
+  if (open === 1) {
+    drawn = placeInstance(
+      mesh,
+      dummy,
+      color,
+      drawn,
+      baseX + cos * postOffset,
+      postY,
+      baseZ - sin * postOffset,
+      0.66,
+      postHeight * 0.9,
+      0.08,
+      ry + Math.PI / 2,
+      DOOR_SLAB_COLOR,
+    );
+  } else {
+    drawn = placeInstance(
+      mesh,
+      dummy,
+      color,
+      drawn,
+      baseX,
+      ROOM_FLOOR_HEIGHT + 0.36,
+      baseZ,
+      0.66,
+      0.72,
+      0.1,
+      ry,
+      DOOR_SLAB_COLOR,
+    );
+    drawn = placeInstance(
+      mesh,
+      dummy,
+      color,
+      drawn,
+      baseX,
+      ROOM_FLOOR_HEIGHT + 0.2,
+      baseZ,
+      0.66,
+      0.08,
+      0.12,
+      ry,
+      DOOR_BAND_COLOR,
+    );
+    drawn = placeInstance(
+      mesh,
+      dummy,
+      color,
+      drawn,
+      baseX,
+      ROOM_FLOOR_HEIGHT + 0.52,
+      baseZ,
+      0.66,
+      0.08,
+      0.12,
+      ry,
+      DOOR_BAND_COLOR,
+    );
+  }
+  return drawn;
+}
+
+function drawTrap(
+  tile: number,
+  width: number,
+  state: number,
+  mesh: InstancedMesh,
+  dummy: Object3D,
+  color: Color,
+  start: number,
+): number {
+  const tileY = (tile / width) | 0;
+  const tileX = tile - tileY * width;
+  const baseX = tileX - MAP_HALF;
+  const baseZ = tileY - MAP_HALF;
+  let drawn = start;
+  switch (state) {
+    case TRAP_GAS_LIVE:
+      drawn = placeInstance(
+        mesh,
+        dummy,
+        color,
+        drawn,
+        baseX,
+        ROOM_FLOOR_HEIGHT + 0.04,
+        baseZ,
+        0.72,
+        0.08,
+        0.72,
+        0,
+        TRAP_PLATE_LIVE_COLOR,
+      );
+      drawn = placeInstance(
+        mesh,
+        dummy,
+        color,
+        drawn,
+        baseX,
+        ROOM_FLOOR_HEIGHT + 0.16,
+        baseZ,
+        0.34,
+        0.16,
+        0.34,
+        0,
+        TRAP_VENT_COLOR,
+      );
+      break;
+    case TRAP_GAS_SPENT:
+      drawn = placeInstance(
+        mesh,
+        dummy,
+        color,
+        drawn,
+        baseX,
+        ROOM_FLOOR_HEIGHT + 0.03,
+        baseZ,
+        0.74,
+        0.06,
+        0.74,
+        0,
+        TRAP_PLATE_SPENT_COLOR,
+      );
+      break;
+    default:
+      break;
+  }
+  return drawn;
+}
+
 function drawRoomMarker(
   room: number,
   tile: number,
@@ -299,6 +523,10 @@ export function syncPropInstances(
   width: number,
   chickens: ChickenSlot[],
   creatures: CreatureSlot[],
+  doorHp: TileRead,
+  doorOpen: TileRead,
+  trapState: TileRead,
+  tiles: TileRead,
   mesh: InstancedMesh,
   dummy: Object3D,
   color: Color,
@@ -324,6 +552,18 @@ export function syncPropInstances(
         break;
       default:
         break;
+    }
+  }
+  for (let i = 0; i < doorHp.length; i += 1) {
+    const hp = doorHp[i];
+    if (hp !== undefined && hp > 0) {
+      const open = doorOpen[i];
+      drawn = drawDoor(i, width, open === 1 ? 1 : 0, tiles, mesh, dummy, color, drawn);
+      continue;
+    }
+    const trap = trapState[i];
+    if (trap === TRAP_GAS_LIVE || trap === TRAP_GAS_SPENT) {
+      drawn = drawTrap(i, width, trap, mesh, dummy, color, drawn);
     }
   }
   for (let i = 0; i < creatures.length; i += 1) {

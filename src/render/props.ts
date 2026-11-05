@@ -9,6 +9,8 @@ export type PropMeshes = {
   syncedTreasuryVersion: number;
   syncedChickensVersion: number;
   syncedRoomsVersion: number;
+  syncedDoorVersion: number;
+  syncedTrapVersion: number;
   syncedBedsFingerprint: number;
 };
 
@@ -67,6 +69,8 @@ export function createPropMeshes(scene: THREE.Scene): PropMeshes {
     syncedTreasuryVersion: -1,
     syncedChickensVersion: -1,
     syncedRoomsVersion: -1,
+    syncedDoorVersion: -1,
+    syncedTrapVersion: -1,
     syncedBedsFingerprint: -1,
   };
 }
@@ -77,6 +81,8 @@ export function syncProps(world: World, visual: PropMeshes): void {
     visual.syncedTreasuryVersion === world.treasuryVersion &&
     visual.syncedChickensVersion === world.chickensVersion &&
     visual.syncedRoomsVersion === world.roomsVersion &&
+    visual.syncedDoorVersion === world.doorVersion &&
+    visual.syncedTrapVersion === world.trapVersion &&
     visual.syncedBedsFingerprint === bedsFingerprint
   ) {
     return;
@@ -84,6 +90,8 @@ export function syncProps(world: World, visual: PropMeshes): void {
   visual.syncedTreasuryVersion = world.treasuryVersion;
   visual.syncedChickensVersion = world.chickensVersion;
   visual.syncedRoomsVersion = world.roomsVersion;
+  visual.syncedDoorVersion = world.doorVersion;
+  visual.syncedTrapVersion = world.trapVersion;
   visual.syncedBedsFingerprint = bedsFingerprint;
   syncPropInstances(
     world.rooms,
@@ -91,6 +99,10 @@ export function syncProps(world: World, visual: PropMeshes): void {
     world.width,
     world.chickens.slots,
     world.creatures.slots,
+    world.doorHp,
+    world.doorOpen,
+    world.trapState,
+    world.tiles,
     visual.mesh,
     visual.dummy,
     visual.color,
