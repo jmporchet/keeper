@@ -7,7 +7,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { createActor } from "xstate";
-import { appMachine, appStateName, isPaused, isReplaying, isSimStepping } from "./app/appMachine";
+import { appMachine, appStateName, isDefeated, isPaused, isReplaying, isSimStepping } from "./app/appMachine";
 import { createCameraPose, eyeFromPose } from "./camera/pose";
 import { bindCameraInput } from "./input/bindCamera";
 import { isPainting, isPossessed, paintToolEvent } from "./input/inputCameraMachine";
@@ -22,6 +22,7 @@ import {
   carryingCount,
   countTagged,
   createWorld,
+  DEFEAT_TICKS,
   doorCount,
   hashWorld,
   HEART_X,
@@ -115,6 +116,9 @@ declare global {
       heartHp: number;
       heartMaxHp: number;
       heartBreached: boolean;
+      breachTicks: number;
+      defeated: boolean;
+      defeatTicks: number;
       repairsDone: number;
       waveIndex: number;
       doorCount: number;
@@ -324,6 +328,9 @@ function loadSave(save: Save): void {
     flickerTorchLights(torchLights, world.tick * TICK_DT);
     placeCamera();
     actor.send({ type: "REPLAY_DONE" });
+    if (world.defeated) {
+      actor.send({ type: "DEFEAT" });
+    }
   } catch {
     actor.send({ type: "REPLAY_ERROR" });
   }
@@ -364,14 +371,18 @@ function syncHud(): void {
     ticksUntilPayday(world.tick),
     world.heartHp,
     world.heartBreached,
+    world.breachTicks,
+    world.defeated,
     world.repairsDone,
   );
   const snapshot = actor.getSnapshot();
   const paused = isPaused(snapshot);
-  sandboxPanel.setPaused(paused);
+  const defeated = isDefeated(snapshot);
+  sandboxPanel.setPaused(paused || defeated);
   sandboxPanel.setReplaying(isReplaying(snapshot));
   if (pauseOverlay !== null) {
-    pauseOverlay.classList.toggle("visible", paused);
+    pauseOverlay.classList.toggle("visible", paused || defeated);
+    pauseOverlay.textContent = defeated ? "Defeat" : "Pause";
   }
 }
 
@@ -620,6 +631,15 @@ if (proof) {
     },
     get heartBreached() {
       return world.heartBreached;
+    },
+    get breachTicks() {
+      return world.breachTicks;
+    },
+    get defeated() {
+      return world.defeated;
+    },
+    get defeatTicks() {
+      return DEFEAT_TICKS;
     },
     get repairsDone() {
       return world.repairsDone;
@@ -879,8 +899,15 @@ if (proof) {
         return;
       }
       for (let i = 0; i < n; i += 1) {
+        if (world.defeated) {
+          break;
+        }
         step(world, commandLog);
         cameraInput.tickHeldKeys();
+        if (world.defeated) {
+          actor.send({ type: "DEFEAT" });
+          break;
+        }
       }
       syncMap(world, map, world.tick);
       syncProps(world, props);
@@ -984,14 +1011,17 @@ if (proof) {
     accumulator += delta;
     let steps = 0;
     while (accumulator >= TICK_DT && steps < MAX_STEPS_PER_FRAME) {
-      if (!isSimStepping(actor.getSnapshot())) {
+      if (!isSimStepping(actor.getSnapshot()) || world.defeated) {
         break;
       }
       step(world, commandLog);
+      if (world.defeated) {
+        actor.send({ type: "DEFEAT" });
+      }
       accumulator -= TICK_DT;
       steps += 1;
     }
-    if (!isSimStepping(actor.getSnapshot())) {
+    if (!isSimStepping(actor.getSnapshot()) || world.defeated) {
       accumulator = 0;
     }
     cameraInput.tickHeldKeys();

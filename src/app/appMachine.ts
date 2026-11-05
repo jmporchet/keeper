@@ -8,6 +8,7 @@ export type AppEvent =
   | { type: "RETRY" }
   | { type: "PAUSE" }
   | { type: "RESUME" }
+  | { type: "DEFEAT" }
   | { type: "TAB_HIDDEN" }
   | { type: "TAB_VISIBLE" }
   | { type: "CONTEXT_LOST" }
@@ -51,6 +52,7 @@ export const appMachine = setup({
         Running: {
           on: {
             PAUSE: "Paused",
+            DEFEAT: "Defeated",
           },
         },
         Paused: {
@@ -58,6 +60,7 @@ export const appMachine = setup({
             RESUME: "Running",
           },
         },
+        Defeated: {},
         Replaying: {
           on: {
             REPLAY_DONE: "Running",
@@ -111,12 +114,19 @@ export function isReplaying(snapshot: AppSnapshot): boolean {
   return snapshot.matches({ Sandbox: "Replaying" });
 }
 
+export function isDefeated(snapshot: AppSnapshot): boolean {
+  return snapshot.matches({ Sandbox: "Defeated" });
+}
+
 export function appStateName(snapshot: AppSnapshot): string {
   if (isSimStepping(snapshot)) {
     return "running";
   }
   if (isPaused(snapshot)) {
     return "paused";
+  }
+  if (isDefeated(snapshot)) {
+    return "defeated";
   }
   if (isReplaying(snapshot)) {
     return "replaying";

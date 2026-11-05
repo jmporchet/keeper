@@ -26,6 +26,7 @@ import {
 import { stepImps } from "./imps.hot";
 import { cancelJobAtTile, createJobBoard, hashJobs, openJob, releaseWorker } from "./jobs";
 import {
+  DEFEAT_TICKS,
   DOOR_COST,
   DOOR_HP,
   HATCHERY_COST,
@@ -65,6 +66,7 @@ import { runPayday, spendGold } from "./wages";
 import { attachTiles, setTile, type World } from "./worldCore";
 
 export {
+  DEFEAT_TICKS,
   DOOR_COST,
   DOOR_DAMAGE_TICKS,
   DOOR_HP,
@@ -311,6 +313,8 @@ export function createWorld(seed: number): World {
     heartHp: HEART_HP,
     heartMaxHp: HEART_HP,
     heartBreached: false,
+    breachTicks: 0,
+    defeated: false,
     repairsDone: 0,
     commandCursor: 0,
     jobs: createJobBoard(width * height),
@@ -344,6 +348,8 @@ export function hashWorld(world: World): number {
   h = mix(h, world.heartHp);
   h = mix(h, world.heartMaxHp);
   h = mix(h, world.heartBreached ? 1 : 0);
+  h = mix(h, world.breachTicks);
+  h = mix(h, world.defeated ? 1 : 0);
   h = mix(h, world.repairsDone);
   h = mix(h, world.goldStock.length);
   for (let i = 0; i < world.goldStock.length; i += 1) {
@@ -842,7 +848,7 @@ function applyDrop(world: World, impId: ImpId, tileX: number, tileY: number): vo
 }
 
 function applyRepairHeart(world: World): void {
-  if (!world.heartBreached) {
+  if (world.defeated || !world.heartBreached) {
     return;
   }
   if (!spendGold(world, REPAIR_HEART_COST)) {
@@ -850,7 +856,18 @@ function applyRepairHeart(world: World): void {
   }
   world.heartHp = HEART_HP;
   world.heartBreached = false;
+  world.breachTicks = 0;
   world.repairsDone += 1;
+}
+
+function stepDefeat(world: World): void {
+  if (!world.heartBreached || world.defeated) {
+    return;
+  }
+  world.breachTicks += 1;
+  if (world.breachTicks >= DEFEAT_TICKS) {
+    world.defeated = true;
+  }
 }
 
 function applyCommand(world: World, command: Command): void {
@@ -943,6 +960,7 @@ export function step(world: World, commands: CommandLog): void {
   stepCreatures(world);
   stepHeroes(world);
   resolveCombat(world);
+  stepDefeat(world);
   syncPossession(world);
   advanceRng(world);
   world.tick = asTick(world.tick + 1);

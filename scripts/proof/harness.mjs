@@ -302,7 +302,7 @@ export async function createScenarioContext(browser, name) {
     },
     async screenshot(target, label) {
       const start = Date.now();
-      await page.screenshot({ path: target });
+      await page.screenshot({ path: target, timeout: 120000 });
       console.log(`screenshot ${label} ms=${String(Date.now() - start)}`);
     },
     async printFinal() {

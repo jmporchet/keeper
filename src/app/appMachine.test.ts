@@ -1,7 +1,7 @@
 import { createActor } from "xstate";
 import { describe, expect, it } from "vitest";
 import type { Save } from "../sim/save";
-import { appMachine, isPaused, isReplaying, isSimStepping } from "./appMachine";
+import { appMachine, isDefeated, isPaused, isReplaying, isSimStepping } from "./appMachine";
 
 const save: Save = { version: 1, seed: 1, tick: 0, commands: [] };
 
@@ -56,6 +56,26 @@ describe("app chart", () => {
     actor.send({ type: "RESUME" });
     expect(actor.getSnapshot().value).toEqual({ Sandbox: "Running" });
     expect(isSimStepping(actor.getSnapshot())).toBe(true);
+  });
+
+  it("enters defeated from running and stops stepping", () => {
+    const actor = startSandbox();
+    actor.send({ type: "DEFEAT" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Defeated" });
+    expect(isDefeated(actor.getSnapshot())).toBe(true);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
+    expect(isPaused(actor.getSnapshot())).toBe(false);
+  });
+
+  it("keeps defeated across tab hide and show", () => {
+    const actor = startSandbox();
+    actor.send({ type: "DEFEAT" });
+    actor.send({ type: "TAB_HIDDEN" });
+    expect(actor.getSnapshot().value).toBe("Hidden");
+    actor.send({ type: "TAB_VISIBLE" });
+    expect(actor.getSnapshot().value).toEqual({ Sandbox: "Defeated" });
+    expect(isDefeated(actor.getSnapshot())).toBe(true);
+    expect(isSimStepping(actor.getSnapshot())).toBe(false);
   });
 
   it("keeps a manual pause across tab hide and show", () => {
