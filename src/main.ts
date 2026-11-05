@@ -30,9 +30,9 @@ for (let z = 0; z < GRID; z += 1) {
   for (let x = 0; x < GRID; x += 1) {
     const lx = x - HALF;
     const lz = z - HALF;
-    const claimed = Math.abs(lx) <= 1 && Math.abs(lz) <= 1;
     const gold = lx === 1 && lz === 0;
-    const height = claimed ? 0.2 : 1;
+    const claimed = Math.abs(lx) <= 1 && Math.abs(lz) <= 1;
+    const height = gold ? 1 : claimed ? 0.2 : 1;
     const geometry = new THREE.BoxGeometry(1, height, 1);
     const color = gold ? 0xc9a227 : claimed ? 0x6a5340 : 0x2a1d14;
     const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color }));
