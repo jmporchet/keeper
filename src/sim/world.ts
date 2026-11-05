@@ -1,102 +1,37 @@
 import { asTick, asTileIndex, type Tick, type TileIndex } from "./ids";
-import { createImpBoard, hashImps, spawnStartingImps, type ImpBoard } from "./imps";
+import { createImpBoard, hashImps, spawnStartingImps } from "./imps";
 import { stepImps } from "./imps.hot";
-import { cancelJobAtTile, createJobBoard, hashJobs, openJob, type JobBoard } from "./jobs";
-import { createPathScratch, type PathScratch } from "./path";
+import { cancelJobAtTile, createJobBoard, hashJobs, openJob } from "./jobs";
+import { MAP_HEIGHT, MAP_HALF, MAP_WIDTH, TILE_KIND, tileKindAt } from "./map";
+import { createPathScratch } from "./path";
 import { advanceRng } from "./rng";
+import { attachTiles, setTile, type World } from "./worldCore";
+
+export {
+  MAP_HALF,
+  MAP_HEIGHT,
+  MAP_WIDTH,
+  TILE_KIND,
+  TILE_KIND_COUNT,
+  TILE_KINDS,
+  tileKindAt,
+  type TileKind,
+  type TileKindCode,
+  type TileRead,
+} from "./map";
+export { setTile, type World } from "./worldCore";
+export { openClaimJobsAround } from "./claims";
 
 export const TICK_HZ = 20;
 export const TICK_DT = 1 / TICK_HZ;
 export const MAX_FRAME_DELTA = 0.1;
 export const MAX_STEPS_PER_FRAME = 4;
 
-export const MAP_WIDTH = 64;
-export const MAP_HEIGHT = 64;
-export const MAP_HALF = 32;
-
-export const TILE_KINDS = [
-  "earth",
-  "goldSeam",
-  "rock",
-  "dirt",
-  "claimed",
-  "room",
-  "taggedEarth",
-  "taggedGold",
-] as const;
-
-export type TileKind = (typeof TILE_KINDS)[number];
-
-function kindCode(kind: TileKind): number {
-  const index = TILE_KINDS.indexOf(kind);
-  if (index < 0) {
-    throw new Error("unknown tile kind");
-  }
-  return index;
-}
-
-export const TILE_KIND = {
-  earth: kindCode("earth"),
-  goldSeam: kindCode("goldSeam"),
-  rock: kindCode("rock"),
-  dirt: kindCode("dirt"),
-  claimed: kindCode("claimed"),
-  room: kindCode("room"),
-  taggedEarth: kindCode("taggedEarth"),
-  taggedGold: kindCode("taggedGold"),
-} as const;
-
-export const TILE_KIND_COUNT = TILE_KINDS.length;
-
-export type TileKindCode = (typeof TILE_KIND)[TileKind];
-
-export type TileRead = {
-  readonly length: number;
-  readonly [index: number]: number;
-};
-
 export type Command =
   | { kind: "noop"; tick: Tick }
   | { kind: "addGold"; tick: Tick; amount: number }
   | { kind: "tag"; tick: Tick; tile: TileIndex }
   | { kind: "untag"; tick: Tick; tile: TileIndex };
-
-export type World = {
-  seed: number;
-  tick: Tick;
-  rng: number;
-  width: number;
-  height: number;
-  readonly tiles: TileRead;
-  tilesVersion: number;
-  goldStored: number;
-  commandCursor: number;
-  jobs: JobBoard;
-  imps: ImpBoard;
-  pathScratch: PathScratch;
-};
-
-const TILE_BUFFERS = new WeakMap<World, Uint8Array>();
-
-function tilesBuffer(world: World): Uint8Array {
-  const tiles = TILE_BUFFERS.get(world);
-  if (tiles === undefined) {
-    throw new Error("missing tiles");
-  }
-  return tiles;
-}
-
-export function tileKindAt(tiles: TileRead, index: number): TileKind {
-  const code = tiles[index];
-  if (code === undefined) {
-    throw new Error("tile index out of range");
-  }
-  const kind = TILE_KINDS[code];
-  if (kind === undefined) {
-    throw new Error("invalid tile kind");
-  }
-  return kind;
-}
 
 export function tileIndexFromWorld(x: number, z: number): TileIndex | undefined {
   const tx = Math.floor(x + MAP_HALF + 0.5);
@@ -185,24 +120,12 @@ export function createWorld(seed: number): World {
     imps,
     pathScratch: createPathScratch(),
   };
-  TILE_BUFFERS.set(world, tiles);
+  attachTiles(world, tiles);
   return world;
 }
 
 function mix(h: number, v: number): number {
   return Math.imul(h ^ (v >>> 0), 16777619) >>> 0;
-}
-
-export function setTile(world: World, index: number, code: TileKindCode): void {
-  const tiles = tilesBuffer(world);
-  if (index < 0 || index >= tiles.length) {
-    throw new Error("tile index out of range");
-  }
-  if (tiles[index] === code) {
-    return;
-  }
-  tiles[index] = code;
-  world.tilesVersion += 1;
 }
 
 export function hashWorld(world: World): number {

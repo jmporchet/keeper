@@ -1,14 +1,17 @@
+import { openClaimJobsAround } from "./claims";
 import { asImpId, asTileIndex, asWorkerId, type ImpId, type TileIndex, type WorkerId } from "./ids";
-import { completeJob, jobHeldBy, releaseWorker, reserveOpenJob } from "./jobs";
+import { betterJob, completeJob, jobForFilledSlot, jobHeldBy, reserveJob, type Job } from "./jobs";
+import { MAP_WIDTH, TILE_KIND, type TileRead } from "./map";
 import { bumpPathGen, isWalkableCode, PATH_CELL_COUNT, type PathScratch } from "./path";
 import { bfsToGoal, floodWalkable, reconstructPath } from "./path.hot";
 import { advanceRng } from "./rng";
-import { MAP_WIDTH, setTile, TILE_KIND, type TileRead, type World } from "./world";
+import { setTile, type World } from "./worldCore";
 
 export const IMP_CAPACITY = 200;
 export const STARTING_IMP_COUNT = 4;
 export const STEPS_PER_TILE = 6;
 export const DIG_TICKS = 40;
+export const CLAIM_TICKS = 30;
 
 export type ImpIdle = { kind: "idle" };
 export type ImpWandering = {
@@ -24,9 +27,11 @@ export type ImpWalking = {
   pathLength: number;
   progress: number;
 };
+export type WorkKind = "dig" | "claim";
 export type ImpWorking = {
   kind: "working";
   tile: TileIndex;
+  work: WorkKind;
   remaining: number;
 };
 export type ImpState = ImpIdle | ImpWandering | ImpWalking | ImpWorking;
@@ -68,7 +73,12 @@ export function createImp(index: number, tileX: number, tileY: number): Imp {
     pathLength: 0,
     progress: 0,
   };
-  const working: ImpWorking = { kind: "working", tile: asTileIndex(tileY * MAP_WIDTH + tileX), remaining: 0 };
+  const working: ImpWorking = {
+    kind: "working",
+    tile: asTileIndex(tileY * MAP_WIDTH + tileX),
+    work: "dig",
+    remaining: 0,
+  };
   return {
     id: asImpId(index),
     tileX,
@@ -181,53 +191,129 @@ export function beginWander(world: ImpWorld, imp: Imp): void {
   setHeading(imp, world.width);
 }
 
-function pathToJobNeighbour(world: ImpWorld, imp: Imp, jobTile: TileIndex): number {
-  const width = world.width;
-  const start = tileIndex(imp.tileX, imp.tileY, width);
-  const jobY = (jobTile / width) | 0;
-  const jobX = jobTile - jobY * width;
-  let length = tryNeighbour(world, imp, start, jobX, jobY - 1);
-  if (length > 0) {
-    return length;
-  }
-  length = tryNeighbour(world, imp, start, jobX + 1, jobY);
-  if (length > 0) {
-    return length;
-  }
-  length = tryNeighbour(world, imp, start, jobX, jobY + 1);
-  if (length > 0) {
-    return length;
-  }
-  return tryNeighbour(world, imp, start, jobX - 1, jobY);
+function isReached(world: ImpWorld, index: number, gen: number): boolean {
+  const reached = world.pathScratch.generation[index];
+  return reached !== undefined && reached === gen;
 }
 
-function tryNeighbour(world: ImpWorld, imp: Imp, start: number, x: number, y: number): number {
+function neighbourTarget(world: ImpWorld, x: number, y: number, gen: number): number | undefined {
   if (x < 0 || y < 0 || x >= world.width || y >= world.height) {
-    return 0;
+    return undefined;
   }
   const n = tileIndex(x, y, world.width);
-  const code = world.tiles[n];
-  if (code === undefined || !isWalkableCode(code)) {
-    return 0;
+  if (!isReached(world, n, gen)) {
+    return undefined;
   }
-  return findPath(world.tiles, world.width, world.height, start, n, world.pathScratch, imp.path);
+  return n;
+}
+
+function digTarget(world: ImpWorld, jobTile: TileIndex, gen: number): number | undefined {
+  const width = world.width;
+  const y = (jobTile / width) | 0;
+  const x = jobTile - y * width;
+  const north = neighbourTarget(world, x, y - 1, gen);
+  if (north !== undefined) {
+    return north;
+  }
+  const east = neighbourTarget(world, x + 1, y, gen);
+  if (east !== undefined) {
+    return east;
+  }
+  const south = neighbourTarget(world, x, y + 1, gen);
+  if (south !== undefined) {
+    return south;
+  }
+  return neighbourTarget(world, x - 1, y, gen);
+}
+
+function targetForJob(world: ImpWorld, job: Job, gen: number): number | undefined {
+  switch (job.jobKind) {
+    case "dig":
+      return digTarget(world, job.tile, gen);
+    case "claim":
+      return isReached(world, job.tile, gen) ? job.tile : undefined;
+    case "mineGold":
+    case "carryGold":
+    case "reinforce":
+      return undefined;
+    default: {
+      const never: never = job.jobKind;
+      return never;
+    }
+  }
+}
+
+function bestReachableJob(world: ImpWorld, imp: Imp): Job | undefined {
+  const start = tileIndex(imp.tileX, imp.tileY, world.width);
+  const gen = bumpPathGen(world.pathScratch);
+  const count = floodWalkable(
+    world.tiles,
+    world.width,
+    world.height,
+    start,
+    world.pathScratch.queue,
+    world.pathScratch.generation,
+    gen,
+    world.pathScratch.cameFrom,
+    world.pathScratch.reachable,
+  );
+  if (count === 0) {
+    return undefined;
+  }
+  let best: Job | undefined;
+  const board = world.jobs;
+  for (let i = 0; i < board.filledCount; i += 1) {
+    const job = jobForFilledSlot(board, i);
+    if (job === undefined) {
+      continue;
+    }
+    switch (job.lifecycle.kind) {
+      case "open":
+        if (targetForJob(world, job, gen) !== undefined && (best === undefined || betterJob(best, job))) {
+          best = job;
+        }
+        break;
+      case "reserved":
+        break;
+      default: {
+        const never: never = job.lifecycle;
+        return never;
+      }
+    }
+  }
+  return best;
+}
+
+export function reserveBestReachableJob(world: ImpWorld, imp: Imp): Job | undefined {
+  const job = bestReachableJob(world, imp);
+  if (job === undefined) {
+    return undefined;
+  }
+  const gen = world.pathScratch.gen;
+  const target = targetForJob(world, job, gen);
+  if (target === undefined) {
+    return undefined;
+  }
+  const start = tileIndex(imp.tileX, imp.tileY, world.width);
+  const length = findPath(world.tiles, world.width, world.height, start, target, world.pathScratch, imp.path);
+  if (length <= 0) {
+    return undefined;
+  }
+  if (!reserveJob(world.jobs, workerOf(imp), job)) {
+    return undefined;
+  }
+  imp.walking.tile = job.tile;
+  imp.walking.pathStep = 0;
+  imp.walking.pathLength = length;
+  imp.walking.progress = 0;
+  imp.state = imp.walking;
+  setHeading(imp, world.width);
+  return job;
 }
 
 export function beginIdle(world: ImpWorld, imp: Imp): void {
-  const worker = workerOf(imp);
-  const job = reserveOpenJob(world.jobs, worker, "dig", world.tiles, world.width);
-  if (job !== undefined) {
-    const length = pathToJobNeighbour(world, imp, job.tile);
-    if (length > 0) {
-      imp.walking.tile = job.tile;
-      imp.walking.pathStep = 0;
-      imp.walking.pathLength = length;
-      imp.walking.progress = 0;
-      imp.state = imp.walking;
-      setHeading(imp, world.width);
-      return;
-    }
-    releaseWorker(world.jobs, worker);
+  if (reserveBestReachableJob(world, imp) !== undefined) {
+    return;
   }
   beginWander(world, imp);
 }
@@ -240,9 +326,32 @@ export function jobHeldOnTile(world: ImpWorld, imp: Imp, tile: TileIndex): boole
   return job.tile === tile;
 }
 
-export function beginWorking(imp: Imp, tile: TileIndex): void {
+export function beginWorking(world: ImpWorld, imp: Imp, tile: TileIndex): void {
+  const job = jobHeldBy(world.jobs, workerOf(imp));
+  if (job === undefined) {
+    goIdle(imp);
+    return;
+  }
+  switch (job.jobKind) {
+    case "dig":
+      imp.working.work = "dig";
+      imp.working.remaining = DIG_TICKS;
+      break;
+    case "claim":
+      imp.working.work = "claim";
+      imp.working.remaining = CLAIM_TICKS;
+      break;
+    case "mineGold":
+    case "carryGold":
+    case "reinforce":
+      goIdle(imp);
+      return;
+    default: {
+      const never: never = job.jobKind;
+      return never;
+    }
+  }
   imp.working.tile = tile;
-  imp.working.remaining = DIG_TICKS;
   imp.headingX = 0;
   imp.headingY = 0;
   imp.state = imp.working;
@@ -257,6 +366,14 @@ export function goIdle(imp: Imp): void {
 export function finishDig(world: ImpWorld, imp: Imp, tile: TileIndex): void {
   setTile(world, tile, TILE_KIND.dirt);
   completeJob(world.jobs, workerOf(imp));
+  openClaimJobsAround(world, tile);
+  goIdle(imp);
+}
+
+export function finishClaim(world: ImpWorld, imp: Imp, tile: TileIndex): void {
+  setTile(world, tile, TILE_KIND.claimed);
+  completeJob(world.jobs, workerOf(imp));
+  openClaimJobsAround(world, tile);
   goIdle(imp);
 }
 
@@ -365,6 +482,19 @@ function impStateCode(kind: ImpState["kind"]): number {
   }
 }
 
+function workCode(work: WorkKind): number {
+  switch (work) {
+    case "dig":
+      return 1;
+    case "claim":
+      return 2;
+    default: {
+      const never: never = work;
+      return never;
+    }
+  }
+}
+
 export function hashImps(board: ImpBoard): number {
   let h = 2166136261;
   h = mix(h, board.slots.length);
@@ -403,6 +533,7 @@ export function hashImps(board: ImpBoard): number {
             break;
           case "working":
             h = mix(h, moving.tile);
+            h = mix(h, workCode(moving.work));
             h = mix(h, moving.remaining);
             break;
           default: {

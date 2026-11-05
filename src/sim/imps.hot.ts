@@ -3,6 +3,7 @@ import {
   beginWorking,
   captureCurr,
   capturePrev,
+  finishClaim,
   finishDig,
   goIdle,
   jobHeldOnTile,
@@ -51,7 +52,7 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
         break;
       }
       if (advanceAlongPath(imp, state, world.width)) {
-        beginWorking(imp, state.tile);
+        beginWorking(world, imp, state.tile);
       }
       break;
     case "working":
@@ -61,7 +62,18 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
       }
       state.remaining -= 1;
       if (state.remaining <= 0) {
-        finishDig(world, imp, state.tile);
+        switch (state.work) {
+          case "dig":
+            finishDig(world, imp, state.tile);
+            break;
+          case "claim":
+            finishClaim(world, imp, state.tile);
+            break;
+          default: {
+            const never: never = state.work;
+            throw never;
+          }
+        }
       }
       break;
     default: {

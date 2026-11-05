@@ -1,5 +1,5 @@
 import { isWalkableCode } from "./path";
-import type { TileRead } from "./world";
+import type { TileRead } from "./map";
 
 export function bfsToGoal(
   tiles: TileRead,

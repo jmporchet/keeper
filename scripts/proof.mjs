@@ -187,6 +187,7 @@ async function run() {
       await page.mouse.move(cx, cy);
 
       const dirtAtStart = await page.evaluate(() => globalThis.__keeper.dirtCount);
+      const claimedAtStart = await page.evaluate(() => globalThis.__keeper.claimedCount);
 
       const sweepXs = [25, 26, 27, 28, 29];
       const sweepPts = [];
@@ -230,9 +231,9 @@ async function run() {
       }
 
       await page.keyboard.up("KeyA");
-      await panToTileCenter(page, box, 28, 32);
+      await panToTileCenter(page, box, 28.5, 32);
       await page.mouse.move(cx, cy);
-      for (let i = 0; i < 4; i += 1) {
+      for (let i = 0; i < 6; i += 1) {
         await page.mouse.wheel(0, -240);
         await stepOnce(page, 2);
       }
@@ -269,17 +270,23 @@ async function run() {
       }
 
       let extraTicks = 0;
-      let dirtNow = await page.evaluate(() => globalThis.__keeper.dirtCount);
-      while (dirtNow < dirtAtStart + 5 && extraTicks < 1500) {
-        await stepOnce(page, 5, 50);
-        extraTicks += 5;
-        dirtNow = await page.evaluate(() => globalThis.__keeper.dirtCount);
-      }
-      if (dirtNow < dirtAtStart + 5) {
-        throw new Error(`corridor not fully dug after ${String(extraTicks)} extra ticks: dirtCount ${String(dirtNow)}`);
-      }
-      while (Date.now() - recordStart < 12000) {
+      for (;;) {
+        const counts = await page.evaluate(() => ({
+          tagged: globalThis.__keeper.taggedCount,
+          claimed: globalThis.__keeper.claimedCount,
+        }));
+        const elapsed = Date.now() - recordStart;
+        if (counts.tagged === 0 && counts.claimed === claimedAtStart + 5 && elapsed >= 12000) {
+          break;
+        }
+        if (extraTicks >= 3000) {
+          const dirtNow = await page.evaluate(() => globalThis.__keeper.dirtCount);
+          throw new Error(
+            `claim proof not complete after ${String(extraTicks)} extra ticks: tagged ${String(counts.tagged)}, claimed ${String(counts.claimed)} (start ${String(claimedAtStart)}), dirt ${String(dirtNow)}, elapsed ${String(elapsed)} ms`,
+          );
+        }
         await stepOnce(page, 3, 50);
+        extraTicks += 3;
       }
 
       const result = await page.evaluate(() => ({
@@ -287,6 +294,7 @@ async function run() {
         hash: globalThis.__keeper.hash,
         taggedCount: globalThis.__keeper.taggedCount,
         dirtCount: globalThis.__keeper.dirtCount,
+        claimedCount: globalThis.__keeper.claimedCount,
         drawCalls: globalThis.__keeper.drawCalls,
         camera: globalThis.__keeper.camera,
       }));
@@ -299,8 +307,19 @@ async function run() {
       if (result.taggedCount !== 0) {
         throw new Error(`tagged count ended at ${String(result.taggedCount)}`);
       }
-      if (result.dirtCount !== dirtAtStart + 5) {
-        throw new Error(`dirt count ended at ${String(result.dirtCount)}`);
+      if (result.claimedCount !== claimedAtStart + 5) {
+        throw new Error(
+          `claimed count ended at ${String(result.claimedCount)} instead of ${String(claimedAtStart + 5)}`,
+        );
+      }
+      if (result.dirtCount !== dirtAtStart) {
+        throw new Error(`dirt count ended at ${String(result.dirtCount)} instead of ${String(dirtAtStart)}`);
+      }
+      for (let x = 25; x <= 30; x += 1) {
+        const point = await pagePointForTile(page, box, x, 32);
+        if (point === null) {
+          throw new Error(`corridor tile ${String(x)},32 is off screen at the end`);
+        }
       }
       console.log(
         beforePause,
@@ -310,6 +329,7 @@ async function run() {
         result.drawCalls,
         result.taggedCount,
         result.dirtCount,
+        result.claimedCount,
         result.camera.targetX,
         result.camera.targetZ,
         result.camera.distance,
@@ -327,7 +347,7 @@ async function run() {
       if (!(duration >= 10 && duration <= 20)) {
         throw new Error(`play.mp4 duration ${String(duration)} s is outside 10-20 s`);
       }
-      console.log("play.mp4 duration", duration);
+      console.log("play.mp4 duration", duration, "dirtCount", result.dirtCount, "claimedCount", result.claimedCount);
     } finally {
       await browser.close();
     }

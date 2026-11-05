@@ -34,6 +34,7 @@ declare global {
       hash: number;
       taggedCount: number;
       dirtCount: number;
+      claimedCount: number;
       drawCalls: number;
       camera: { targetX: number; targetZ: number; yaw: number; pitch: number; distance: number };
       canvasPointForTile(tx: number, ty: number): { x: number; y: number } | null;
@@ -219,6 +220,15 @@ if (proof) {
       let n = 0;
       for (let i = 0; i < world.tiles.length; i += 1) {
         if (tileKindAt(world.tiles, i) === "dirt") {
+          n += 1;
+        }
+      }
+      return n;
+    },
+    get claimedCount() {
+      let n = 0;
+      for (let i = 0; i < world.tiles.length; i += 1) {
+        if (tileKindAt(world.tiles, i) === "claimed") {
           n += 1;
         }
       }
