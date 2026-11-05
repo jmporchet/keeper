@@ -254,6 +254,11 @@ async function run() {
       const beforePause = await page.evaluate(() => globalThis.__keeper.tick);
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible");
+      const spawnDisabled = await page.locator("#spawn-imp").isDisabled();
+      const goldDisabled = await page.locator("#add-gold").isDisabled();
+      if (!spawnDisabled || !goldDisabled) {
+        throw new Error(`panel buttons not disabled while paused: spawn ${String(spawnDisabled)}, gold ${String(goldDisabled)}`);
+      }
       for (let i = 0; i < 8; i += 1) {
         await stepOnce(page);
       }
@@ -263,6 +268,11 @@ async function run() {
       }
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible", { state: "hidden" });
+      const spawnEnabled = await page.locator("#spawn-imp").isEnabled();
+      const goldEnabled = await page.locator("#add-gold").isEnabled();
+      if (!spawnEnabled || !goldEnabled) {
+        throw new Error(`panel buttons not re-enabled after resume: spawn ${String(spawnEnabled)}, gold ${String(goldEnabled)}`);
+      }
       for (let i = 0; i < 8; i += 1) {
         await stepOnce(page);
       }
@@ -282,7 +292,7 @@ async function run() {
           carryingSeen = true;
         }
         const elapsed = Date.now() - recordStart;
-        if (counts.goldStored >= 40 && carryingSeen && elapsed >= 12000) {
+        if (counts.goldStored >= 40 && carryingSeen && elapsed >= 9000) {
           break;
         }
         if (extraTicks >= 4000) {
@@ -290,8 +300,54 @@ async function run() {
             `gold proof not complete after ${String(extraTicks)} extra ticks: goldStored ${String(counts.goldStored)}, maxCarrying ${String(maxCarrying)}, elapsed ${String(elapsed)} ms`,
           );
         }
-        await stepOnce(page, 2, 30);
-        extraTicks += 2;
+        await stepOnce(page, 3, 30);
+        extraTicks += 3;
+      }
+
+      const beforePanel = await page.evaluate(() => ({
+        impCount: globalThis.__keeper.impCount,
+        goldStored: globalThis.__keeper.goldStored,
+        taggedCount: globalThis.__keeper.taggedCount,
+        hudText: globalThis.__keeper.hudText,
+        camera: globalThis.__keeper.camera,
+      }));
+      await page.click("#spawn-imp");
+      await page.click("#spawn-imp");
+      await page.click("#add-gold");
+      await stepOnce(page, 2);
+      const afterPanel = await page.evaluate(() => ({
+        impCount: globalThis.__keeper.impCount,
+        goldStored: globalThis.__keeper.goldStored,
+        taggedCount: globalThis.__keeper.taggedCount,
+        hudText: globalThis.__keeper.hudText,
+        camera: globalThis.__keeper.camera,
+      }));
+      if (afterPanel.impCount !== beforePanel.impCount + 2) {
+        throw new Error(`panel spawn changed imp count ${String(beforePanel.impCount)} -> ${String(afterPanel.impCount)}`);
+      }
+      if (afterPanel.goldStored < beforePanel.goldStored + 100) {
+        throw new Error(`panel gold changed ${String(beforePanel.goldStored)} -> ${String(afterPanel.goldStored)}`);
+      }
+      if (afterPanel.taggedCount !== beforePanel.taggedCount) {
+        throw new Error(`panel click reached canvas: tagged ${String(beforePanel.taggedCount)} -> ${String(afterPanel.taggedCount)}`);
+      }
+      if (
+        afterPanel.camera.targetX !== beforePanel.camera.targetX ||
+        afterPanel.camera.targetZ !== beforePanel.camera.targetZ ||
+        afterPanel.camera.yaw !== beforePanel.camera.yaw ||
+        afterPanel.camera.pitch !== beforePanel.camera.pitch ||
+        afterPanel.camera.distance !== beforePanel.camera.distance
+      ) {
+        throw new Error("panel click moved the camera");
+      }
+      if (
+        !afterPanel.hudText.includes(`gold ${String(afterPanel.goldStored)}`) ||
+        !afterPanel.hudText.includes(`imps ${String(afterPanel.impCount)}`)
+      ) {
+        throw new Error(`hud did not show new values: ${afterPanel.hudText}`);
+      }
+      for (let i = 0; i < 40; i += 1) {
+        await stepOnce(page, 1, 20);
       }
 
       const result = await page.evaluate(() => ({
@@ -301,7 +357,9 @@ async function run() {
         dirtCount: globalThis.__keeper.dirtCount,
         claimedCount: globalThis.__keeper.claimedCount,
         goldStored: globalThis.__keeper.goldStored,
+        impCount: globalThis.__keeper.impCount,
         carryingCount: globalThis.__keeper.carryingCount,
+        hudText: globalThis.__keeper.hudText,
         drawCalls: globalThis.__keeper.drawCalls,
         camera: globalThis.__keeper.camera,
       }));
@@ -334,6 +392,9 @@ async function run() {
         result.camera.targetX,
         result.camera.targetZ,
         result.camera.distance,
+        result.impCount,
+        result.goldStored,
+        result.hudText,
       );
       await page.screenshot({ path: "proof/shot.png" });
       await context.close();

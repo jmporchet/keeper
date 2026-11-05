@@ -135,6 +135,27 @@ export function createImpBoard(): ImpBoard {
   return { slots };
 }
 
+export function spawnImp(board: ImpBoard, tileX: number, tileY: number): boolean {
+  for (let i = 0; i < board.slots.length; i += 1) {
+    const slot = board.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        board.slots[i] = { kind: "live", imp: createImp(i, tileX, tileY) };
+        return true;
+      case "live":
+        break;
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+  return false;
+}
+
 export function spawnStartingImps(board: ImpBoard): void {
   for (let i = 0; i < STARTING_IMP_COUNT; i += 1) {
     const sx = SPAWN_X[i];

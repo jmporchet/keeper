@@ -18,6 +18,7 @@ import {
   countTagged,
   createWorld,
   hashWorld,
+  liveImpCount,
   MAP_HALF,
   MAP_WIDTH,
   MAX_FRAME_DELTA,
@@ -27,6 +28,8 @@ import {
   tileKindAt,
   type Command,
 } from "./sim";
+import { createHud } from "./ui/hud";
+import { createSandboxPanel } from "./ui/sandboxPanel";
 
 declare global {
   interface Window {
@@ -37,7 +40,9 @@ declare global {
       dirtCount: number;
       claimedCount: number;
       goldStored: number;
+      impCount: number;
       carryingCount: number;
+      hudText: string;
       drawCalls: number;
       camera: { targetX: number; targetZ: number; yaw: number; pitch: number; distance: number };
       canvasPointForTile(tx: number, ty: number): { x: number; y: number } | null;
@@ -69,6 +74,15 @@ const pose = createCameraPose();
 
 const world = createWorld(1);
 const commands: Command[] = [];
+const hudElement = document.getElementById("hud");
+const hud = createHud(hudElement);
+const sandboxPanel = createSandboxPanel(
+  document.getElementById("sandbox-panel"),
+  () => world.tick,
+  (command) => {
+    commands.push(command);
+  },
+);
 const map = createMapMeshes(scene);
 const impsVisual = createImpMeshes(scene);
 syncMap(world.tiles, world.width, world.tilesVersion, map);
@@ -76,15 +90,18 @@ syncImps(world.imps, 1, impsVisual);
 addTorchLighting(scene);
 const screenPoint = new Vector3();
 
-const tickHud = document.getElementById("tick");
 const pauseOverlay = document.getElementById("pause-overlay");
 
+function hudText(): string {
+  return hudElement === null ? "" : hudElement.textContent ?? "";
+}
+
 function syncHud(): void {
-  if (tickHud !== null) {
-    tickHud.textContent = `tick ${String(world.tick)} · gold ${String(world.goldStored)}`;
-  }
+  hud.update(world.goldStored, liveImpCount(world.imps), world.tick);
+  const paused = isPaused(actor.getSnapshot());
+  sandboxPanel.setPaused(paused);
   if (pauseOverlay !== null) {
-    pauseOverlay.classList.toggle("visible", isPaused(actor.getSnapshot()));
+    pauseOverlay.classList.toggle("visible", paused);
   }
 }
 
@@ -240,8 +257,14 @@ if (proof) {
     get goldStored() {
       return world.goldStored;
     },
+    get impCount() {
+      return liveImpCount(world.imps);
+    },
     get carryingCount() {
       return carryingCount(world.imps);
+    },
+    get hudText() {
+      return hudText();
     },
     canvasPointForTile,
     step(n: number) {

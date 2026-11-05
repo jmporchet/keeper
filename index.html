@@ -13,13 +13,35 @@
         background: #000;
         font-family: sans-serif;
       }
-      #tick {
+      #hud {
         position: fixed;
         top: 12px;
         left: 12px;
         color: #f4e6c4;
         font-size: 18px;
         pointer-events: none;
+      }
+      #sandbox-panel {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        z-index: 10;
+      }
+      #sandbox-panel button {
+        font: inherit;
+        color: #f4e6c4;
+        background: #3a2f26;
+        border: 1px solid #6b5a45;
+        border-radius: 4px;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      #sandbox-panel button:disabled {
+        opacity: 0.45;
+        cursor: default;
       }
       #pause-overlay {
         display: none;
@@ -38,7 +60,11 @@
     </style>
   </head>
   <body>
-    <div id="tick">tick 0</div>
+    <div id="hud">gold 0 · imps 4 · tick 0</div>
+    <div id="sandbox-panel">
+      <button id="spawn-imp" type="button">Spawn imp</button>
+      <button id="add-gold" type="button">Add 100 gold</button>
+    </div>
     <div id="pause-overlay">Pause</div>
     <script type="module" src="/src/main.ts"></script>
   </body>

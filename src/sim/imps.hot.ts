@@ -45,7 +45,7 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
       break;
     case "wandering":
       if (advanceAlongPath(imp, state, world.width)) {
-        goIdle(imp);
+        beginIdle(world, imp);
       }
       break;
     case "walking":
