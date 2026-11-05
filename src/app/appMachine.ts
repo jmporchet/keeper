@@ -8,6 +8,8 @@ export type AppEvent =
   | { type: "RETRY" }
   | { type: "PAUSE" }
   | { type: "RESUME" }
+  | { type: "TAB_HIDDEN" }
+  | { type: "TAB_VISIBLE" }
   | { type: "CONTEXT_LOST" }
   | { type: "CONTEXT_RESTORED" }
   | { type: "LOAD_SAVE"; save: Save }
@@ -41,7 +43,8 @@ export const appMachine = setup({
     Sandbox: {
       initial: "Running",
       on: {
-        CONTEXT_LOST: "ContextLost",
+        TAB_HIDDEN: "#app.Hidden",
+        CONTEXT_LOST: "#app.ContextLost.Visible",
         LOAD_SAVE: ".Replaying",
       },
       states: {
@@ -61,11 +64,34 @@ export const appMachine = setup({
             REPLAY_ERROR: "Paused",
           },
         },
+        Last: {
+          type: "history",
+          history: "deep",
+        },
+      },
+    },
+    Hidden: {
+      on: {
+        TAB_VISIBLE: "#app.Sandbox.Last",
+        TAB_HIDDEN: "Hidden",
+        CONTEXT_LOST: "#app.ContextLost.Hidden",
       },
     },
     ContextLost: {
-      on: {
-        CONTEXT_RESTORED: "Sandbox",
+      initial: "Visible",
+      states: {
+        Visible: {
+          on: {
+            TAB_HIDDEN: "Hidden",
+            CONTEXT_RESTORED: "#app.Sandbox.Last",
+          },
+        },
+        Hidden: {
+          on: {
+            TAB_VISIBLE: "Visible",
+            CONTEXT_RESTORED: "#app.Hidden",
+          },
+        },
       },
     },
   },
@@ -83,4 +109,35 @@ export function isPaused(snapshot: AppSnapshot): boolean {
 
 export function isReplaying(snapshot: AppSnapshot): boolean {
   return snapshot.matches({ Sandbox: "Replaying" });
+}
+
+export function appStateName(snapshot: AppSnapshot): string {
+  if (isSimStepping(snapshot)) {
+    return "running";
+  }
+  if (isPaused(snapshot)) {
+    return "paused";
+  }
+  if (isReplaying(snapshot)) {
+    return "replaying";
+  }
+  if (snapshot.matches("Hidden")) {
+    return "hidden";
+  }
+  if (snapshot.matches({ ContextLost: "Visible" })) {
+    return "contextLost";
+  }
+  if (snapshot.matches({ ContextLost: "Hidden" })) {
+    return "contextLostHidden";
+  }
+  if (snapshot.matches("Booting")) {
+    return "booting";
+  }
+  if (snapshot.matches("Loading")) {
+    return "loading";
+  }
+  if (snapshot.matches("Failed")) {
+    return "failed";
+  }
+  return "unknown";
 }

@@ -150,6 +150,51 @@ async function pagePointForTile(page, box, tx, ty) {
   return { x: box.x + local.x, y: box.y + local.y };
 }
 
+async function setVisibility(page, hidden) {
+  await page.evaluate((isHidden) => {
+    Object.defineProperty(globalThis.document, "hidden", { configurable: true, get: () => isHidden });
+    Object.defineProperty(globalThis.document, "visibilityState", {
+      configurable: true,
+      get: () => (isHidden ? "hidden" : "visible"),
+    });
+    globalThis.document.dispatchEvent(new globalThis.Event("visibilitychange"));
+  }, hidden);
+}
+
+async function findTaggableRow(page, box, length) {
+  for (let y = 28; y <= 34; y += 1) {
+    for (let x = 27; x + length - 1 <= 37; x += 1) {
+      const kinds = await page.evaluate(
+        ({ rowX, rowY, count }) => {
+          const result = [];
+          for (let i = 0; i < count; i += 1) {
+            result.push(globalThis.__keeper.tileKind(rowX + i, rowY));
+          }
+          return result;
+        },
+        { rowX: x, rowY: y, count: length },
+      );
+      if (!kinds.every((kind) => kind === "earth" || kind === "goldSeam")) {
+        continue;
+      }
+      const points = [];
+      let onScreen = true;
+      for (let i = 0; i < length; i += 1) {
+        const point = await pagePointForTile(page, box, x + i, y);
+        if (point === null) {
+          onScreen = false;
+          break;
+        }
+        points.push(point);
+      }
+      if (onScreen) {
+        return { x, y, points };
+      }
+    }
+  }
+  throw new Error(`no taggable on-screen row of ${String(length)} tiles found`);
+}
+
 async function findHandTarget(page) {
   for (let i = 0; i < 200; i += 1) {
     const imps = await page.evaluate(() => globalThis.__keeper.impSnapshot());
@@ -269,6 +314,47 @@ async function run() {
       if (taggedAfterSweep !== 5) {
         throw new Error(`expected 5 tagged tiles after earth sweep, got ${String(taggedAfterSweep)}`);
       }
+      const fastLength = 5;
+      const fastRow = await findTaggableRow(page, box, fastLength);
+      const fastStart = fastRow.points[0];
+      const fastEnd = fastRow.points[fastRow.points.length - 1];
+      if (fastStart === undefined || fastEnd === undefined) {
+        throw new Error("fast drag row has no endpoints");
+      }
+      await page.mouse.move(fastStart.x, fastStart.y);
+      await page.mouse.down();
+      await page.mouse.move(fastEnd.x, fastEnd.y, { steps: 1 });
+      await page.mouse.up();
+      await stepOnce(page);
+      const taggedAfterFastDrag = await page.evaluate(() => globalThis.__keeper.taggedCount);
+      if (taggedAfterFastDrag !== taggedAfterSweep + fastLength) {
+        throw new Error(
+          `fast drag tagged ${String(taggedAfterFastDrag - taggedAfterSweep)} tiles, expected ${String(fastLength)}`,
+        );
+      }
+      for (let i = 0; i < fastLength; i += 1) {
+        const kind = await page.evaluate(
+          ({ x, y }) => globalThis.__keeper.tileKind(x, y),
+          { x: fastRow.x + i, y: fastRow.y },
+        );
+        if (kind !== "taggedEarth" && kind !== "taggedGold") {
+          throw new Error(`fast drag left a gap at ${String(fastRow.x + i)},${String(fastRow.y)} (${String(kind)})`);
+        }
+      }
+      await page.mouse.move(fastEnd.x, fastEnd.y);
+      await page.mouse.down();
+      await page.mouse.move(fastStart.x, fastStart.y, { steps: 1 });
+      await page.mouse.up();
+      await stepOnce(page);
+      const taggedAfterFastUntag = await page.evaluate(() => globalThis.__keeper.taggedCount);
+      if (taggedAfterFastUntag !== taggedAfterSweep) {
+        throw new Error(
+          `fast untag left ${String(taggedAfterFastUntag)} tagged tiles, expected ${String(taggedAfterSweep)}`,
+        );
+      }
+      console.log(
+        `fast drag row y=${String(fastRow.y)} x=${String(fastRow.x)}..${String(fastRow.x + fastLength - 1)} tagged=${String(fastLength)} contiguous`,
+      );
       await panToTileCenter(page, box, 35, 32);
       await page.mouse.move(cx, cy);
       for (let i = 0; i < 4; i += 1) {
@@ -642,6 +728,45 @@ async function run() {
       if (duringPause !== beforePause) {
         throw new Error(`tick advanced while paused: ${String(beforePause)} -> ${String(duringPause)}`);
       }
+      await setVisibility(page, true);
+      await stepOnce(page);
+      const hiddenWhilePaused = await page.evaluate(() => ({
+        tick: globalThis.__keeper.tick,
+        appState: globalThis.__keeper.appState,
+      }));
+      if (hiddenWhilePaused.tick !== duringPause) {
+        throw new Error(`tick advanced while hidden and paused: ${String(duringPause)} -> ${String(hiddenWhilePaused.tick)}`);
+      }
+      if (hiddenWhilePaused.appState !== "hidden") {
+        throw new Error(`app state while hidden and paused was ${hiddenWhilePaused.appState}`);
+      }
+      await setVisibility(page, false);
+      await page.waitForSelector("#pause-overlay.visible");
+      const spawnDisabledAfterHidden = await page.locator("#spawn-imp").isDisabled();
+      const goldDisabledAfterHidden = await page.locator("#add-gold").isDisabled();
+      const afterVisiblePaused = await page.evaluate(() => ({
+        tick: globalThis.__keeper.tick,
+        appState: globalThis.__keeper.appState,
+      }));
+      if (!spawnDisabledAfterHidden || !goldDisabledAfterHidden) {
+        throw new Error(
+          `panel buttons not disabled after tab return while paused: spawn ${String(spawnDisabledAfterHidden)}, gold ${String(goldDisabledAfterHidden)}`,
+        );
+      }
+      if (afterVisiblePaused.tick !== duringPause) {
+        throw new Error(`tick advanced across tab hide and show while paused: ${String(duringPause)} -> ${String(afterVisiblePaused.tick)}`);
+      }
+      if (afterVisiblePaused.appState !== "paused") {
+        throw new Error(`app state after tab return was ${afterVisiblePaused.appState}, expected paused`);
+      }
+      await stepOnce(page);
+      const stillPausedAfterVisible = await page.evaluate(() => globalThis.__keeper.tick);
+      if (stillPausedAfterVisible !== duringPause) {
+        throw new Error(`tick advanced after tab return while paused: ${String(duringPause)} -> ${String(stillPausedAfterVisible)}`);
+      }
+      console.log(
+        `visibility paused hidden=${hiddenWhilePaused.appState} visible=${afterVisiblePaused.appState} tick=${String(afterVisiblePaused.tick)}`,
+      );
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible", { state: "hidden" });
       const spawnEnabled = await page.locator("#spawn-imp").isEnabled();
@@ -652,6 +777,38 @@ async function run() {
       for (let i = 0; i < 4; i += 1) {
         await stepOnce(page);
       }
+      const runningBeforeHidden = await page.evaluate(() => globalThis.__keeper.tick);
+      await setVisibility(page, true);
+      await stepOnce(page);
+      const hiddenWhileRunning = await page.evaluate(() => ({
+        tick: globalThis.__keeper.tick,
+        appState: globalThis.__keeper.appState,
+      }));
+      if (hiddenWhileRunning.tick !== runningBeforeHidden) {
+        throw new Error(`tick advanced while hidden and running: ${String(runningBeforeHidden)} -> ${String(hiddenWhileRunning.tick)}`);
+      }
+      if (hiddenWhileRunning.appState !== "hidden") {
+        throw new Error(`app state while hidden and running was ${hiddenWhileRunning.appState}`);
+      }
+      await setVisibility(page, false);
+      const runningAfterVisible = await page.evaluate(() => globalThis.__keeper.tick);
+      if (runningAfterVisible !== runningBeforeHidden) {
+        throw new Error(`tick advanced across tab hide and show while running: ${String(runningBeforeHidden)} -> ${String(runningAfterVisible)}`);
+      }
+      await stepOnce(page);
+      const runningAdvanced = await page.evaluate(() => ({
+        tick: globalThis.__keeper.tick,
+        appState: globalThis.__keeper.appState,
+      }));
+      if (runningAdvanced.tick <= runningAfterVisible) {
+        throw new Error(`tick did not advance after tab return while running: ${String(runningAfterVisible)} -> ${String(runningAdvanced.tick)}`);
+      }
+      if (runningAdvanced.appState !== "running") {
+        throw new Error(`app state after tab return while running was ${runningAdvanced.appState}`);
+      }
+      console.log(
+        `visibility running hidden=${hiddenWhileRunning.appState} visible=${runningAdvanced.appState} tick=${String(runningBeforeHidden)}->${String(runningAdvanced.tick)}`,
+      );
 
       await checkpoint(page, recordStart, "pause");
       await presentFrame(page);

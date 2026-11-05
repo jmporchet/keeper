@@ -18,12 +18,13 @@ import {
   type TileKind,
   type World,
 } from "../sim";
+import { walkGridLine } from "./gridLine";
 import { inputCameraMachine, isHolding, isOrbiting, isPainting, isPanning, isTagging } from "./inputCameraMachine";
 import { pickTileIndex } from "./pick";
 
 export type HeldKeys = { w: boolean; a: boolean; s: boolean; d: boolean };
 
-type SweepMode = "tag" | "untag" | undefined;
+export type SweepMode = "tag" | "untag" | undefined;
 
 function panKeyFromCode(code: string): keyof HeldKeys | undefined {
   switch (code) {
@@ -40,7 +41,7 @@ function panKeyFromCode(code: string): keyof HeldKeys | undefined {
   }
 }
 
-function sweepModeFor(kind: TileKind): SweepMode {
+export function sweepModeFor(kind: TileKind): SweepMode {
   switch (kind) {
     case "earth":
     case "goldSeam":
@@ -61,7 +62,7 @@ function sweepModeFor(kind: TileKind): SweepMode {
   }
 }
 
-function matchesMode(kind: TileKind, mode: "tag" | "untag"): boolean {
+export function matchesMode(kind: TileKind, mode: "tag" | "untag"): boolean {
   switch (mode) {
     case "tag":
       return kind === "earth" || kind === "goldSeam";
@@ -93,15 +94,19 @@ export function bindCameraInput(
   let lastX = 0;
   let lastY = 0;
   let sweepMode: SweepMode;
+  let lastSweepTile: TileIndex | undefined;
+  let lastPaintTile: TileIndex | undefined;
   const swept = new Uint8Array(getWorld().width * getWorld().height);
   const painted = new Uint8Array(getWorld().width * getWorld().height);
 
   function resetSweep(): void {
     sweepMode = undefined;
+    lastSweepTile = undefined;
     swept.fill(0);
   }
 
   function resetPaint(): void {
+    lastPaintTile = undefined;
     painted.fill(0);
   }
 
@@ -140,6 +145,48 @@ export function bindCameraInput(
       tick: world.tick,
       tile: asTileIndex(tile),
     });
+  }
+
+  function applySweepPoint(x: number, y: number): void {
+    const world = getWorld();
+    if (x < 0 || y < 0 || x >= world.width || y >= world.height) {
+      return;
+    }
+    applySweepTile(asTileIndex(y * world.width + x));
+  }
+
+  function applyPaintPoint(x: number, y: number): void {
+    const world = getWorld();
+    if (x < 0 || y < 0 || x >= world.width || y >= world.height) {
+      return;
+    }
+    paintTile(asTileIndex(y * world.width + x));
+  }
+
+  function applySweepTo(tile: TileIndex): void {
+    const world = getWorld();
+    const x = tile % world.width;
+    const y = (tile / world.width) | 0;
+    const previous = lastSweepTile;
+    lastSweepTile = tile;
+    if (previous === undefined) {
+      applySweepTile(tile);
+      return;
+    }
+    walkGridLine(previous % world.width, (previous / world.width) | 0, x, y, applySweepPoint);
+  }
+
+  function applyPaintTo(tile: TileIndex): void {
+    const world = getWorld();
+    const x = tile % world.width;
+    const y = (tile / world.width) | 0;
+    const previous = lastPaintTile;
+    lastPaintTile = tile;
+    if (previous === undefined) {
+      paintTile(tile);
+      return;
+    }
+    walkGridLine(previous % world.width, (previous / world.width) | 0, x, y, applyPaintPoint);
   }
 
   function pickFromEvent(event: PointerEvent): TileIndex | undefined {
@@ -181,6 +228,16 @@ export function bindCameraInput(
   function cursorTile(): TileIndex | undefined {
     return pickTileIndex(camera, canvas, lastX, lastY);
   }
+
+  actor.subscribe(() => {
+    const snapshot = actor.getSnapshot();
+    if (!isTagging(snapshot)) {
+      resetSweep();
+    }
+    if (!isPainting(snapshot)) {
+      resetPaint();
+    }
+  });
 
   canvas.addEventListener("contextmenu", (event) => {
     event.preventDefault();
@@ -229,7 +286,7 @@ export function bindCameraInput(
     if (isTagging(snapshot)) {
       const tile = pickFromEvent(event);
       if (tile !== undefined) {
-        applySweepTile(tile);
+        applySweepTo(tile);
       }
       return;
     }
@@ -237,7 +294,7 @@ export function bindCameraInput(
       const tile = pickFromEvent(event);
       if (tile !== undefined) {
         resetPaint();
-        paintTile(tile);
+        applyPaintTo(tile);
       }
       return;
     }
@@ -268,7 +325,7 @@ export function bindCameraInput(
     resetSweep();
     actor.send({ type: "LEFT_DOWN_TILE" });
     if (isTagging(actor.getSnapshot())) {
-      applySweepTile(tile);
+      applySweepTo(tile);
     }
   });
 
@@ -291,14 +348,14 @@ export function bindCameraInput(
     if (isTagging(snapshot)) {
       const tile = pickFromEvent(event);
       if (tile !== undefined) {
-        applySweepTile(tile);
+        applySweepTo(tile);
       }
       return;
     }
     if (isPainting(snapshot)) {
       const tile = pickFromEvent(event);
       if (tile !== undefined) {
-        paintTile(tile);
+        applyPaintTo(tile);
       }
     }
   });

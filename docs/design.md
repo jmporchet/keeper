@@ -79,18 +79,35 @@ stateDiagram-v2
     Failed --> Loading: retry
     state Sandbox {
         [*] --> Running
-        Running --> Paused: pause key or tab hidden
-        Paused --> Running: resume
+        Running --> Paused: PAUSE
+        Paused --> Running: RESUME
         Running --> Replaying: LOAD_SAVE
         Paused --> Replaying: LOAD_SAVE
         Replaying --> Running: REPLAY_DONE
         Replaying --> Paused: REPLAY_ERROR
+        state Last <<history>>
     }
-    Sandbox --> ContextLost: WebGL context lost
-    ContextLost --> Sandbox: context restored
+    Sandbox --> Hidden: TAB_HIDDEN
+    Hidden --> Last: TAB_VISIBLE
+    Hidden --> Hidden: TAB_HIDDEN
+    Sandbox --> ContextLostVisible: CONTEXT_LOST
+    Hidden --> ContextLostHidden: CONTEXT_LOST
+    state ContextLost {
+        state ContextLostVisible
+        state ContextLostHidden
+        [*] --> ContextLostVisible
+        ContextLostVisible --> ContextLostHidden: TAB_HIDDEN
+        ContextLostHidden --> ContextLostVisible: TAB_VISIBLE
+    }
+    ContextLostVisible --> Last: CONTEXT_RESTORED
+    ContextLostHidden --> Hidden: CONTEXT_RESTORED
 ```
 
-While `Paused`, `Replaying` or `ContextLost`, the sim does not step. The sim tick counter proves it in tests. Loading a save enters `Replaying`, replaces the world, seed and command log, steps the imported `CommandLog` to the saved tick through the chart, then sends `REPLAY_DONE` (or `REPLAY_ERROR`).
+`Hidden` is a non-manual suspended state for a hidden tab. `isPaused` is true only for the manual `Paused` state, so a hidden tab does not show the pause overlay. `isSimStepping` is false in `Hidden`, `ContextLost`, `Paused` and `Replaying`; the sim tick counter proves it in tests.
+
+The `Sandbox.Last` history state remembers the last of `Running`, `Paused` and `Replaying`. `TAB_VISIBLE` from `Hidden` returns there, and `CONTEXT_RESTORED` from `ContextLostVisible` returns there, so a manual pause stays paused and a running game stays running. `ContextLostHidden` records that the tab is still hidden: `TAB_VISIBLE` moves it to `ContextLostVisible`, while `CONTEXT_RESTORED` returns to `Hidden` until the tab becomes visible. Both orders of `TAB_HIDDEN` and `CONTEXT_LOST` therefore preserve the remembered `Running` or `Paused` state, and `PAUSE`/`RESUME` are ignored while suspended.
+
+Loading a save enters `Replaying`, replaces the world, seed and command log, steps the imported `CommandLog` to the saved tick through the chart, then sends `REPLAY_DONE` (or `REPLAY_ERROR`). Replay is synchronous inside that load, so hide or context loss is not normally observed during `Replaying`; if one does interleave, the history returns to `Replaying`.
 
 ### Chart 2: input and camera mode (XState)
 

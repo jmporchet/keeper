@@ -7,7 +7,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { createActor } from "xstate";
-import { appMachine, isPaused, isReplaying, isSimStepping } from "./app/appMachine";
+import { appMachine, appStateName, isPaused, isReplaying, isSimStepping } from "./app/appMachine";
 import { createCameraPose, eyeFromPose } from "./camera/pose";
 import { bindCameraInput } from "./input/bindCamera";
 import { isPainting } from "./input/inputCameraMachine";
@@ -88,6 +88,7 @@ declare global {
       drawCalls: number;
       heldCount: number;
       painting: boolean;
+      appState: string;
       treasuryTileCount: number;
       treasuryStockTotal: number;
       maxImpsPerTile: number;
@@ -279,10 +280,10 @@ window.addEventListener("keydown", (event) => {
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
-    actor.send({ type: "PAUSE" });
+    actor.send({ type: "TAB_HIDDEN" });
     return;
   }
-  actor.send({ type: "RESUME" });
+  actor.send({ type: "TAB_VISIBLE" });
 });
 
 canvas.addEventListener("webglcontextlost", (event) => {
@@ -448,6 +449,9 @@ if (proof) {
     },
     get painting() {
       return isPainting(cameraInput.actor.getSnapshot());
+    },
+    get appState() {
+      return appStateName(actor.getSnapshot());
     },
     get treasuryTileCount() {
       return treasuryTileCount(world);
