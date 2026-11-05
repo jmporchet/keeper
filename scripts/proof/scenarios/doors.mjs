@@ -143,22 +143,70 @@ export async function run(ctx) {
   }
   await ctx.checkpoint("doors-trap");
 
-  let breakTicks = 0;
-  let broken = await page.evaluate(() => globalThis.__keeper.doorCount);
-  while (broken === DOOR_WALL.length) {
-    if (breakTicks >= 200) {
-      throw new Error(`no door broke after ${String(breakTicks)} ticks`);
+  for (let i = 0; i < 12; i += 1) {
+    await ctx.stepOnce(1, 25);
+  }
+  const blockedHeroes = await page.evaluate(() => globalThis.__keeper.heroSnapshot());
+  if (blockedHeroes.some((hero) => hero.tileY < 34)) {
+    throw new Error("a hero crossed the closed door wall");
+  }
+  const closedBefore = await page.evaluate(() => globalThis.__keeper.doorSnapshot());
+  if (closedBefore.some((door) => door.open)) {
+    throw new Error("the door wall was not fully closed before the toggle");
+  }
+  const beforeDoor = closedBefore.find((door) => door.x === 32 && door.y === 33);
+  if (beforeDoor === undefined) {
+    throw new Error("the center door is missing");
+  }
+  await ctx.checkpoint("doors-blocked");
+
+  await ctx.panToTileCenter(32, 33);
+  const openPoint = await ctx.pagePointForTile(32, 33);
+  if (openPoint === null) {
+    throw new Error("door tile 32,33 is off screen");
+  }
+  await page.mouse.click(openPoint.x, openPoint.y);
+  await ctx.stepOnce(1, 25);
+  const opened = await page.evaluate(() => globalThis.__keeper.doorSnapshot());
+  const openedDoor = opened.find((door) => door.x === 32 && door.y === 33);
+  if (openedDoor === undefined || !openedDoor.open) {
+    throw new Error("door did not open on click");
+  }
+  if (openedDoor.hp !== beforeDoor.hp) {
+    throw new Error(`toggle changed door hp from ${String(beforeDoor.hp)} to ${String(openedDoor.hp)}`);
+  }
+  await ctx.checkpoint("doors-open");
+
+  let crossTicks = 0;
+  let crossed = false;
+  while (!crossed) {
+    if (crossTicks >= 200) {
+      throw new Error(`hero did not cross the open door after ${String(crossTicks)} ticks`);
     }
     await ctx.stepOnce(1, 25);
-    breakTicks += 1;
-    broken = await page.evaluate(() => globalThis.__keeper.doorCount);
+    crossTicks += 1;
+    const heroes = await page.evaluate(() => globalThis.__keeper.heroSnapshot());
+    crossed = heroes.some((hero) => hero.tileY <= 33);
   }
-  await ctx.checkpoint("doors-broken");
+  await ctx.checkpoint("doors-crossed");
+
+  const closePoint = await ctx.pagePointForTile(32, 33);
+  if (closePoint === null) {
+    throw new Error("door tile 32,33 went off screen");
+  }
+  await page.mouse.click(closePoint.x, closePoint.y);
+  await ctx.stepOnce(1, 25);
+  const closedAfter = await page.evaluate(() => globalThis.__keeper.doorSnapshot());
+  const closedDoor = closedAfter.find((door) => door.x === 32 && door.y === 33);
+  if (closedDoor === undefined || closedDoor.open) {
+    throw new Error("door did not close on click");
+  }
+  await ctx.checkpoint("doors-closed");
 
   let heartTicks = 0;
   let heartHp = await page.evaluate(() => globalThis.__keeper.heartHp);
   while (heartHp === initial.heartHp) {
-    if (heartTicks >= 200) {
+    if (heartTicks >= 300) {
       const debug = await page.evaluate(() => ({
         heroes: globalThis.__keeper.heroSnapshot(),
         doors: globalThis.__keeper.doorSnapshot(),
@@ -167,7 +215,7 @@ export async function run(ctx) {
         heartHp: globalThis.__keeper.heartHp,
       }));
       throw new Error(
-        `heart did not take damage after the door broke in ${String(heartTicks)} ticks: ${JSON.stringify(debug)}`,
+        `heart did not take damage after the door toggle in ${String(heartTicks)} ticks: ${JSON.stringify(debug)}`,
       );
     }
     await ctx.stepOnce(1, 25);
@@ -196,6 +244,6 @@ export async function run(ctx) {
     throw new Error(`draw calls ${String(result.drawCalls)} exceed 7`);
   }
   console.log(
-    `doors doors=${String(initial.doorCount)} broken=${String(broken)} breakTicks=${String(breakTicks)} trapHeroHp=${String(damagedHero.hp)} heartHp=${String(result.heartHp)} heartTicks=${String(heartTicks)} drawCalls=${String(result.drawCalls)}`,
+    `doors doors=${String(initial.doorCount)} opened=${String(openedDoor.open)} closed=${String(closedDoor.open)} crossTicks=${String(crossTicks)} trapHeroHp=${String(damagedHero.hp)} heartHp=${String(result.heartHp)} heartTicks=${String(heartTicks)} drawCalls=${String(result.drawCalls)}`,
   );
 }

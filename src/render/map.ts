@@ -136,6 +136,7 @@ export function syncMap(world: World, map: MapMeshes, time: number): void {
     world.tiles,
     world.rooms,
     world.doorHp,
+    world.doorOpen,
     world.trapState,
     world.width,
     map.meshes,

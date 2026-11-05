@@ -146,7 +146,8 @@ declare global {
       impSnapshot(): ImpDebug[];
       heroCount: number;
       heroSnapshot(): HeroDebug[];
-      doorSnapshot(): { x: number; y: number; hp: number }[];
+      doorSnapshot(): { x: number; y: number; hp: number; open: boolean }[];
+      toggleDoor(tx: number, ty: number): void;
       creatureSnapshot(): CreatureDebug[];
       freeBeds(): { x: number; y: number }[];
       dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
@@ -752,17 +753,24 @@ if (proof) {
       return creatures;
     },
     doorSnapshot() {
-      const doors: { x: number; y: number; hp: number }[] = [];
+      const doors: { x: number; y: number; hp: number; open: boolean }[] = [];
       for (let i = 0; i < world.doorHp.length; i += 1) {
         const hp = world.doorHp[i];
         if (hp === undefined || hp <= 0) {
           continue;
         }
+        const open = world.doorOpen[i];
         const y = (i / world.width) | 0;
         const x = i - y * world.width;
-        doors.push({ x, y, hp });
+        doors.push({ x, y, hp, open: open === 1 });
       }
       return doors;
+    },
+    toggleDoor(tx: number, ty: number) {
+      if (tx < 0 || ty < 0 || tx >= world.width || ty >= world.height) {
+        return;
+      }
+      commands.push({ kind: "toggleDoor", tick: world.tick, tile: asTileIndex(ty * world.width + tx) });
     },
     heroSnapshot() {
       const heroes: HeroDebug[] = [];

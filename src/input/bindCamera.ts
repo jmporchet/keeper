@@ -437,6 +437,16 @@ export function bindCameraInput(
         lastCreatureClickTime = 0;
       }
     }
+    if (snapshot.matches("Idle") && !event.shiftKey) {
+      const tile = pickFromEvent(event);
+      if (tile !== undefined) {
+        const hp = world.doorHp[tile];
+        if (hp !== undefined && hp > 0) {
+          enqueue({ kind: "toggleDoor", tick: world.tick, tile });
+          return;
+        }
+      }
+    }
     if (isTagging(snapshot)) {
       const tile = pickFromEvent(event);
       if (tile !== undefined) {

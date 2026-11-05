@@ -141,6 +141,7 @@ export type Command =
   | { kind: "untag"; tick: Tick; tile: TileIndex }
   | { kind: "paintRoom"; tick: Tick; tile: TileIndex; room: RoomTool }
   | { kind: "paintDoor"; tick: Tick; tile: TileIndex }
+  | { kind: "toggleDoor"; tick: Tick; tile: TileIndex }
   | { kind: "paintTrap"; tick: Tick; tile: TileIndex }
   | { kind: "spawnImp"; tick: Tick }
   | { kind: "pickUp"; tick: Tick; impId: ImpId }
@@ -240,6 +241,7 @@ export function createWorld(seed: number): World {
   const goldStock = new Uint32Array(width * height);
   const rooms = new Uint8Array(width * height);
   const doorHp = new Uint8Array(width * height);
+  const doorOpen = new Uint8Array(width * height);
   const trapState = new Uint8Array(width * height);
   const treasuryStock = new Uint16Array(width * height);
   const treasuryCache = new Int32Array(width * height);
@@ -273,6 +275,7 @@ export function createWorld(seed: number): World {
     tiles,
     rooms,
     doorHp,
+    doorOpen,
     trapState,
     treasuryStock,
     treasuryCache,
@@ -363,6 +366,13 @@ export function hashWorld(world: World): number {
       continue;
     }
     h = mix(h, hp);
+  }
+  for (let i = 0; i < world.doorOpen.length; i += 1) {
+    const open = world.doorOpen[i];
+    if (open === undefined) {
+      continue;
+    }
+    h = mix(h, open);
   }
   for (let i = 0; i < world.trapState.length; i += 1) {
     const state = world.trapState[i];
@@ -565,6 +575,20 @@ function applyPaintDoor(world: World, tile: TileIndex): void {
   world.goldStored -= DOOR_COST;
   world.goldSpent += DOOR_COST;
   world.doorHp[tile] = DOOR_HP;
+  world.doorOpen[tile] = 0;
+  world.doorVersion += 1;
+}
+
+function applyToggleDoor(world: World, tile: TileIndex): void {
+  const hp = world.doorHp[tile];
+  if (hp === undefined || hp <= 0) {
+    return;
+  }
+  const open = world.doorOpen[tile];
+  if (open === undefined) {
+    return;
+  }
+  world.doorOpen[tile] = open === 1 ? 0 : 1;
   world.doorVersion += 1;
 }
 
@@ -867,6 +891,9 @@ function applyCommand(world: World, command: Command): void {
       return;
     case "paintDoor":
       applyPaintDoor(world, command.tile);
+      return;
+    case "toggleDoor":
+      applyToggleDoor(world, command.tile);
       return;
     case "paintTrap":
       applyPaintTrap(world, command.tile);

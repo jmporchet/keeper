@@ -114,6 +114,7 @@ function parseCommand(value: unknown): CommandResult {
       return { ok: true, command: { kind: "paintRoom", tick, tile: asTileIndex(value.tile), room } };
     }
     case "paintDoor":
+    case "toggleDoor":
     case "paintTrap": {
       if (!isIntegerInRange(value.tile, 0, MAP_WIDTH * MAP_HEIGHT - 1)) {
         return { ok: false, reason: "invalidTile" };
