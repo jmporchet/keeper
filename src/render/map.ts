@@ -3,7 +3,7 @@ import { MAP_HEIGHT, MAP_WIDTH, TILE_KINDS, TILE_KIND, type TileKind, type TileR
 import { syncMapInstances } from "./map.hot";
 import { TILE_COLOR, TILE_HEIGHT, TILE_KIND_COUNT } from "./tileLookups";
 
-export const TILE_GROUP_COUNT = 5;
+export const TILE_GROUP_COUNT = 4;
 
 export type MapMeshes = {
   meshes: THREE.InstancedMesh[];
@@ -35,10 +35,9 @@ function groupForKind(kind: TileKind): number {
     case "rock":
       return 2;
     case "claimed":
-      return 3;
     case "room":
     case "portal":
-      return 4;
+      return 3;
     default: {
       const never: never = kind;
       return never;

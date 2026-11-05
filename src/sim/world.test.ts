@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { asTick, asTileIndex } from "./ids";
 import { commandList, extraGold } from "./commandArbitrary";
 import {
-  asCommandLog,
+  sortCommands,
   countTagged,
   createWorld,
   hashWorld,
@@ -66,8 +66,8 @@ describe("sim core", () => {
   it("same seed and command log give the same state hash after 10000 ticks", () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 0xffffffff }), commandList(TICKS), (seed, commands) => {
-        const a = hashWorld(run(seed, asCommandLog(commands), TICKS));
-        const b = hashWorld(run(seed, asCommandLog(commands), TICKS));
+        const a = hashWorld(run(seed, sortCommands(commands), TICKS));
+        const b = hashWorld(run(seed, sortCommands(commands), TICKS));
         expect(a).toBe(b);
       }),
       { numRuns: 20 },
@@ -78,8 +78,8 @@ describe("sim core", () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 0xffffffff }), fc.integer({ min: 1, max: 0xffffffff }), (seed, delta) => {
         const other = (seed + delta) >>> 0;
-        const a = hashWorld(run(seed, asCommandLog([]), TICKS));
-        const b = hashWorld(run(other, asCommandLog([]), TICKS));
+        const a = hashWorld(run(seed, sortCommands([]), TICKS));
+        const b = hashWorld(run(other, sortCommands([]), TICKS));
         expect(a).not.toBe(b);
       }),
       { numRuns: 20 },
@@ -87,8 +87,8 @@ describe("sim core", () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 0xffffffff }), commandList(TICKS), extraGold(TICKS), (seed, commands, extra) => {
         const withExtra = commands.concat([extra]);
-        const a = hashWorld(run(seed, asCommandLog(commands), TICKS));
-        const b = hashWorld(run(seed, asCommandLog(withExtra), TICKS));
+        const a = hashWorld(run(seed, sortCommands(commands), TICKS));
+        const b = hashWorld(run(seed, sortCommands(withExtra), TICKS));
         expect(a).not.toBe(b);
       }),
       { numRuns: 20 },
@@ -217,7 +217,7 @@ describe("tag tiles", () => {
       commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(y * MAP_WIDTH + x) });
     }
     commands.push({ kind: "tag", tick: asTick(0), tile: asTileIndex(31 * MAP_WIDTH + 38) });
-    const world = run(1, asCommandLog(commands), 1);
+    const world = run(1, sortCommands(commands), 1);
     expect(tileKindAt(world.tiles, y * MAP_WIDTH + 0)).toBe("rock");
     expect(tileKindAt(world.tiles, y * MAP_WIDTH + 1)).toBe("rock");
     expect(tileKindAt(world.tiles, y * MAP_WIDTH + 2)).toBe("taggedEarth");
@@ -238,7 +238,7 @@ describe("tag tiles", () => {
     const gold = asTileIndex(31 * MAP_WIDTH + 38);
     const world = run(
       1,
-      asCommandLog([
+      sortCommands([
         { kind: "tag", tick: asTick(0), tile: earth },
         { kind: "tag", tick: asTick(0), tile: gold },
         { kind: "untag", tick: asTick(1), tile: earth },
@@ -253,11 +253,11 @@ describe("tag tiles", () => {
 
   it("tagging is included in the world hash", () => {
     const tile = asTileIndex(10 * MAP_WIDTH + 4);
-    const tagged = hashWorld(run(1, asCommandLog([{ kind: "tag", tick: asTick(0), tile }]), 4));
-    const plain = hashWorld(run(1, asCommandLog([]), 4));
+    const tagged = hashWorld(run(1, sortCommands([{ kind: "tag", tick: asTick(0), tile }]), 4));
+    const plain = hashWorld(run(1, sortCommands([]), 4));
     expect(tagged).not.toBe(plain);
-    const a = hashWorld(run(7, asCommandLog([{ kind: "tag", tick: asTick(0), tile }]), 20));
-    const b = hashWorld(run(7, asCommandLog([{ kind: "tag", tick: asTick(0), tile }]), 20));
+    const a = hashWorld(run(7, sortCommands([{ kind: "tag", tick: asTick(0), tile }]), 20));
+    const b = hashWorld(run(7, sortCommands([{ kind: "tag", tick: asTick(0), tile }]), 20));
     expect(a).toBe(b);
   });
 });

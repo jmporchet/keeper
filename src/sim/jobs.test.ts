@@ -11,7 +11,7 @@ import {
   releaseWorker,
   reserveOpenJob,
 } from "./jobs";
-import { asCommandLog, createWorld, hashWorld, MAP_WIDTH, run, step, tileKindAt, type Command, type World } from "./world";
+import { sortCommands, createWorld, hashWorld, MAP_WIDTH, run, step, tileKindAt, type Command, type World } from "./world";
 
 const EARTH_A = asTileIndex(10 * MAP_WIDTH + 4);
 const EARTH_B = asTileIndex(10 * MAP_WIDTH + 5);
@@ -28,7 +28,7 @@ function untag(tick: number, tile: TileIndex): Command {
 
 function applyNow(world: World, command: Command): void {
   world.commandCursor = 0;
-  step(world, asCommandLog([command]));
+  step(world, sortCommands([command]));
 }
 
 describe("job board", () => {
@@ -38,23 +38,23 @@ describe("job board", () => {
       commands.push(tag(0, asTileIndex(10 * MAP_WIDTH + x)));
     }
     commands.push(tag(0, GOLD));
-    const world = run(1, asCommandLog(commands), 1);
+    const world = run(1, sortCommands(commands), 1);
     expect(printJobs(world.jobs)).toMatchSnapshot();
     expect(listJobs(world.jobs).length).toBe(5);
   });
 
   it("creates a dig job on tag and cancels it on untag", () => {
-    const tagged = run(1, asCommandLog([tag(0, EARTH_A)]), 1);
+    const tagged = run(1, sortCommands([tag(0, EARTH_A)]), 1);
     const job = jobAtTile(tagged.jobs, EARTH_A);
     expect(job?.jobKind).toBe("dig");
     expect(job?.lifecycle.kind).toBe("open");
-    const cleared = run(1, asCommandLog([tag(0, EARTH_A), untag(1, EARTH_A)]), 2);
+    const cleared = run(1, sortCommands([tag(0, EARTH_A), untag(1, EARTH_A)]), 2);
     expect(jobAtTile(cleared.jobs, EARTH_A)).toBeUndefined();
     expect(tileKindAt(cleared.tiles, EARTH_A)).toBe("earth");
   });
 
   it("reserves the highest-priority open job and one job per worker", () => {
-    const world = run(1, asCommandLog([tag(0, GOLD), tag(0, EARTH_A), tag(0, EARTH_B)]), 1);
+    const world = run(1, sortCommands([tag(0, GOLD), tag(0, EARTH_A), tag(0, EARTH_B)]), 1);
     const w0 = asWorkerId(0);
     const w1 = asWorkerId(1);
     const first = reserveOpenJob(world.jobs, w0);
@@ -73,15 +73,15 @@ describe("job board", () => {
   });
 
   it("untag cancels a reserved job", () => {
-    const world = run(1, asCommandLog([tag(0, EARTH_A)]), 1);
+    const world = run(1, sortCommands([tag(0, EARTH_A)]), 1);
     const w0 = asWorkerId(0);
     reserveOpenJob(world.jobs, w0);
-    const after = run(1, asCommandLog([tag(0, EARTH_A), untag(1, EARTH_A)]), 2);
+    const after = run(1, sortCommands([tag(0, EARTH_A), untag(1, EARTH_A)]), 2);
     expect(jobAtTile(after.jobs, EARTH_A)).toBeUndefined();
   });
 
   it("reserves only dig jobs when a kind filter is given", () => {
-    const world = run(1, asCommandLog([tag(0, GOLD), tag(0, EARTH_A)]), 1);
+    const world = run(1, sortCommands([tag(0, GOLD), tag(0, EARTH_A)]), 1);
     const reserved = reserveOpenJob(world.jobs, asWorkerId(0), "dig");
     expect(reserved?.jobKind).toBe("dig");
     expect(reserved?.tile).toBe(EARTH_A);
@@ -89,15 +89,15 @@ describe("job board", () => {
   });
 
   it("rock tag creates no job", () => {
-    const world = run(1, asCommandLog([tag(0, ROCK)]), 1);
+    const world = run(1, sortCommands([tag(0, ROCK)]), 1);
     expect(listJobs(world.jobs).length).toBe(0);
   });
 
   it("jobs are part of the world hash", () => {
-    const tagged = run(1, asCommandLog([tag(0, EARTH_A)]), 4);
-    const plain = run(1, asCommandLog([]), 4);
+    const tagged = run(1, sortCommands([tag(0, EARTH_A)]), 4);
+    const plain = run(1, sortCommands([]), 4);
     expect(hashWorld(tagged)).not.toBe(hashWorld(plain));
-    const again = run(1, asCommandLog([tag(0, EARTH_A)]), 4);
+    const again = run(1, sortCommands([tag(0, EARTH_A)]), 4);
     expect(hashWorld(tagged)).toBe(hashWorld(again));
   });
 

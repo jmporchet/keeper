@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { MAP_HEIGHT, MAP_WIDTH, type World } from "../sim";
-import { syncGoldPileInstances } from "./goldPiles.hot";
+import { syncPropInstances } from "./props.hot";
 
-export type GoldPileMeshes = {
+export type PropMeshes = {
   mesh: THREE.InstancedMesh;
   dummy: THREE.Object3D;
   syncedVersion: number;
@@ -10,7 +10,7 @@ export type GoldPileMeshes = {
 
 const CAPACITY = MAP_WIDTH * MAP_HEIGHT;
 
-export function createGoldPileMeshes(scene: THREE.Scene): GoldPileMeshes {
+export function createPropMeshes(scene: THREE.Scene): PropMeshes {
   const geometry = new THREE.BoxGeometry(1, 1, 1);
   const material = new THREE.MeshLambertMaterial({
     color: 0xffd23f,
@@ -28,10 +28,10 @@ export function createGoldPileMeshes(scene: THREE.Scene): GoldPileMeshes {
   };
 }
 
-export function syncGoldPiles(world: World, visual: GoldPileMeshes): void {
+export function syncProps(world: World, visual: PropMeshes): void {
   if (visual.syncedVersion === world.treasuryVersion) {
     return;
   }
   visual.syncedVersion = world.treasuryVersion;
-  syncGoldPileInstances(world.rooms, world.treasuryStock, world.width, visual.mesh, visual.dummy);
+  syncPropInstances(world.rooms, world.treasuryStock, world.width, visual.mesh, visual.dummy);
 }

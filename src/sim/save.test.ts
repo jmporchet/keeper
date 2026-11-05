@@ -11,10 +11,10 @@ import {
   serializeSave,
 } from "./save";
 import {
-  asCommandLog,
   createWorld,
   hashWorld,
   MAP_WIDTH,
+  requireSorted,
   run,
   sortCommands,
   step,
@@ -44,9 +44,22 @@ describe("command log", () => {
     const world = createWorld(1);
     step(world, sorted);
     expect(world.tick).toBe(1);
-    const branded = asCommandLog(sorted.slice());
+    const branded = requireSorted(sorted.slice());
     step(world, branded);
     expect(world.tick).toBe(2);
+  });
+
+  it("rejects command logs that are not in stable sorted order", () => {
+    const commands: Command[] = [
+      { kind: "addGold", tick: asTick(1), amount: 1 },
+      { kind: "addGold", tick: asTick(0), amount: 2 },
+    ];
+    expect(() => requireSorted(commands)).toThrow("commands are not in stable sorted order");
+    const equalTicks: Command[] = [
+      { kind: "addGold", tick: asTick(0), amount: 1 },
+      { kind: "addGold", tick: asTick(0), amount: 2 },
+    ];
+    expect(requireSorted(equalTicks)).toBe(equalTicks);
   });
 
   it("sorts an imported command log by tick and original index", () => {
@@ -94,7 +107,7 @@ describe("save round-trip", () => {
     ];
     const live = createWorld(3);
     for (let i = 0; i < 2; i += 1) {
-      step(live, asCommandLog(commands));
+      step(live, sortCommands(commands));
     }
     const save = buildSave(live, commands);
     expect(save.version).toBe(1);

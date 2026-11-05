@@ -84,22 +84,14 @@ export type Command =
 
 export type CommandLog = readonly Command[] & { readonly __brand: "CommandLog" };
 
-export function asCommandLog(commands: readonly Command[]): CommandLog {
-  return commands as CommandLog;
-}
-
 export function requireSorted(commands: readonly Command[]): CommandLog {
-  for (let i = 1; i < commands.length; i += 1) {
-    const previous = commands[i - 1];
-    const current = commands[i];
-    if (previous === undefined || current === undefined) {
-      throw new Error("missing command");
-    }
-    if (previous.tick > current.tick) {
-      throw new Error("commands are not sorted by tick");
+  const sorted = sortCommands(commands);
+  for (let i = 0; i < commands.length; i += 1) {
+    if (commands[i] !== sorted[i]) {
+      throw new Error("commands are not in stable sorted order");
     }
   }
-  return asCommandLog(commands);
+  return commands as CommandLog;
 }
 
 export function tileIndexFromWorld(x: number, z: number): TileIndex | undefined {
@@ -551,7 +543,8 @@ export function sortCommands(commands: readonly Command[]): CommandLog {
     }
     return a.index - b.index;
   });
-  return asCommandLog(indexed.map((entry) => entry.command));
+  const sorted: readonly Command[] = indexed.map((entry) => entry.command);
+  return sorted as CommandLog;
 }
 
 export function step(world: World, commands: CommandLog): void {
