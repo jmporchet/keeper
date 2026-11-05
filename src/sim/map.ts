@@ -3,6 +3,8 @@ export const MAP_HEIGHT = 64;
 export const MAP_HALF = 32;
 export const HEART_X = 32;
 export const HEART_Y = 32;
+export const HEART_HP = 20;
+export const HEART_DAMAGE_TICKS = 2;
 
 export const TILE_KINDS = [
   "earth",

@@ -205,6 +205,28 @@ describe("possession commands", () => {
     expect(freeBedTiles(world)).toContain(bed);
   });
 
+  it("lets a possessed creature damage an adjacent hero", () => {
+    const world = run(1, sortCommands(lairSetup(1)), HERO_ARRIVE_TICKS + 1);
+    const creature = liveCreature(world, asCreatureId(0));
+    const hero = liveHero(world, 0);
+    for (let i = 0; i < world.imps.slots.length; i += 1) {
+      world.imps.slots[i] = { kind: "empty" };
+    }
+    const bedY = (creature.bedTile / MAP_WIDTH) | 0;
+    const bedX = creature.bedTile - bedY * MAP_WIDTH;
+    creature.tileX = bedX;
+    creature.tileY = bedY;
+    creature.state = creature.sleeping;
+    hero.tileX = bedX + 1;
+    hero.tileY = bedY;
+    hero.attackCooldown = FIGHT_TICKS;
+    creature.attackCooldown = 0;
+    const before = hero.hp;
+    stepWith(world, [{ kind: "possess", tick: world.tick, creatureId: creature.id }]);
+    expect(world.possession).toEqual({ kind: "creature", id: creature.id });
+    expect(hero.hp).toBeLessThan(before);
+  });
+
   it("includes possession in the world hash", () => {
     const world = setupSleepingCreatures(1);
     const creature = liveCreature(world, asCreatureId(0));

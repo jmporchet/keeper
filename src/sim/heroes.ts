@@ -6,7 +6,14 @@ import {
   type TileIndex,
 } from "./ids";
 import type { ImpSlot } from "./imps";
-import { HEART_X, HEART_Y, PORTAL_X, PORTAL_Y, TILE_KIND, tileKindAt } from "./map";
+import {
+  HEART_X,
+  HEART_Y,
+  PORTAL_X,
+  PORTAL_Y,
+  TILE_KIND,
+  tileKindAt,
+} from "./map";
 import { bumpPathGen, isWalkableCode, PATH_CELL_COUNT } from "./path";
 import { floodWalkable } from "./path.hot";
 import { findPath, STEPS_PER_TILE } from "./pathfind";
@@ -19,8 +26,11 @@ export const HERO_HP = 4;
 export const FIGHT_TICKS = 20;
 export const COMBAT_DAMAGE = 1;
 
+export type HeroGoal = "heart" | "creature" | "claimed";
+
 export type HeroMarching = {
   kind: "marching";
+  goal: HeroGoal;
   pathStep: number;
   pathLength: number;
   progress: number;
@@ -28,7 +38,14 @@ export type HeroMarching = {
 
 export type HeroFighting = { kind: "fighting" };
 
-export type HeroState = HeroMarching | HeroFighting;
+export type HeroLeaving = {
+  kind: "leaving";
+  pathStep: number;
+  pathLength: number;
+  progress: number;
+};
+
+export type HeroState = HeroMarching | HeroFighting | HeroLeaving;
 
 export type Hero = {
   id: HeroId;
@@ -46,6 +63,7 @@ export type Hero = {
   path: Int16Array;
   marching: HeroMarching;
   fighting: HeroFighting;
+  leaving: HeroLeaving;
   state: HeroState;
 };
 
@@ -62,11 +80,18 @@ export const EMPTY_IMP_SLOT: ImpSlot = { kind: "empty" };
 export function createHero(index: number, tileX: number, tileY: number): Hero {
   const marching: HeroMarching = {
     kind: "marching",
+    goal: "heart",
     pathStep: 0,
     pathLength: 0,
     progress: 0,
   };
   const fighting: HeroFighting = { kind: "fighting" };
+  const leaving: HeroLeaving = {
+    kind: "leaving",
+    pathStep: 0,
+    pathLength: 0,
+    progress: 0,
+  };
   return {
     id: asHeroId(index),
     tileX,
@@ -83,6 +108,7 @@ export function createHero(index: number, tileX: number, tileY: number): Hero {
     path: new Int16Array(PATH_CELL_COUNT),
     marching,
     fighting,
+    leaving,
     state: marching,
   };
 }
@@ -230,6 +256,9 @@ export function tryHeroArrival(world: World): void {
   if (world.tick === 0 || world.tick % HERO_ARRIVE_TICKS !== 0) {
     return;
   }
+  if (world.heartBreached) {
+    return;
+  }
   if (!liveCreatureExists(world)) {
     return;
   }
@@ -253,6 +282,7 @@ export function tryHeroArrival(world: World): void {
 export function beginMarching(hero: Hero): void {
   hero.headingX = 0;
   hero.headingY = 0;
+  hero.marching.goal = "heart";
   hero.marching.pathStep = 0;
   hero.marching.pathLength = 0;
   hero.marching.progress = 0;
@@ -266,12 +296,62 @@ export function beginFighting(hero: Hero): void {
   hero.state = hero.fighting;
 }
 
+export function beginLeaving(world: World, hero: Hero): void {
+  hero.headingX = 0;
+  hero.headingY = 0;
+  hero.leaving.pathStep = 0;
+  hero.leaving.pathLength = 0;
+  hero.leaving.progress = 0;
+  const start = hero.tileY * world.width + hero.tileX;
+  const portal = asTileIndex(PORTAL_Y * world.width + PORTAL_X);
+  const length = findPath(world.tiles, world.width, world.height, start, portal, world.pathScratch, hero.path);
+  if (length > 0) {
+    hero.leaving.pathLength = length;
+    if (length > 1) {
+      hero.state = hero.leaving;
+      setHeroHeading(hero, world.width);
+      return;
+    }
+  }
+  hero.state = hero.leaving;
+}
+
+export function beginAllLeaving(world: World): void {
+  for (let i = 0; i < world.heroes.slots.length; i += 1) {
+    const slot = world.heroes.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "live":
+        if (slot.hero.state.kind !== "leaving") {
+          beginLeaving(world, slot.hero);
+        }
+        break;
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+}
+
 export function setHeroHeading(hero: Hero, width: number): void {
   const state = hero.state;
-  if (state.kind !== "marching") {
-    hero.headingX = 0;
-    hero.headingY = 0;
-    return;
+  switch (state.kind) {
+    case "fighting":
+      hero.headingX = 0;
+      hero.headingY = 0;
+      return;
+    case "marching":
+    case "leaving":
+      break;
+    default: {
+      const never: never = state;
+      return never;
+    }
   }
   const nextIndex = state.pathStep + 1;
   if (nextIndex >= state.pathLength) {
@@ -383,22 +463,36 @@ function heroTarget(world: World, hero: Hero): TileIndex | undefined {
   if (count === 0) {
     return undefined;
   }
+  const heart = asTileIndex(HEART_Y * world.width + HEART_X);
+  if (world.pathScratch.generation[heart] === gen) {
+    hero.marching.goal = "heart";
+    return heart;
+  }
   const creature = nearestCreatureTile(world, start, gen);
   if (creature !== undefined) {
+    hero.marching.goal = "creature";
     return creature;
   }
   const claimed = nearestClaimedTile(world, gen);
   if (claimed !== undefined) {
+    hero.marching.goal = "claimed";
     return claimed;
   }
-  const heart = asTileIndex(HEART_Y * world.width + HEART_X);
-  return world.pathScratch.generation[heart] === gen ? heart : undefined;
+  return undefined;
 }
 
 export function heroAdvanceAlongPath(hero: Hero, width: number): boolean {
   const state = hero.state;
-  if (state.kind !== "marching") {
-    return true;
+  switch (state.kind) {
+    case "fighting":
+      return true;
+    case "marching":
+    case "leaving":
+      break;
+    default: {
+      const never: never = state;
+      return never;
+    }
   }
   if (state.pathLength <= 1) {
     return true;
@@ -493,8 +587,25 @@ function heroStateCode(kind: HeroState["kind"]): number {
       return 1;
     case "fighting":
       return 2;
+    case "leaving":
+      return 3;
     default: {
       const never: never = kind;
+      return never;
+    }
+  }
+}
+
+function heroGoalCode(goal: HeroGoal): number {
+  switch (goal) {
+    case "heart":
+      return 1;
+    case "creature":
+      return 2;
+    case "claimed":
+      return 3;
+    default: {
+      const never: never = goal;
       return never;
     }
   }
@@ -525,6 +636,7 @@ export function hashHeroes(board: HeroBoard): number {
         switch (hero.state.kind) {
           case "marching": {
             const state = hero.state;
+            h = mix(h, heroGoalCode(state.goal));
             h = mix(h, state.pathStep);
             h = mix(h, state.pathLength);
             h = mix(h, state.progress);
@@ -533,6 +645,14 @@ export function hashHeroes(board: HeroBoard): number {
           }
           case "fighting":
             break;
+          case "leaving": {
+            const state = hero.state;
+            h = mix(h, state.pathStep);
+            h = mix(h, state.pathLength);
+            h = mix(h, state.progress);
+            h = mixPath(h, hero.path, state.pathLength);
+            break;
+          }
           default: {
             const never: never = hero.state;
             return never;

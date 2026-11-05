@@ -27,6 +27,7 @@ import { stepImps } from "./imps.hot";
 import { cancelJobAtTile, createJobBoard, hashJobs, openJob, releaseWorker } from "./jobs";
 import {
   HATCHERY_COST,
+  HEART_HP,
   HEART_X,
   HEART_Y,
   LAIR_COST,
@@ -58,6 +59,8 @@ import { attachTiles, setTile, type World } from "./worldCore";
 
 export {
   HATCHERY_COST,
+  HEART_DAMAGE_TICKS,
+  HEART_HP,
   HEART_X,
   HEART_Y,
   MAP_HALF,
@@ -269,6 +272,9 @@ export function createWorld(seed: number): World {
     goldSpent: 0,
     goldPaidOut: 0,
     goldStock,
+    heartHp: HEART_HP,
+    heartMaxHp: HEART_HP,
+    heartBreached: false,
     commandCursor: 0,
     jobs: createJobBoard(width * height),
     imps,
@@ -298,6 +304,9 @@ export function hashWorld(world: World): number {
   h = mix(h, world.goldStored);
   h = mix(h, world.goldSpent);
   h = mix(h, world.goldPaidOut);
+  h = mix(h, world.heartHp);
+  h = mix(h, world.heartMaxHp);
+  h = mix(h, world.heartBreached ? 1 : 0);
   h = mix(h, world.goldStock.length);
   for (let i = 0; i < world.goldStock.length; i += 1) {
     const stock = world.goldStock[i];

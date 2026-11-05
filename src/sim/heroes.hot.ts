@@ -1,4 +1,5 @@
 import {
+  beginAllLeaving,
   beginFighting,
   beginMarching,
   captureHeroCurr,
@@ -8,13 +9,14 @@ import {
   EMPTY_HERO_SLOT,
   EMPTY_IMP_SLOT,
   FIGHT_TICKS,
+  heroAdvanceAlongPath,
   heroMarchStep,
-  liveCreatureExists,
   tryHeroArrival,
   type Hero,
 } from "./heroes";
 import { removeOccupancy, workerOf, type Imp } from "./imps";
 import { releaseWorker } from "./jobs";
+import { HEART_DAMAGE_TICKS, HEART_X, HEART_Y } from "./map";
 import type { World } from "./worldCore";
 
 export function stepHeroes(world: World): void {
@@ -53,6 +55,12 @@ function stepLiveHero(world: World, hero: Hero): void {
     case "fighting":
       if (!heroHasAdjacentEnemy(world, hero)) {
         beginMarching(hero);
+      }
+      break;
+    case "leaving":
+      if (heroAdvanceAlongPath(hero, world.width)) {
+        world.heroes.slots[hero.id] = EMPTY_HERO_SLOT;
+        return;
       }
       break;
     default: {
@@ -160,9 +168,6 @@ function heroHasAdjacentEnemy(world: World, hero: Hero): boolean {
   if (adjacentCreatureIndex(world, hero) >= 0) {
     return true;
   }
-  if (liveCreatureExists(world)) {
-    return false;
-  }
   return adjacentImpIndex(world, hero) >= 0;
 }
 
@@ -193,6 +198,9 @@ function resolveHeroAttacks(world: World): void {
         if (hero.hp <= 0) {
           break;
         }
+        if (hero.state.kind === "leaving") {
+          break;
+        }
         if (hero.attackCooldown > 0) {
           hero.attackCooldown -= 1;
         }
@@ -212,9 +220,6 @@ function resolveHeroAttacks(world: World): void {
           }
           break;
         }
-        if (liveCreatureExists(world)) {
-          break;
-        }
         const impIndex = adjacentImpIndex(world, hero);
         if (impIndex >= 0) {
           const impSlot = world.imps.slots[impIndex];
@@ -225,6 +230,16 @@ function resolveHeroAttacks(world: World): void {
             if (imp.hp <= 0) {
               killImp(world, impIndex, imp);
             }
+          }
+          break;
+        }
+        if (!world.heartBreached && isAdjacent(hero.tileX, hero.tileY, HEART_X, HEART_Y)) {
+          world.heartHp -= COMBAT_DAMAGE;
+          hero.attackCooldown = HEART_DAMAGE_TICKS;
+          if (world.heartHp <= 0) {
+            world.heartHp = 0;
+            world.heartBreached = true;
+            beginAllLeaving(world);
           }
         }
         break;

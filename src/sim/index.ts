@@ -136,6 +136,8 @@ export {
   HATCHERY_COST,
   hatcheryTileCount,
   trainingTileCount,
+  HEART_DAMAGE_TICKS,
+  HEART_HP,
   HEART_X,
   HEART_Y,
   LAIR_COST,
@@ -193,6 +195,7 @@ export {
   liveHeroCount,
   type Hero,
   type HeroBoard,
+  type HeroGoal,
   type HeroSlot,
   type HeroState,
 } from "./heroes";

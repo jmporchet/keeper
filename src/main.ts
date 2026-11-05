@@ -60,6 +60,7 @@ import {
   type Command,
   type CommandLog,
   type CreatureId,
+  type Hero,
   type Job,
   type Possession,
   type RoomTool,
@@ -87,6 +88,7 @@ type HeroDebug = {
   tileX: number;
   tileY: number;
   state: string;
+  goal: string;
   hp: number;
   maxHp: number;
 };
@@ -106,6 +108,9 @@ declare global {
       goldPaidOut: number;
       ticksUntilPayday: number;
       payTicks: number;
+      heartHp: number;
+      heartMaxHp: number;
+      heartBreached: boolean;
       liveCreatureCount: number;
       impCount: number;
       creatureCount: number;
@@ -346,6 +351,8 @@ function syncHud(): void {
     liveImpCount(world.imps),
     world.tick,
     ticksUntilPayday(world.tick),
+    world.heartHp,
+    world.heartBreached,
   );
   const snapshot = actor.getSnapshot();
   const paused = isPaused(snapshot);
@@ -478,6 +485,21 @@ function jobSnapshotDebug(tx: number, ty: number): JobDebug | null {
   return job === undefined ? null : jobDebug(job);
 }
 
+function heroGoal(hero: Hero): string {
+  switch (hero.state.kind) {
+    case "marching":
+      return hero.state.goal;
+    case "fighting":
+      return "unit";
+    case "leaving":
+      return "portal";
+    default: {
+      const never: never = hero.state;
+      return never;
+    }
+  }
+}
+
 function hasAdjacentJob(tx: number, ty: number): boolean {
   const north = ty > 0 ? jobAtTile(world.jobs, asTileIndex((ty - 1) * world.width + tx)) : undefined;
   if (north !== undefined) {
@@ -577,6 +599,15 @@ if (proof) {
     },
     get payTicks() {
       return PAY_TICKS;
+    },
+    get heartHp() {
+      return world.heartHp;
+    },
+    get heartMaxHp() {
+      return world.heartMaxHp;
+    },
+    get heartBreached() {
+      return world.heartBreached;
     },
     get painting() {
       return isPainting(cameraInput.actor.getSnapshot());
@@ -709,6 +740,7 @@ if (proof) {
               tileX: hero.tileX,
               tileY: hero.tileY,
               state: hero.state.kind,
+              goal: heroGoal(hero),
               hp: hero.hp,
               maxHp: hero.maxHp,
             });

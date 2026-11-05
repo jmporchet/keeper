@@ -71,57 +71,59 @@ export async function run(ctx) {
   }
 
   ctx.clipStart();
-  let previous = await page.evaluate(() => ({
-    heroes: globalThis.__keeper.heroSnapshot(),
-    creatures: globalThis.__keeper.creatureSnapshot(),
+  const initial = await page.evaluate(() => ({
+    heartHp: globalThis.__keeper.heartHp,
+    heartBreached: globalThis.__keeper.heartBreached,
     heroCount: globalThis.__keeper.heroCount,
-    creatureCount: globalThis.__keeper.creatureCount,
   }));
-  let fightTicks = 0;
-  for (;;) {
-    const current = await page.evaluate(() => ({
-      heroes: globalThis.__keeper.heroSnapshot(),
-      creatures: globalThis.__keeper.creatureSnapshot(),
-      heroCount: globalThis.__keeper.heroCount,
-      creatureCount: globalThis.__keeper.creatureCount,
-    }));
-    const heroHpDropped = current.heroes.some((hero) => {
-      const before = previous.heroes.find((entry) => entry.id === hero.id);
-      return before !== undefined && hero.hp < before.hp;
-    });
-    const creatureHpDropped = current.creatures.some((creature) => {
-      const before = previous.creatures.find((entry) => entry.id === creature.id);
-      return before !== undefined && creature.hp < before.hp;
-    });
-    const heroDied = current.heroCount < previous.heroCount;
-    const creatureDied = current.creatureCount < previous.creatureCount;
-    previous = current;
-    if (heroHpDropped || creatureHpDropped || heroDied || creatureDied) {
-      break;
-    }
-    if (fightTicks >= 2000) {
-      throw new Error(`no fight started after ${String(fightTicks)} ticks with heroes present`);
+  if (initial.heroCount < 1) {
+    throw new Error("heart proof started without a live hero");
+  }
+  let heartTicks = 0;
+  let current = await page.evaluate(() => ({
+    heartHp: globalThis.__keeper.heartHp,
+    heartBreached: globalThis.__keeper.heartBreached,
+    heroCount: globalThis.__keeper.heroCount,
+  }));
+  while (!(current.heartBreached || current.heartHp < initial.heartHp)) {
+    if (heartTicks >= 1000) {
+      throw new Error(`heart did not take damage after ${String(heartTicks)} ticks with heroes present`);
     }
     await ctx.stepOnce(1, 1);
-    fightTicks += 1;
+    heartTicks += 1;
+    current = await page.evaluate(() => ({
+      heartHp: globalThis.__keeper.heartHp,
+      heartBreached: globalThis.__keeper.heartBreached,
+      heroCount: globalThis.__keeper.heroCount,
+    }));
   }
 
-  const focusCreature = previous.creatures[0];
-  const focusHero = previous.heroes[0];
-  const focus = focusCreature === undefined ? focusHero : focusCreature;
-  if (focus === undefined) {
-    throw new Error("fight tick had no hero or creature to focus");
-  }
-  await ctx.panToTileCenter(focus.tileX, focus.tileY);
+  await ctx.panToTileCenter(32, 32);
   await ctx.stepOnce(1, 150);
   await ctx.screenshot("proof/heroes.png", "heroes");
-  await ctx.checkpoint("heroes-fight");
+  await ctx.checkpoint("heroes-heart");
+
+  let breachTicks = 0;
+  while (!current.heartBreached) {
+    if (breachTicks >= 1000) {
+      throw new Error(`heart was not breached after ${String(breachTicks)} ticks`);
+    }
+    await ctx.stepOnce(1, 1);
+    breachTicks += 1;
+    current = await page.evaluate(() => ({
+      heartHp: globalThis.__keeper.heartHp,
+      heartBreached: globalThis.__keeper.heartBreached,
+      heroCount: globalThis.__keeper.heroCount,
+    }));
+  }
+  await ctx.checkpoint("heroes-breach");
+
   const drawCalls = await page.evaluate(() => globalThis.__keeper.drawCalls);
   if (drawCalls > 7) {
     throw new Error(`draw calls ${String(drawCalls)} exceed 7`);
   }
   console.log(
-    `heroes heroes=${String(previous.heroCount)} creatures=${String(previous.creatureCount)} fightTicks=${String(fightTicks)} focus=${String(focus.tileX)},${String(focus.tileY)} drawCalls=${String(drawCalls)}`,
+    `heroes heroes=${String(initial.heroCount)} heartHp=${String(current.heartHp)} breached=${String(current.heartBreached)} heartTicks=${String(heartTicks)} breachTicks=${String(breachTicks)} drawCalls=${String(drawCalls)}`,
   );
 
   for (let i = 0; i < 4; i += 1) {
@@ -130,7 +132,7 @@ export async function run(ctx) {
     await page.mouse.wheel(0, i % 2 === 0 ? -240 : 240);
     await ctx.stepOnce(1, 150);
   }
-  await ctx.panToTileCenter(focus.tileX, focus.tileY);
+  await ctx.panToTileCenter(32, 32);
   await ctx.stepOnce(1, 250);
   ctx.clipEnd();
 }
