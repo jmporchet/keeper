@@ -39,3 +39,20 @@ One feature per PR, in this order. Each item names its acceptance check. "Proof"
 | 32 | ~~**Wave escalation.** After each successful heart repair the next hero wave grows in party size and HP, capped at `HERO_WAVE_PARTY_CAP = 5` and `HERO_WAVE_HP_CAP = 6`; the first wave stays at baseline.~~ | Proof: breach then repair; the respawned wave has more heroes or higher max HP. Tests cover baseline, first escalation, caps and `repairsDone` hashing. |
 | 33 | ~~**Door toggle.** Click a door to open/close; open lets heroes through; closed blocks them again.~~ | Proof: open a door and a hero walks through; close blocks. |
 | 34 | ~~**Beetle.** A second creature kind arrives through the portal beside the fly, picked by the seeded arrival roll and hashed; it has `BEETLE_HP = 5` and a distinct darker, wider render tint while sharing the fly lifecycle, training, hunger, payday, possession and combat rules.~~ | Proof: lair arrivals include a beetle, draw calls stay ≤ 7. Tests cover both kinds arriving, kind hashing, beetle possession and hero damage to a beetle. |
+
+# Backlog: milestone 2 (DK look)
+
+One feature per PR, in this order. Each item names its acceptance check. "Proof" means the PR proof in [guidelines.md](guidelines.md#6-pr-proof): build, tests, screenshot, gameplay video.
+
+| # | Item | Acceptance check |
+|---|------|------------------|
+| 35 | ~~**M2 visual brief (docs).** Add the DK-inspired look axes and constraints to `docs/design.md`.~~ | `docs/design.md` has a Milestone 2 section with the pitch, axes and constraints; no copied Bullfrog or EA assets. |
+| 36 | ~~**Cave floor atlas.** Generate a runtime atlas for dirt, claimed stone flags, rock, gold veins, earth top and room or portal floors; apply it to the tile `InstancedMesh` groups with per-instance atlas cells so tints still work.~~ | Proof screenshot shows textured floors and distinct rock and gold tops; draw calls ≤ 7; first-load JS ≤ 300 KB gzip; tests cover atlas cell selection. |
+| 37 | **Cave wall faces.** Draw cave wall faces on dug edges using the atlas and existing tile meshes. | Proof screenshot shows cave walls around dug corridors; draw calls ≤ 7; no new art assets. |
+| 38 | **Room floor variants.** Give each room kind a distinct atlas floor variant while keeping per-instance tints. | Proof shows treasury, lair, hatchery, training, workshop and library floors reading differently; draw calls ≤ 7; tests cover room-to-cell selection. |
+| 39 | **Torch lights.** Add torch point lights with darker falloff and optional fog. | Proof screenshot shows lit dungeon pools with dark falloff; frame budget still met at 200 imps; no extra draw calls. |
+| 40 | **Imp silhouette.** Replace the cone with a low-poly DK-inspired imp silhouette. | Proof shows the new imp silhouette while walking, working and held; draw calls ≤ 7. |
+| 41 | **Creature silhouettes (fly, beetle, heroes).** Give fly, beetle and heroes distinct low-poly silhouettes within the existing instanced meshes. | Proof shows fly, beetle and hero silhouettes; draw calls ≤ 7; possession still works. |
+| 42 | **Room props pass.** Make treasury piles, lair beds and hatchery chickens readable props. | Proof shows stocked treasury, occupied lair beds and hatchery chickens; shared props draw calls ≤ 7. |
+| 43 | **Door & trap meshes.** Give doors and gas traps distinct meshes instead of floor tints. | Proof shows closed and open doors and a live and spent trap; draw calls ≤ 7. |
+| 44 | **HUD/panel restyle.** Restyle the HUD and sandbox panel as a classic DK dark stone panel with HTML/CSS. | Proof screenshot shows the restyled HUD and panel; all panel actions still work; no new gameplay rules. |
