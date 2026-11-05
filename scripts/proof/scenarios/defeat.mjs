@@ -1,0 +1,157 @@
+async function paintRow(ctx, tool, xs, y) {
+  const { page } = ctx;
+  await page.click(tool, { force: true });
+  const paintingOn = await page.evaluate(() => globalThis.__keeper.painting);
+  if (!paintingOn) {
+    throw new Error(`${tool} did not select Painting`);
+  }
+  const points = [];
+  for (const tx of xs) {
+    const point = await ctx.pagePointForTile(tx, y);
+    if (point === null) {
+      throw new Error(`room tile ${String(tx)},${String(y)} is off screen`);
+    }
+    points.push(point);
+  }
+  const first = points[0];
+  await page.mouse.move(first.x, first.y);
+  await page.mouse.down();
+  for (let i = 1; i < points.length; i += 1) {
+    const point = points[i];
+    await page.mouse.move(point.x, point.y);
+  }
+  await page.mouse.up();
+  await ctx.stepOnce();
+  await page.click(tool, { force: true });
+  const paintingOff = await page.evaluate(() => globalThis.__keeper.painting);
+  if (paintingOff) {
+    throw new Error(`${tool} stayed selected after toggle`);
+  }
+}
+
+function heartState(page) {
+  return page.evaluate(() => ({
+    heartBreached: globalThis.__keeper.heartBreached,
+    breachTicks: globalThis.__keeper.breachTicks,
+    defeated: globalThis.__keeper.defeated,
+  }));
+}
+
+export const name = "defeat";
+
+export async function run(ctx) {
+  const { page, cx, cy } = ctx;
+  await page.click("#add-gold", { force: true });
+  await ctx.stepOnce();
+  await ctx.panToTileCenter(31, 30);
+  await paintRow(ctx, "#paint-treasury", [30, 31, 32], 30);
+  await page.click("#add-gold", { force: true });
+  await ctx.stepOnce();
+  await ctx.panToTileCenter(31, 31);
+  await paintRow(ctx, "#paint-lair", [30, 31, 32], 31);
+  await page.click("#add-gold", { force: true });
+  await ctx.stepOnce();
+
+  let setupTicks = 0;
+  for (;;) {
+    const creatures = await page.evaluate(() => globalThis.__keeper.creatureSnapshot());
+    if (creatures.some((creature) => creature.state === "sleeping")) {
+      break;
+    }
+    if (setupTicks >= 600) {
+      throw new Error(`creature did not reach a bed after ${String(setupTicks)} ticks`);
+    }
+    await ctx.stepOnce(12, 10);
+    setupTicks += 12;
+  }
+
+  let arrivalTicks = 0;
+  for (;;) {
+    const heroCount = await page.evaluate(() => globalThis.__keeper.heroCount);
+    if (heroCount >= 1) {
+      break;
+    }
+    if (arrivalTicks >= 1500) {
+      throw new Error(`no hero arrived after ${String(arrivalTicks)} ticks`);
+    }
+    await ctx.stepOnce(12, 10);
+    arrivalTicks += 12;
+  }
+
+  let state = await heartState(page);
+  let breachTicks = 0;
+  while (!state.heartBreached) {
+    if (breachTicks >= 1500) {
+      throw new Error(`heart was not breached after ${String(breachTicks)} ticks`);
+    }
+    await ctx.stepOnce(1, 10);
+    breachTicks += 1;
+    state = await heartState(page);
+  }
+
+  await ctx.panToTileCenter(32, 32);
+  const defeatTicks = await page.evaluate(() => globalThis.__keeper.defeatTicks);
+  const midpoint = Math.floor(defeatTicks / 2);
+  while (state.breachTicks < midpoint) {
+    await ctx.stepOnce(2, 150);
+    state = await heartState(page);
+  }
+  await ctx.stepOnce(1, 150);
+  state = await heartState(page);
+  const midHud = await page.evaluate(() => globalThis.__keeper.hudText);
+  if (!midHud.includes("breach")) {
+    throw new Error(`HUD did not show the breach timer: ${midHud}`);
+  }
+  await ctx.screenshot("proof/defeat.png", "defeat");
+  await ctx.checkpoint("defeat-mid");
+  ctx.clipStart();
+
+  while (!state.defeated) {
+    if (state.breachTicks > defeatTicks) {
+      throw new Error(`breach timer passed ${String(defeatTicks)} without defeat`);
+    }
+    await ctx.stepOnce(2, 450);
+    state = await heartState(page);
+  }
+
+  const tickAtDefeat = await page.evaluate(() => globalThis.__keeper.tick);
+  await ctx.stepOnce(4, 120);
+  const result = await page.evaluate(() => ({
+    tick: globalThis.__keeper.tick,
+    hash: globalThis.__keeper.worldHash,
+    appState: globalThis.__keeper.appState,
+    hudText: globalThis.__keeper.hudText,
+    breachTicks: globalThis.__keeper.breachTicks,
+    defeated: globalThis.__keeper.defeated,
+    drawCalls: globalThis.__keeper.drawCalls,
+  }));
+  const spawnDisabled = await page.locator("#spawn-imp").isDisabled();
+  if (!result.defeated || result.appState !== "defeated") {
+    throw new Error(`app did not enter defeat: defeated=${String(result.defeated)} state=${result.appState}`);
+  }
+  if (!result.hudText.includes("defeated")) {
+    throw new Error(`HUD did not show defeat: ${result.hudText}`);
+  }
+  if (result.tick !== tickAtDefeat) {
+    throw new Error(`tick advanced after defeat: ${String(tickAtDefeat)} -> ${String(result.tick)}`);
+  }
+  if (!spawnDisabled) {
+    throw new Error("sandbox panel actions stayed enabled after defeat");
+  }
+  if (result.drawCalls > 7) {
+    throw new Error(`draw calls ${String(result.drawCalls)} exceed 7`);
+  }
+  console.log(
+    `defeat setupTicks=${String(setupTicks)} arrivalTicks=${String(arrivalTicks)} breachTicks=${String(breachTicks)} midBreach=${String(midpoint)} tick=${String(result.tick)} hash=${String(result.hash)} appState=${result.appState} hud="${result.hudText}" drawCalls=${String(result.drawCalls)}`,
+  );
+
+  for (let i = 0; i < 3; i += 1) {
+    await ctx.panToTileCenter(i % 2 === 0 ? 35 : 30, 32);
+    await page.mouse.move(cx, cy);
+    await page.mouse.wheel(0, i % 2 === 0 ? -240 : 240);
+    await ctx.stepOnce(1, 150);
+  }
+  await ctx.panToTileCenter(32, 32);
+  await ctx.stepOnce(1, 250);
+  ctx.clipEnd();
+}

@@ -135,6 +135,7 @@ export { findPath, STEPS_PER_TILE } from "./pathfind";
 export {
   countTagged,
   createWorld,
+  DEFEAT_TICKS,
   doorCount,
   DOOR_COST,
   DOOR_DAMAGE_TICKS,

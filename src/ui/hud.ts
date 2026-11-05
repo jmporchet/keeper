@@ -1,3 +1,5 @@
+import { DEFEAT_TICKS } from "../sim";
+
 export type HudElement = {
   textContent: string | null;
 };
@@ -10,8 +12,19 @@ function formatPay(ticksUntilPayday: number): string {
   return ticksUntilPayday === 0 ? "pay now" : `pay ${String(ticksUntilPayday)}`;
 }
 
-function formatHeart(heartHp: number, heartBreached: boolean): string {
-  return heartBreached ? "breached" : `heart ${String(heartHp)}`;
+function formatHeart(
+  heartHp: number,
+  heartBreached: boolean,
+  breachTicks: number,
+  defeated: boolean,
+): string {
+  if (defeated) {
+    return "defeated";
+  }
+  if (heartBreached) {
+    return `breach ${String(DEFEAT_TICKS - breachTicks)}`;
+  }
+  return `heart ${String(heartHp)}`;
 }
 
 export function formatHud(
@@ -21,9 +34,11 @@ export function formatHud(
   ticksUntilPayday: number,
   heartHp: number,
   heartBreached: boolean,
+  breachTicks: number,
+  defeated: boolean,
   repairsDone: number,
 ): string {
-  return `gold ${String(gold)} · imps ${String(imps)} · tick ${String(tick)} · ${formatPay(ticksUntilPayday)} · ${formatHeart(heartHp, heartBreached)} · wave ${String(repairsDone + 1)}`;
+  return `gold ${String(gold)} · imps ${String(imps)} · tick ${String(tick)} · ${formatPay(ticksUntilPayday)} · ${formatHeart(heartHp, heartBreached, breachTicks, defeated)} · wave ${String(repairsDone + 1)}`;
 }
 
 export function createHud(element: HudElement | null): {
@@ -34,6 +49,8 @@ export function createHud(element: HudElement | null): {
     ticksUntilPayday: number,
     heartHp: number,
     heartBreached: boolean,
+    breachTicks: number,
+    defeated: boolean,
     repairsDone: number,
   ): void;
 } {
@@ -43,6 +60,8 @@ export function createHud(element: HudElement | null): {
   let prevPay: number | undefined;
   let prevHeartHp: number | undefined;
   let prevHeartBreached: boolean | undefined;
+  let prevBreachTicks: number | undefined;
+  let prevDefeated: boolean | undefined;
   let prevRepairsDone: number | undefined;
   return {
     update(
@@ -52,6 +71,8 @@ export function createHud(element: HudElement | null): {
       ticksUntilPayday: number,
       heartHp: number,
       heartBreached: boolean,
+      breachTicks: number,
+      defeated: boolean,
       repairsDone: number,
     ): void {
       if (
@@ -61,6 +82,8 @@ export function createHud(element: HudElement | null): {
         prevPay === ticksUntilPayday &&
         prevHeartHp === heartHp &&
         prevHeartBreached === heartBreached &&
+        prevBreachTicks === breachTicks &&
+        prevDefeated === defeated &&
         prevRepairsDone === repairsDone
       ) {
         return;
@@ -71,6 +94,8 @@ export function createHud(element: HudElement | null): {
       prevPay = ticksUntilPayday;
       prevHeartHp = heartHp;
       prevHeartBreached = heartBreached;
+      prevBreachTicks = breachTicks;
+      prevDefeated = defeated;
       prevRepairsDone = repairsDone;
       if (element !== null) {
         element.textContent = formatHud(
@@ -80,6 +105,8 @@ export function createHud(element: HudElement | null): {
           ticksUntilPayday,
           heartHp,
           heartBreached,
+          breachTicks,
+          defeated,
           repairsDone,
         );
       }

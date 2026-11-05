@@ -64,7 +64,7 @@ One feature per PR, in this order. Each item names its acceptance check. "Proof"
 | # | Item | Acceptance check |
 |---|------|------------------|
 | 45 | ~~**M3 brief (docs).** Add the hold-the-heart axes and constraints to `docs/design.md`.~~ | `docs/design.md` has a Milestone 3 section with the pitch, axes, constraints and out-of-scope list; no copied Bullfrog or EA assets. |
-| 46 | **Defeat condition.** The heart stays breached for `DEFEAT_TICKS`; the app enters defeat. | Tests: breach for fewer than `DEFEAT_TICKS` does not defeat, breach for `DEFEAT_TICKS` does, repair resets the timer; determinism hash covers the timer. Proof video shows the breach timer reaching defeat. |
+| 46 | ~~**Defeat condition.** The heart stays breached for `DEFEAT_TICKS`; the app enters defeat.~~ | Tests: breach for fewer than `DEFEAT_TICKS` does not defeat, breach for `DEFEAT_TICKS` does, repair resets the timer; determinism hash covers the timer. Proof video shows the breach timer reaching defeat. |
 | 47 | **Victory condition.** Surviving `VICTORY_WAVES` hero waves wins. | Tests: the wave counter increments on cleared waves, victory fires exactly at `VICTORY_WAVES`, earlier clears do not win. Proof video shows the final wave and the victory transition. |
 | 48 | **End screen + restart.** Show defeat or victory and restart from the same seed. | Tests: restart rebuilds the seed and clears the command log, the restarted state matches a fresh run, no stale entities. Proof video shows both end screens and a restart. |
 | 49 | **Spell lightning.** Cast at a hero for gold, damage and cooldown. | Tests: cost is refused when short, cooldown blocks recast until elapsed, damage is applied once, gold is conserved. Proof video shows a cast and a cooldown. |
