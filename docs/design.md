@@ -151,6 +151,8 @@ stateDiagram-v2
 
 Each state carries only the data it needs, for example `{ kind: "walking", jobId, path, step }`. A slap is an effect (a speed boost timer), not a state.
 
+Walkable tiles: claimed floor, dirt, and rooms. Earth, gold seams, tagged earth, tagged gold and rock are not walkable. Idle imps with no job wander: pick a random reachable walkable tile with the seeded RNG, then follow a 4-neighbour grid path (BFS) one tile at a time. The sandbox starts with four imps on the heart's claimed patch. The job board exists; imps do not reserve jobs yet. Digging and the Hand of Evil are later.
+
 ### Chart 5: job lifecycle (hand-rolled, sim)
 
 ```mermaid
@@ -172,14 +174,14 @@ Job priority follows KeeperFX's digger stack in spirit: dig tagged tiles, then m
 ### Data shapes (summary)
 
 - `TileGrid`: `Uint8Array` kind plus `Uint16Array` gold left, indexed `y * width + x`. No per-tile objects.
-- `Imp`: discriminated union on `state.kind`, stored in a preallocated pool.
+- `Imp`: discriminated union on `state.kind`. The pool is empty or live slots (`{ kind: "empty" } | { kind: "live", imp }`), same shape as the job board.
 - `JobBoard`: fixed-size pool of empty or filled slots; jobs referenced by `JobId` (slot index), never by object identity.
 - `Command`: discriminated union (`tag`, `untag`, `paintRoom`, `pickUp`, `drop`, `slap`, `spawnImp`, `addGold`), each with `tick`. Tag and untag update tiles and the job board together.
 - Branded ids: `TileIndex`, `ImpId`, `JobId`, `WorkerId`, `Tick`. A raw number cannot be passed where an id is expected.
 
 ### Chart 0: sim step and render loop
 
-The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a command log; `hashWorld` is stable for that pair. Sim core currently applies `noop`, `addGold`, `tag` and `untag`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. Reserve and release are job-board operations, not commands yet.
+The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step imps, step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a command log; `hashWorld` is stable for that pair and includes jobs and live imps. Sim core currently applies `noop`, `addGold`, `tag` and `untag`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. Reserve and release are job-board operations, not commands yet. Pathfinding reads the grid through `TileRead`.
 
 Live play uses a fixed-step accumulator (dt 1/20 s, frame delta clamped to 100 ms, at most 4 sim steps per frame). Proof mode (`?proof=1`) never reads real time: Playwright calls `window.__keeper.step(n)`, which advances n sim ticks and draws once.
 
@@ -187,7 +189,8 @@ Live play uses a fixed-step accumulator (dt 1/20 s, frame delta clamped to 100 m
 stateDiagram-v2
     [*] --> Waiting
     Waiting --> Applying: step(state, commands)
-    Applying --> SteppingRng: commands with command.tick == world.tick
+    Applying --> SteppingImps: commands with command.tick == world.tick
+    SteppingImps --> SteppingRng: idle, wandering and walking imps
     SteppingRng --> Advanced: seeded PRNG stepped
     Advanced --> Waiting: tick += 1
     [*] --> Live: default
@@ -201,7 +204,7 @@ stateDiagram-v2
 - Tile drawing lives in `src/render/`. It reads the sim `Uint8Array` grid and never writes sim state.
 - One `InstancedMesh` per tile kind (eight kinds, including tagged earth and tagged gold). Sync packs live tiles densely and sets `mesh.count` to the number of tiles of that kind, so tile draw calls stay at most 8. `syncMap` skips when `world.tilesVersion` matches the last packed version. Tagged kinds use a brighter emissive material. Picking maps a camera ray to the ground plane, then to a tile index.
 - A later pass can switch to tile-index instances with scale 0 for removed blocks; counts must still match the grid.
-- Imps are instanced too. Animation is cheap vertex or transform motion, no skinned meshes in milestone 1.
+- Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Tile kinds plus imps stay within 8 draw calls.
 - Camera: perspective, orbit around a ground target. Pitch is clamped to `[0.2, 1.35]` rad, zoom (distance) to `[12, 90]`, and the ground target to the map rectangle `[-MAP_HALF, MAP_WIDTH - MAP_HALF]` × `[-MAP_HALF, MAP_HEIGHT - MAP_HALF]`. Modes follow chart 2 in `src/input`; pose math lives in `src/camera`.
 - Visual style: low-poly blocks, moody dungeon light (one heart point light plus dim hemisphere and ambient), darker per-kind materials, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
 

@@ -1,5 +1,9 @@
 import { asTick, asTileIndex, type Tick, type TileIndex } from "./ids";
+import { createImpBoard, hashImps, spawnStartingImps, type ImpBoard } from "./imps";
+import { stepImps } from "./imps.hot";
 import { cancelJobAtTile, createJobBoard, hashJobs, openJob, type JobBoard } from "./jobs";
+import { createPathScratch, type PathScratch } from "./path";
+import { advanceRng } from "./rng";
 
 export const TICK_HZ = 20;
 export const TICK_DT = 1 / TICK_HZ;
@@ -68,6 +72,8 @@ export type World = {
   goldStored: number;
   commandCursor: number;
   jobs: JobBoard;
+  imps: ImpBoard;
+  pathScratch: PathScratch;
 };
 
 const TILE_BUFFERS = new WeakMap<World, Uint8Array>();
@@ -163,6 +169,8 @@ export function createWorld(seed: number): World {
   const height = MAP_HEIGHT;
   const tiles = new Uint8Array(width * height);
   fillStartingMap(tiles, width, height);
+  const imps = createImpBoard();
+  spawnStartingImps(imps);
   const world: World = {
     seed: seed >>> 0,
     tick: asTick(0),
@@ -174,16 +182,11 @@ export function createWorld(seed: number): World {
     goldStored: 0,
     commandCursor: 0,
     jobs: createJobBoard(width * height),
+    imps,
+    pathScratch: createPathScratch(),
   };
   TILE_BUFFERS.set(world, tiles);
   return world;
-}
-
-function nextRng(world: World): void {
-  let t = (world.rng + 0x6d2b79f5) >>> 0;
-  t = Math.imul(t ^ (t >>> 15), t | 1);
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  world.rng = (t ^ (t >>> 14)) >>> 0;
 }
 
 function mix(h: number, v: number): number {
@@ -220,6 +223,7 @@ export function hashWorld(world: World): number {
     }
     h = mix(h, cell);
   }
+  h = mix(h, hashImps(world.imps));
   return h >>> 0;
 }
 
@@ -320,7 +324,8 @@ export function step(world: World, commands: readonly Command[]): void {
     i += 1;
   }
   world.commandCursor = i;
-  nextRng(world);
+  stepImps(world);
+  advanceRng(world);
   world.tick = asTick(world.tick + 1);
 }
 

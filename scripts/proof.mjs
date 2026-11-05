@@ -92,10 +92,10 @@ function startPreview() {
   });
 }
 
-async function stepOnce(page) {
-  await page.evaluate(() => {
-    globalThis.__keeper.step(1);
-  });
+async function stepOnce(page, n = 1) {
+  await page.evaluate((count) => {
+    globalThis.__keeper.step(count);
+  }, n);
   await delay(80);
 }
 
@@ -172,47 +172,6 @@ async function run() {
         throw new Error(`expected 5 tagged tiles after earth sweep, got ${String(taggedAfterSweep)}`);
       }
 
-      await page.mouse.down({ button: "right" });
-      for (let i = 0; i < 10; i += 1) {
-        await page.mouse.move(cx + i * 12, cy + Math.sin(i / 5) * 45);
-        await stepOnce(page);
-      }
-      await page.mouse.up({ button: "right" });
-
-      await page.keyboard.down("KeyW");
-      for (let i = 0; i < 8; i += 1) {
-        await stepOnce(page);
-      }
-      await page.keyboard.down("KeyD");
-      for (let i = 0; i < 6; i += 1) {
-        await stepOnce(page);
-      }
-      await page.keyboard.up("KeyW");
-      await page.keyboard.up("KeyD");
-      await page.keyboard.down("KeyA");
-      for (let i = 0; i < 6; i += 1) {
-        await stepOnce(page);
-      }
-      await page.keyboard.up("KeyA");
-
-      await page.mouse.move(cx, cy);
-      for (let i = 0; i < 4; i += 1) {
-        await page.mouse.wheel(0, -140);
-        await stepOnce(page);
-      }
-      for (let i = 0; i < 4; i += 1) {
-        await page.mouse.wheel(0, 180);
-        await stepOnce(page);
-      }
-
-      await page.mouse.move(cx, cy);
-      await page.mouse.down({ button: "middle" });
-      for (let i = 0; i < 8; i += 1) {
-        await page.mouse.move(cx - i * 14, cy + i * 7);
-        await stepOnce(page);
-      }
-      await page.mouse.up({ button: "middle" });
-
       const rockPoint = await panUntilTileVisible(page, box, 1, 32);
       await page.keyboard.up("KeyA");
       const beforeRock = await page.evaluate(() => globalThis.__keeper.taggedCount);
@@ -227,6 +186,31 @@ async function run() {
       }
       if (afterRock !== 5) {
         throw new Error(`tagged count after rock click was ${String(afterRock)}`);
+      }
+
+      await page.keyboard.up("KeyA");
+      for (let i = 0; i < 40; i += 1) {
+        const heart = await pagePointForTile(page, box, 32, 32);
+        if (heart !== null) {
+          break;
+        }
+        await page.keyboard.down("KeyD");
+        await stepOnce(page);
+      }
+      await page.keyboard.up("KeyD");
+      await page.mouse.move(cx, cy);
+      for (let i = 0; i < 5; i += 1) {
+        await page.mouse.wheel(0, -240);
+        await stepOnce(page, 2);
+      }
+      await page.mouse.down({ button: "right" });
+      for (let i = 0; i < 8; i += 1) {
+        await page.mouse.move(cx + i * 10, cy + Math.sin(i / 3) * 22);
+        await stepOnce(page, 3);
+      }
+      await page.mouse.up({ button: "right" });
+      for (let i = 0; i < 16; i += 1) {
+        await stepOnce(page, 5);
       }
 
       const beforePause = await page.evaluate(() => globalThis.__keeper.tick);

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
-import { createWorld, setTile, TILE_KIND } from "../sim";
+import { createWorld, liveImpCount, setTile, STARTING_IMP_COUNT, TILE_KIND } from "../sim";
+import { createImpMeshes, syncImps } from "./imps";
 import { countTilesByKind, createMapMeshes, syncMap } from "./map";
 
 describe("map instances", () => {
@@ -55,5 +56,14 @@ describe("map instances", () => {
     syncMap(world.tiles, world.width, world.tilesVersion, map);
     expect(map.syncedVersion).toBe(world.tilesVersion);
     expect(spy).toHaveBeenCalled();
+  });
+
+  it("draws one instance per live imp", () => {
+    const world = createWorld(1);
+    const scene = new THREE.Scene();
+    const visual = createImpMeshes(scene);
+    syncImps(world.imps, 1, visual);
+    expect(visual.mesh.count).toBe(STARTING_IMP_COUNT);
+    expect(liveImpCount(world.imps)).toBe(STARTING_IMP_COUNT);
   });
 });
