@@ -12,7 +12,7 @@ export function commandList(maxTick: number): fc.Arbitrary<Command[]> {
         fc.integer({ min: 0, max: maxTick - 1 }),
         fc.integer({ min: 1, max: 8 }),
         fc.integer({ min: 0, max: MAP_WIDTH * MAP_WIDTH - 1 }),
-        fc.integer({ min: 0, max: 21 }),
+        fc.integer({ min: 0, max: 22 }),
       )
       .map(([tick, amount, tile, kind]) => {
         switch (kind) {
@@ -133,6 +133,12 @@ export function commandList(maxTick: number): fc.Arbitrary<Command[]> {
               kind: "castLightning",
               tick: asTick(tick),
               heroId: asHeroId(tile % HERO_CAPACITY),
+            };
+          case 22:
+            return {
+              kind: "castHeal",
+              tick: asTick(tick),
+              creatureId: asCreatureId(tile % CREATURE_CAPACITY),
             };
           case 14: {
             const direction = tile % 4;

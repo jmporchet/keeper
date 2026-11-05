@@ -66,6 +66,9 @@ import {
   LIGHTNING_COOLDOWN_TICKS,
   LIGHTNING_COST,
   LIGHTNING_DAMAGE,
+  HEAL_AMOUNT,
+  HEAL_COOLDOWN_TICKS,
+  HEAL_COST,
   type Command,
   type CommandLog,
   type CreatureId,
@@ -137,6 +140,10 @@ declare global {
       lightningCost: number;
       lightningDamage: number;
       lightningCooldownTicks: number;
+      healCooldown: number;
+      healCost: number;
+      healAmount: number;
+      healCooldownTicks: number;
       doorCount: number;
       trapCount: number;
       liveCreatureCount: number;
@@ -169,6 +176,7 @@ declare global {
       doorSnapshot(): { x: number; y: number; hp: number; open: boolean }[];
       toggleDoor(tx: number, ty: number): void;
       creatureSnapshot(): CreatureDebug[];
+      woundCreature(creatureId: number, amount: number): void;
       freeBeds(): { x: number; y: number }[];
       dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
       drainGold(): number;
@@ -232,6 +240,7 @@ const restartButton = document.getElementById("restart-game");
 const lightningFlash = document.getElementById("lightning-flash");
 const proof = new URLSearchParams(window.location.search).has("proof");
 let prevLightningCooldown = 0;
+let prevHealCooldown = 0;
 
 function flashLightning(): void {
   if (lightningFlash === null) {
@@ -365,6 +374,34 @@ function castLightningAtFirstHero(): void {
   commands.push({ kind: "castLightning", tick: world.tick, heroId });
 }
 
+function firstLiveCreatureId(): CreatureId | undefined {
+  for (let i = 0; i < world.creatures.slots.length; i += 1) {
+    const slot = world.creatures.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "live":
+        return slot.creature.id;
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+  return undefined;
+}
+
+function castHealAtFirstCreature(): void {
+  const creatureId = firstLiveCreatureId();
+  if (creatureId === undefined) {
+    return;
+  }
+  commands.push({ kind: "castHeal", tick: world.tick, creatureId });
+}
+
 function togglePaint(tool: PaintTool): void {
   const snapshot = cameraInput.actor.getSnapshot();
   cameraInput.actor.send(paintToolEvent(isPainting(snapshot), snapshot.context.tool, tool));
@@ -438,6 +475,7 @@ const sandboxPanel = createSandboxPanel(
   loadSave,
   possessFirstCreature,
   castLightningAtFirstHero,
+  castHealAtFirstCreature,
 );
 
 function syncPaintMode(): void {
@@ -468,11 +506,16 @@ function syncHud(): void {
     world.victorious,
     world.repairsDone,
     world.lightningCooldown,
+    world.healCooldown,
   );
   if (world.lightningCooldown > prevLightningCooldown) {
     flashLightning();
   }
   prevLightningCooldown = world.lightningCooldown;
+  if (world.healCooldown > prevHealCooldown) {
+    flashLightning();
+  }
+  prevHealCooldown = world.healCooldown;
   const snapshot = actor.getSnapshot();
   const paused = isPaused(snapshot);
   const defeated = isDefeated(snapshot);
@@ -780,6 +823,18 @@ if (proof) {
     get lightningCooldownTicks() {
       return LIGHTNING_COOLDOWN_TICKS;
     },
+    get healCooldown() {
+      return world.healCooldown;
+    },
+    get healCost() {
+      return HEAL_COST;
+    },
+    get healAmount() {
+      return HEAL_AMOUNT;
+    },
+    get healCooldownTicks() {
+      return HEAL_COOLDOWN_TICKS;
+    },
     get doorCount() {
       return doorCount(world);
     },
@@ -903,6 +958,24 @@ if (proof) {
         }
       }
       return creatures;
+    },
+    woundCreature(creatureId: number, amount: number) {
+      const slot = world.creatures.slots[creatureId];
+      if (slot === undefined) {
+        return;
+      }
+      switch (slot.kind) {
+        case "empty":
+          return;
+        case "live": {
+          slot.creature.hp = Math.max(1, slot.creature.hp - amount);
+          return;
+        }
+        default: {
+          const never: never = slot;
+          return never;
+        }
+      }
     },
     doorSnapshot() {
       const doors: { x: number; y: number; hp: number; open: boolean }[] = [];
