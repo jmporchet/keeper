@@ -14,6 +14,7 @@ export const DOOR_COLOR = 0xd08a3c;
 export const DOOR_OPEN_COLOR = 0x7d6238;
 export const TRAP_COLOR = 0x59c878;
 export const TRAP_SPENT_COLOR = 0x546b5a;
+export const WALL_COLOR = 0x8f8578;
 
 export function colorForKind(kind: TileKind): number {
   switch (kind) {
