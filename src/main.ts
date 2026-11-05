@@ -63,10 +63,14 @@ import {
   workerOf,
   asCreatureId,
   findCreature,
+  LIGHTNING_COOLDOWN_TICKS,
+  LIGHTNING_COST,
+  LIGHTNING_DAMAGE,
   type Command,
   type CommandLog,
   type CreatureId,
   type Hero,
+  type HeroId,
   type Job,
   type PaintTool,
   type Possession,
@@ -129,6 +133,10 @@ declare global {
       victoryWaves: number;
       repairsDone: number;
       waveIndex: number;
+      lightningCooldown: number;
+      lightningCost: number;
+      lightningDamage: number;
+      lightningCooldownTicks: number;
       doorCount: number;
       trapCount: number;
       liveCreatureCount: number;
@@ -221,7 +229,18 @@ const screenPoint = new Vector3();
 const pauseOverlay = document.getElementById("pause-overlay");
 const pauseTitle = document.getElementById("pause-title");
 const restartButton = document.getElementById("restart-game");
+const lightningFlash = document.getElementById("lightning-flash");
 const proof = new URLSearchParams(window.location.search).has("proof");
+let prevLightningCooldown = 0;
+
+function flashLightning(): void {
+  if (lightningFlash === null) {
+    return;
+  }
+  lightningFlash.classList.remove("flash");
+  void lightningFlash.offsetWidth;
+  lightningFlash.classList.add("flash");
+}
 
 function placeCamera(alpha = 1): void {
   if (world.possession.kind === "creature") {
@@ -318,6 +337,34 @@ function possessFirstCreature(): void {
   }
 }
 
+function firstLiveHeroId(): HeroId | undefined {
+  for (let i = 0; i < world.heroes.slots.length; i += 1) {
+    const slot = world.heroes.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "live":
+        return slot.hero.id;
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+  return undefined;
+}
+
+function castLightningAtFirstHero(): void {
+  const heroId = firstLiveHeroId();
+  if (heroId === undefined) {
+    return;
+  }
+  commands.push({ kind: "castLightning", tick: world.tick, heroId });
+}
+
 function togglePaint(tool: PaintTool): void {
   const snapshot = cameraInput.actor.getSnapshot();
   cameraInput.actor.send(paintToolEvent(isPainting(snapshot), snapshot.context.tool, tool));
@@ -390,6 +437,7 @@ const sandboxPanel = createSandboxPanel(
   () => buildSave(world, commands),
   loadSave,
   possessFirstCreature,
+  castLightningAtFirstHero,
 );
 
 function syncPaintMode(): void {
@@ -419,7 +467,12 @@ function syncHud(): void {
     world.defeated,
     world.victorious,
     world.repairsDone,
+    world.lightningCooldown,
   );
+  if (world.lightningCooldown > prevLightningCooldown) {
+    flashLightning();
+  }
+  prevLightningCooldown = world.lightningCooldown;
   const snapshot = actor.getSnapshot();
   const paused = isPaused(snapshot);
   const defeated = isDefeated(snapshot);
@@ -714,6 +767,18 @@ if (proof) {
     },
     get waveIndex() {
       return world.repairsDone + 1;
+    },
+    get lightningCooldown() {
+      return world.lightningCooldown;
+    },
+    get lightningCost() {
+      return LIGHTNING_COST;
+    },
+    get lightningDamage() {
+      return LIGHTNING_DAMAGE;
+    },
+    get lightningCooldownTicks() {
+      return LIGHTNING_COOLDOWN_TICKS;
     },
     get doorCount() {
       return doorCount(world);

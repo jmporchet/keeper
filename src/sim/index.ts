@@ -221,6 +221,13 @@ export {
   type HeroSlot,
   type HeroState,
 } from "./heroes";
+export {
+  applyCastLightning,
+  LIGHTNING_COOLDOWN_TICKS,
+  LIGHTNING_COST,
+  LIGHTNING_DAMAGE,
+  stepLightningCooldown,
+} from "./lightning";
 export { CREATURE_WAGE, PAY_TICKS, ticksUntilPayday } from "./wages";
 export {
   applyPossess,

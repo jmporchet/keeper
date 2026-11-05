@@ -38,10 +38,12 @@ export function createSandboxPanel(
   getSave: () => Save,
   onLoad: (save: Save) => void,
   onPossess: () => void,
+  onLightning: () => void,
 ): SandboxPanel {
   const spawnButton = root === null ? null : root.querySelector<HTMLButtonElement>("#spawn-imp");
   const goldButton = root === null ? null : root.querySelector<HTMLButtonElement>("#add-gold");
   const repairHeartButton = root === null ? null : root.querySelector<HTMLButtonElement>("#repair-heart");
+  const lightningButton = root === null ? null : root.querySelector<HTMLButtonElement>("#cast-lightning");
   const paintTreasuryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-treasury");
   const paintLairButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-lair");
   const paintHatcheryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-hatchery");
@@ -67,6 +69,9 @@ export function createSandboxPanel(
     }
     if (repairHeartButton !== null) {
       repairHeartButton.disabled = paused || replaying;
+    }
+    if (lightningButton !== null) {
+      lightningButton.disabled = paused || replaying;
     }
     if (paintTreasuryButton !== null) {
       paintTreasuryButton.disabled = paused || replaying || possessed;
@@ -125,6 +130,14 @@ export function createSandboxPanel(
         return;
       }
       enqueue(sandboxCommand("repairHeart", getTick()));
+    });
+  }
+  if (lightningButton !== null) {
+    lightningButton.addEventListener("click", () => {
+      if (paused || replaying) {
+        return;
+      }
+      onLightning();
     });
   }
   if (paintTreasuryButton !== null) {
