@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CREATURE_CAPACITY, type CreatureBoard } from "../sim";
+import { CREATURE_CAPACITY, HERO_CAPACITY, type CreatureBoard, type HeroBoard } from "../sim";
 import { syncCreatureInstances } from "./creatures.hot";
 
 export type CreatureMeshes = {
@@ -11,11 +11,11 @@ export type CreatureMeshes = {
 export function createCreatureMeshes(scene: THREE.Scene): CreatureMeshes {
   const geometry = new THREE.OctahedronGeometry(0.3, 0);
   const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  const mesh = new THREE.InstancedMesh(geometry, material, CREATURE_CAPACITY);
+  const mesh = new THREE.InstancedMesh(geometry, material, CREATURE_CAPACITY + HERO_CAPACITY);
   mesh.count = 0;
   mesh.frustumCulled = false;
   const color = new THREE.Color(0xffffff);
-  for (let i = 0; i < CREATURE_CAPACITY; i += 1) {
+  for (let i = 0; i < CREATURE_CAPACITY + HERO_CAPACITY; i += 1) {
     mesh.setColorAt(i, color);
   }
   if (mesh.instanceColor !== null) {
@@ -29,6 +29,11 @@ export function createCreatureMeshes(scene: THREE.Scene): CreatureMeshes {
   };
 }
 
-export function syncCreatures(board: CreatureBoard, alpha: number, visual: CreatureMeshes): void {
-  syncCreatureInstances(board.slots, alpha, visual.mesh, visual.dummy, visual.color);
+export function syncCreatures(
+  board: CreatureBoard,
+  heroes: HeroBoard,
+  alpha: number,
+  visual: CreatureMeshes,
+): void {
+  syncCreatureInstances(board.slots, heroes.slots, alpha, visual.mesh, visual.dummy, visual.color);
 }

@@ -26,5 +26,5 @@ One feature per PR, in this order. Each item names its acceptance check. "Proof"
 | 19 | ~~**Hatchery + feeding.** Paint hatchery, chickens appear, creatures eat.~~ | Proof: hatchery with chickens; a hungry creature walks to one. |
 | 20 | ~~**Command-log save/replay.** Export/import the seed + command log; replay matches live hashWorld.~~ | Test: round-trip save then replay equals the live hash after N ticks. |
 | 21 | ~~**Payday.** Every PAY_TICKS, pay each live creature a wage from treasury; unpaid creatures leave.~~ | Proof: payday with and without enough gold; unpaid frees its bed. Test: gold conserved across payday; bed freed. |
-| 22 | **Training room.** Paint training on claimed floor; a creature trains for N ticks and gains a level/flag. | Proof: paint training, a fly trains; bed still owned. |
-| 23 | **First hero invasion.** A hero party enters from the portal on a timer; sandbox skirmish, no defeat screen. | Proof: heroes appear and path; at least one fight resolution. |
+| 22 | ~~**Training room.** Paint training on claimed floor; a creature trains for N ticks and gains a level/flag.~~ | Proof: paint training, a fly trains; bed still owned. |
+| 23 | ~~**First hero invasion.** A hero party enters from the portal on a timer; sandbox skirmish, no defeat screen.~~ | Proof: heroes appear and path; at least one fight resolution. |

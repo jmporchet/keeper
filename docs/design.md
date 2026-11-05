@@ -29,12 +29,13 @@ In scope:
 - Imps: dig, mine gold, carry gold, claim dirt. Idle imps wander.
 - Rooms: treasury, lair, hatchery and training, painted on claimed floor, paid in gold.
 - Creatures: one fly kind arrives through the portal every `ARRIVE_TICKS`, claims the smallest free lair tile and walks there to sleep. A sleeping creature with no training level may walk to a free training tile, train for `TRAIN_TICKS`, gain level one and return to its bed. After `HUNGER_TICKS` it seeks a chicken from a hatchery and eats it.
+- Heroes: a party of `HERO_PARTY_SIZE` heroes enters through the portal every `HERO_ARRIVE_TICKS` while a live creature exists and no hero wave is alive. Heroes march toward the nearest creature, fight adjacent creatures or imps, and die at zero HP. This is a sandbox skirmish with no defeat or victory screen.
 - Payday: every `PAY_TICKS` each live creature owes `CREATURE_WAGE` from the treasury; a creature that cannot be paid leaves and frees its bed.
 - Hand of Evil: pick up and drop imps, slap.
 - A sandbox panel to spawn imps and add gold.
 - HUD: owned gold (stored plus treasury stock), imp count, sim tick, and the countdown to the next payday.
 
-Out of scope for milestone 1: combat, enemy keepers, creature kinds other than the fly, creature levels above one, spells, traps, doors, possession, sound, saving, multiplayer, localization. Unpaid creatures leaving is in scope for the sandbox; fighting is still later.
+Out of scope for milestone 1: enemy keepers, creature kinds other than the fly, creature levels above one, spells, traps, doors, possession, sound, saving, multiplayer, localization. Unpaid creatures leaving and hero skirmishes are in scope for the sandbox.
 
 ## Tech stack
 
@@ -229,6 +230,14 @@ stateDiagram-v2
     Hungry --> [*]: unpaid wage at PAY_TICKS (bed freed)
     ToFood --> [*]: unpaid wage at PAY_TICKS (bed freed)
     Eating --> [*]: unpaid wage at PAY_TICKS (bed freed)
+    Arriving --> [*]: hp reaches zero (bed freed)
+    ToBed --> [*]: hp reaches zero (bed freed)
+    Sleeping --> [*]: hp reaches zero (bed freed)
+    ToTraining --> [*]: hp reaches zero (bed freed)
+    Training --> [*]: hp reaches zero (bed freed)
+    Hungry --> [*]: hp reaches zero (bed freed)
+    ToFood --> [*]: hp reaches zero (bed freed)
+    Eating --> [*]: hp reaches zero (bed freed)
 ```
 
 A creature spawns only as a sim effect of `step`, never as a command. The portal is a walkable tile at `(32,35)`; when the world tick is a multiple of `ARRIVE_TICKS = 200`, a new creature spawns if the portal exists, live creatures are below `CREATURE_CAPACITY = 8`, and at least one lair tile has no live creature claiming it. Bed choice is deterministic: the free lair tile with the smallest tile index from the `roomsVersion`-cached lair list. A creature stores its `bedTile` for its whole life, so a bed is free iff no live creature has that `bedTile`. Arrival, path, state and bed claim are included in `hashWorld`. The single-writer arrival loop makes bed uniqueness a unit-test invariant rather than a TLA+ concurrency spec.
@@ -239,22 +248,44 @@ A sleeping creature that is not training counts down `HUNGER_TICKS = 300`. When 
 
 Every `PAY_TICKS = 450` ticks the world runs a payday before imps and creatures step. In stable creature id order it pays `CREATURE_WAGE = 10` from treasury stock (the smallest tile index with stock first) and then from `goldStored`. Paid wages increase `goldPaidOut`; they are not `goldSpent`, so gold conservation is seams, carried gold, `goldStored`, treasury stock, `goldSpent` and `goldPaidOut`. If the full wage cannot be paid, the creature leaves immediately: its slot becomes empty and its bed is free for a later portal arrival. Leaving is sandbox behaviour, not combat, and there is no defeat. `freeBedTiles` reports beds no live creature claims.
 
+### Chart 7: hero lifecycle (hand-rolled, sim)
+
+```mermaid
+stateDiagram-v2
+    [*] --> Marching: wave at HERO_ARRIVE_TICKS [live creature exists, no live hero, portal exists]
+    Marching --> Marching: path to nearest reachable creature, else nearest claimed tile or heart
+    Marching --> Fighting: adjacent creature, or adjacent imp when no live creature remains
+    Fighting --> Fighting: attack cooldown FIGHT_TICKS
+    Fighting --> Marching: no adjacent enemy
+    Marching --> [*]: hp reaches zero (slot freed)
+    Fighting --> [*]: hp reaches zero (slot freed)
+```
+
+A hero wave spawns only as a sim effect of `step`, never as a command. When the world tick is a positive multiple of `HERO_ARRIVE_TICKS = 500`, at least one live creature exists, no live hero remains, and the portal still exists, `HERO_PARTY_SIZE = 2` heroes spawn in the first empty slots. Spawn tiles are deterministic: the portal tile first, then the walkable north, east, south and west neighbours in that order, skipping tiles occupied by a live hero. The pool holds `HERO_CAPACITY = 8` heroes. Heroes never claim a lair bed. A marching hero uses the single walkability flood to pick the nearest reachable live creature by distance then creature id; with no reachable creature it picks the nearest reachable claimed tile by distance then tile index, falling back to the heart. A fighting hero attacks an adjacent creature first; when no live creature remains anywhere it attacks an adjacent imp. Heroes are not part of the imp occupancy grid.
+
+### HP and combat
+
+Creatures start with `hp = maxHp = CREATURE_HP = 3`; completing training sets level one and adds `CREATURE_HP_PER_LEVEL = 1` to both. Imps start with `hp = maxHp = IMP_HP = 2`. Heroes start with `hp = maxHp = HERO_HP = 4`. `hp`, `maxHp` and `attackCooldown` are part of each entity's hash.
+
+Combat resolves once per tick after movement in stable order: heroes by slot id, then creatures by slot id, then imps by slot id. Adjacency is the same tile or a 4-neighbour. Each attacker deals `COMBAT_DAMAGE = 1` when its `attackCooldown` is zero and then sets it to `FIGHT_TICKS = 20`; a cooldown above zero counts down by one each tick. A creature at zero hp frees its bed and empties its slot, the same leave path as an unpaid creature. An imp at zero hp releases its job, leaves the occupancy grid and empties its slot; carried gold is added to `goldStored` so conservation still holds. A hero at zero hp empties its slot. If every creature or every hero dies the sandbox keeps running; there is no defeat or victory UI.
+
 ### Data shapes (summary)
 
 - `TileGrid`: `Uint8Array` kind plus `Uint16Array` gold left, indexed `y * width + x`. No per-tile objects. Rooms are a separate `Uint8Array` room kind (`none`, `treasury`, `lair`, `hatchery`, `training`) and a `Uint16Array` treasury stock, with a `tilesVersion`-keyed treasury tile cache and `roomsVersion`-keyed lair, hatchery and training tile caches. The portal is tile kind `portal`. `goldSpent` and `goldPaidOut` are on the world and hashed.
-- `Imp`: discriminated union on `state.kind`, including `held`, plus a `boost` slot union (`{ kind: "none" } | { kind: "boosted"; remaining }`). The pool is empty or live slots (`{ kind: "empty" } | { kind: "live", imp }`), same shape as the job board.
+- `Imp`: discriminated union on `state.kind`, including `held`, plus a `boost` slot union (`{ kind: "none" } | { kind: "boosted"; remaining }`) and `hp`, `maxHp`, `attackCooldown`. The pool is empty or live slots (`{ kind: "empty" } | { kind: "live", imp }`), same shape as the job board.
 - `JobBoard`: fixed-size pool of empty or filled slots plus a per-tile slot index; jobs referenced by `JobId` (slot index), never by object identity.
 - `Hand`: fixed-size pool of empty or held slots carrying an `ImpId`, capped at eight; `hashWorld` includes it.
-- `Creature`: slot union `empty | live` in a fixed `CREATURE_CAPACITY` pool, branded `CreatureId`, with `bedTile`, `level`, tile position, path and a state union `arriving | toBed | sleeping | toTraining | training | hungry | toFood | eating`. Creatures are hashed with their bed claims, level, training tile and hunger state; an unpaid creature's slot becomes empty, which frees its bed and changes the hash.
+- `Creature`: slot union `empty | live` in a fixed `CREATURE_CAPACITY` pool, branded `CreatureId`, with `bedTile`, `level`, `hp`, `maxHp`, `attackCooldown`, tile position, path and a state union `arriving | toBed | sleeping | toTraining | training | hungry | toFood | eating`. Creatures are hashed with their bed claims, level, HP and hunger state; an unpaid or killed creature's slot becomes empty, which frees its bed and changes the hash.
+- `Hero`: slot union `empty | live` in a fixed `HERO_CAPACITY` pool, branded `HeroId`, with `hp`, `maxHp`, `attackCooldown`, tile position, path and a state union `marching | fighting`. Heroes are hashed with their HP, cooldown, tile and path; a hero at zero hp leaves an empty slot.
 - `ChickenBoard`: slot union `empty | live` in a fixed `CHICKEN_CAPACITY` pool, branded `ChickenId`, each live chicken carrying its hatchery `tile`; the board, `chickensVersion` and per-tile counts are maintained exactly and hashed.
 - `Command`: discriminated union (`tag`, `untag`, `paintRoom`, `pickUp`, `drop`, `slap`, `spawnImp`, `addGold`), each with `tick`. Tag and untag update tiles and the job board together. `paintRoom` carries `room: "treasury" | "lair" | "hatchery" | "training"`.
 - `CommandLog`: a branded, sorted command list. `sortCommands` returns a `CommandLog`; `requireSorted` validates that an existing log is already in stable sorted order; `step` and `run` accept only a `CommandLog`, so an unsorted `Command[]` cannot reach the sim.
 - `Save`: `{ version: 1, seed, tick, commands }` with commands sorted by `(tick, original index)`. `buildSave` exports the live seed, tick and command log; `parseSave` validates unknown JSON into `{ ok: true, save } | { ok: false, error }`; `replaySave` recreates the world from the seed and steps the imported log to the saved tick. Export, import and replay live in `src/sim/save.ts`.
-- Branded ids: `TileIndex`, `ImpId`, `JobId`, `WorkerId`, `CreatureId`, `ChickenId`, `Tick`. A raw number cannot be passed where an id is expected.
+- Branded ids: `TileIndex`, `ImpId`, `JobId`, `WorkerId`, `CreatureId`, `ChickenId`, `HeroId`, `Tick`. A raw number cannot be passed where an id is expected.
 
 ### Chart 0: sim step and render loop
 
-The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), run a payday when `world.tick` is a positive multiple of `PAY_TICKS`, step imps, step creatures, step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a `CommandLog`; `hashWorld` is stable for that pair and includes jobs, live imps, creatures, bed claims and the hand. A `Save` stores `{ version: 1, seed, tick, commands }`; replaying it from a fresh world must reproduce the live hash and tick. Sim core currently applies `noop`, `addGold`, `tag`, `untag`, `paintRoom`, `spawnImp`, `pickUp`, `drop` and `slap`. `paintRoom` carries `room: "treasury" | "lair" | "hatchery" | "training"`; a lair costs `LAIR_COST = 30`, a treasury costs `TREASURY_COST = 25`, a hatchery costs `HATCHERY_COST = 50`, and a training tile costs `TRAINING_COST = 40`. Each tick then runs the `PAY_TICKS` payday, steps imps, hatches chickens on hatchery tiles at `HATCH_TICKS`, steps creatures (including the `ARRIVE_TICKS` portal arrival, training and hunger/eating effects) and the seeded PRNG. The HUD appends `pay T` for the ticks until the next payday, or `pay now` when one is due. The sandbox panel queues `spawnImp` and `addGold` commands through the same command list as the input layer; `spawnImp` fills the first empty imp slot at the heart and is refused at `IMP_CAPACITY`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. `pickUp` releases the imp's reserved job and clears any boost; `drop` writes no tile and only moves the imp onto a walkable tile; `slap` sets the boost timer on a live non-held imp and is refused otherwise. Reserve and release are job-board operations, not commands yet. Pathfinding reads the grid through `TileRead`.
+The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), run a payday when `world.tick` is a positive multiple of `PAY_TICKS`, step imps, step creatures, step hero waves and hero movement, resolve combat, step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a `CommandLog`; `hashWorld` is stable for that pair and includes jobs, live imps, creatures, bed claims, the hand, heroes, HP and combat cooldowns. A `Save` stores `{ version: 1, seed, tick, commands }`; replaying it from a fresh world must reproduce the live hash and tick. Sim core currently applies `noop`, `addGold`, `tag`, `untag`, `paintRoom`, `spawnImp`, `pickUp`, `drop` and `slap`. `paintRoom` carries `room: "treasury" | "lair" | "hatchery" | "training"`; a lair costs `LAIR_COST = 30`, a treasury costs `TREASURY_COST = 25`, a hatchery costs `HATCHERY_COST = 50`, and a training tile costs `TRAINING_COST = 40`. Each tick then runs the `PAY_TICKS` payday, steps imps, hatches chickens on hatchery tiles at `HATCH_TICKS`, steps creatures (including the `ARRIVE_TICKS` portal arrival, training and hunger/eating effects), steps heroes (including the `HERO_ARRIVE_TICKS` wave), resolves combat, and steps the seeded PRNG. The HUD appends `pay T` for the ticks until the next payday, or `pay now` when one is due. The sandbox panel queues `spawnImp` and `addGold` commands through the same command list as the input layer; `spawnImp` fills the first empty imp slot at the heart and is refused at `IMP_CAPACITY`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. `pickUp` releases the imp's reserved job and clears any boost; `drop` writes no tile and only moves the imp onto a walkable tile; `slap` sets the boost timer on a live non-held imp and is refused otherwise. Reserve and release are job-board operations, not commands yet. Pathfinding reads the grid through `TileRead`.
 
 Live play uses a fixed-step accumulator (dt 1/20 s, frame delta clamped to 100 ms, at most 4 sim steps per frame). Proof mode (`?proof=1`) never reads real time: Playwright calls `window.__keeper.step(n)`, which advances n sim ticks and draws once.
 
@@ -265,7 +296,9 @@ stateDiagram-v2
     Applying --> SteppingPayday: commands with command.tick == world.tick
     SteppingPayday --> SteppingImps: payday at PAY_TICKS, wages paid or unpaid creatures leave
     SteppingImps --> SteppingCreatures: idle, wandering, walking and working imps
-    SteppingCreatures --> SteppingRng: chicken hatching, creature movement, training, hunger, eating and portal arrivals
+    SteppingCreatures --> SteppingHeroes: chicken hatching, creature movement, training, hunger, eating and portal arrivals
+    SteppingHeroes --> SteppingCombat: hero wave, hero movement
+    SteppingCombat --> SteppingRng: hero, creature and imp attacks
     SteppingRng --> Advanced: seeded PRNG stepped
     Advanced --> Waiting: tick += 1
     [*] --> Live: default
@@ -279,7 +312,7 @@ stateDiagram-v2
 - Tile drawing lives in `src/render/`. It reads the sim `Uint8Array` grid and never writes sim state.
 - Four grouped `InstancedMesh` draws cover all nine tile kinds: terrain (earth, dirt, tagged earth), gold (seam, tagged gold), rock, and floor (claimed, treasury, lair, portal). Per-instance colours tint tagged tiles, treasury floors, lair beds and the portal; tagged instances pulse brighter inside their existing group. `syncMap` packs live tiles densely, sets `mesh.count` per group, and skips repacking when `world.tilesVersion` and `world.roomsVersion` match the last packed versions, while still updating the tagged pulse from render time. Picking maps a camera ray to the ground plane, then to a tile index.
 - A later pass can switch to tile-index instances with scale 0 for removed blocks; counts must still match the grid.
-- Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Working imps bob and tilt toward their work tile using render time only, without writing sim state. A freshly slapped imp flashes gold and leans. Held imps are skipped on the grid and drawn floating near the cursor through the same imp mesh. Creatures are one separate `InstancedMesh` of flat green-cyan octahedra, also interpolated between ticks; a creature with level one is drawn slightly larger and brighter through the same instance mesh. Treasury gold piles and hatchery chickens are drawn by one shared props `InstancedMesh`, dirty-synced by `treasuryVersion` and `chickensVersion`: one instance per stocked treasury tile scaled by `stock / TREASURY_CAPACITY`, and one small white-yellow instance per live chicken on its hatchery tile. The grouped tile meshes plus imps, creatures and props stay within 7 draw calls; room, lair, hatchery, training and portal floors reuse the floor group as per-instance tints rather than adding draw calls.
+- Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Working imps bob and tilt toward their work tile using render time only, without writing sim state. A freshly slapped imp flashes gold and leans. Held imps are skipped on the grid and drawn floating near the cursor through the same imp mesh. Creatures are one separate `InstancedMesh` of flat green-cyan octahedra, also interpolated between ticks; a creature with level one is drawn slightly larger and brighter through the same instance mesh. Heroes reuse that creature `InstancedMesh` with a blue-steel tint and a taller scale, so the hero wave adds no draw call. Treasury gold piles and hatchery chickens are drawn by one shared props `InstancedMesh`, dirty-synced by `treasuryVersion` and `chickensVersion`: one instance per stocked treasury tile scaled by `stock / TREASURY_CAPACITY`, and one small white-yellow instance per live chicken on its hatchery tile. The grouped tile meshes plus imps, creatures and props stay within 7 draw calls; room, lair, hatchery, training and portal floors reuse the floor group as per-instance tints rather than adding draw calls.
 - Camera: perspective, orbit around a ground target. Pitch is clamped to `[0.2, 1.35]` rad, zoom (distance) to `[12, 90]`, and the ground target to the map rectangle `[-MAP_HALF, MAP_WIDTH - MAP_HALF]` × `[-MAP_HALF, MAP_HEIGHT - MAP_HALF]`. Modes follow chart 2 in `src/input`; pose math lives in `src/camera`.
 - Visual style: low-poly blocks, moody dungeon light (one heart point light plus dim hemisphere and ambient), darker per-kind materials, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
 

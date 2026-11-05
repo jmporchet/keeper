@@ -41,6 +41,20 @@ describe("module import order", () => {
     expect(level).toBe(creatures.CREATURE_MAX_LEVEL);
   });
 
+  it("spawns heroes when heroes is imported before world", async () => {
+    vi.resetModules();
+    const heroes = await import("./heroes");
+    expect(heroes.HERO_CAPACITY).toBe(8);
+    const worldModule = await import("./world");
+    const ids = await import("./ids");
+    const commands: Command[] = [
+      { kind: "addGold", tick: ids.asTick(0), amount: 1000 },
+      { kind: "paintRoom", tick: ids.asTick(0), tile: ids.asTileIndex(30 * worldModule.MAP_WIDTH + 30), room: "lair" },
+    ];
+    const world = worldModule.run(1, worldModule.sortCommands(commands), heroes.HERO_ARRIVE_TICKS + 1);
+    expect(worldModule.liveHeroCount(world.heroes)).toBe(heroes.HERO_PARTY_SIZE);
+  });
+
   it("hatches chickens when chickens is imported before world", async () => {
     vi.resetModules();
     const chickens = await import("./chickens");
