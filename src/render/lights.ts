@@ -1,24 +1,24 @@
 import * as THREE from "three";
 import { HEART_X, HEART_Y, MAP_HALF, ROOM_KIND, type World } from "../sim";
 
-export const DUNGEON_EXPOSURE = 1.5;
+export const DUNGEON_EXPOSURE = 1.2;
 export const FOG_ENABLED = true;
-export const FOG_COLOR = 0x2a221c;
-export const FOG_DENSITY = 0.002;
+export const FOG_COLOR = 0x140f0b;
+export const FOG_DENSITY = 0.008;
 export const HEMISPHERE_SKY_COLOR = 0x8a7a6a;
 export const HEMISPHERE_GROUND_COLOR = 0x2a2018;
-export const HEMISPHERE_LIGHT_INTENSITY = 2.4;
+export const HEMISPHERE_LIGHT_INTENSITY = 1.0;
 export const AMBIENT_LIGHT_COLOR = 0x8a7a6a;
-export const AMBIENT_LIGHT_INTENSITY = 8.5;
+export const AMBIENT_LIGHT_INTENSITY = 1.0;
 export const TORCH_LIGHT_COUNT = 6;
 export const TORCH_LIGHT_COLOR = 0xff8a3c;
 export const TORCH_LIGHT_INTENSITY = 16;
-export const TORCH_LIGHT_DISTANCE = 20;
+export const TORCH_LIGHT_DISTANCE = 16;
 export const TORCH_LIGHT_DECAY = 2;
 export const TORCH_LIGHT_HEIGHT = 2;
 export const HEART_LIGHT_COLOR = 0xffb060;
-export const HEART_LIGHT_INTENSITY = 28;
-export const HEART_LIGHT_DISTANCE = 30;
+export const HEART_LIGHT_INTENSITY = 32;
+export const HEART_LIGHT_DISTANCE = 26;
 export const HEART_LIGHT_HEIGHT = 3;
 
 const TORCH_ROOM_KINDS = [

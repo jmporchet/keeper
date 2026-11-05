@@ -124,15 +124,15 @@ describe("torch light pool", () => {
   });
 
   it("exports the tuned fill, fog and light constants", () => {
-    expect(DUNGEON_EXPOSURE).toBe(1.5);
-    expect(HEMISPHERE_LIGHT_INTENSITY).toBe(2.4);
-    expect(AMBIENT_LIGHT_INTENSITY).toBe(8.5);
+    expect(DUNGEON_EXPOSURE).toBe(1.2);
+    expect(HEMISPHERE_LIGHT_INTENSITY).toBe(1.0);
+    expect(AMBIENT_LIGHT_INTENSITY).toBe(1.0);
     expect(FOG_ENABLED).toBe(true);
-    expect(FOG_COLOR).toBe(0x2a221c);
-    expect(FOG_DENSITY).toBe(0.002);
+    expect(FOG_COLOR).toBe(0x140f0b);
+    expect(FOG_DENSITY).toBe(0.008);
     expect(TORCH_LIGHT_INTENSITY).toBe(16);
-    expect(TORCH_LIGHT_DISTANCE).toBe(20);
-    expect(HEART_LIGHT_DISTANCE).toBe(30);
+    expect(TORCH_LIGHT_DISTANCE).toBe(16);
+    expect(HEART_LIGHT_DISTANCE).toBe(26);
     expect(AMBIENT_LIGHT_COLOR).toBe(0x8a7a6a);
     expect(HEMISPHERE_SKY_COLOR).toBe(0x8a7a6a);
     expect(HEMISPHERE_GROUND_COLOR).toBe(0x2a2018);
