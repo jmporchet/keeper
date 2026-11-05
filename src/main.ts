@@ -46,6 +46,7 @@ import {
   treasuryTileCount,
   lairTileCount,
   hatcheryTileCount,
+  trainingTileCount,
   liveCreatureCount,
   liveChickenCount,
   freeBedTiles,
@@ -69,6 +70,7 @@ type CreatureDebug = {
   tileX: number;
   tileY: number;
   state: string;
+  level: number;
   bedTileX: number;
   bedTileY: number;
 };
@@ -93,6 +95,7 @@ declare global {
       creatureCount: number;
       lairTileCount: number;
       hatcheryTileCount: number;
+      trainingTileCount: number;
       chickenCount: number;
       carryingCount: number;
       hudText: string;
@@ -501,6 +504,9 @@ if (proof) {
     get hatcheryTileCount() {
       return hatcheryTileCount(world);
     },
+    get trainingTileCount() {
+      return trainingTileCount(world);
+    },
     get chickenCount() {
       return liveChickenCount(world.chickens);
     },
@@ -560,6 +566,7 @@ if (proof) {
               tileX: creature.tileX,
               tileY: creature.tileY,
               state: creature.state.kind,
+              level: creature.level,
               bedTileX: bedX,
               bedTileY: bedY,
             });

@@ -27,14 +27,14 @@ In scope:
 - Free 3D camera: pan, rotate, zoom, tilt. Mouse plus keyboard first. Touch later.
 - Tag and untag tiles for digging.
 - Imps: dig, mine gold, carry gold, claim dirt. Idle imps wander.
-- Rooms: treasury, lair and hatchery, painted on claimed floor, paid in gold.
-- Creatures: one fly kind arrives through the portal every `ARRIVE_TICKS`, claims the smallest free lair tile and walks there to sleep. After `HUNGER_TICKS` it seeks a chicken from a hatchery and eats it.
+- Rooms: treasury, lair, hatchery and training, painted on claimed floor, paid in gold.
+- Creatures: one fly kind arrives through the portal every `ARRIVE_TICKS`, claims the smallest free lair tile and walks there to sleep. A sleeping creature with no training level may walk to a free training tile, train for `TRAIN_TICKS`, gain level one and return to its bed. After `HUNGER_TICKS` it seeks a chicken from a hatchery and eats it.
 - Payday: every `PAY_TICKS` each live creature owes `CREATURE_WAGE` from the treasury; a creature that cannot be paid leaves and frees its bed.
 - Hand of Evil: pick up and drop imps, slap.
 - A sandbox panel to spawn imps and add gold.
 - HUD: owned gold (stored plus treasury stock), imp count, sim tick, and the countdown to the next payday.
 
-Out of scope for milestone 1: combat, enemy keepers, creature kinds other than the fly, training, spells, traps, doors, possession, sound, saving, multiplayer, localization. Unpaid creatures leaving is in scope for the sandbox; fighting is still later.
+Out of scope for milestone 1: combat, enemy keepers, creature kinds other than the fly, creature levels above one, spells, traps, doors, possession, sound, saving, multiplayer, localization. Unpaid creatures leaving is in scope for the sandbox; fighting is still later.
 
 ## Tech stack
 
@@ -121,7 +121,7 @@ stateDiagram-v2
     Panning --> Idle: release
     Idle --> Tagging: left press on a tile
     Tagging --> Idle: release (tag/untag commands for the sweep)
-    Idle --> Painting: treasury, lair or hatchery tool selected
+    Idle --> Painting: treasury, lair, hatchery or training tool selected
     Painting --> Idle: escape or tool cleared
     Idle --> Holding: left press on imp (pickUp)
     Holding --> Holding: left press on imp (pickUp, hand not full)
@@ -131,7 +131,7 @@ stateDiagram-v2
     Idle --> Idle: Shift+left press on imp (slap)
 ```
 
-`SELECT_ROOM_TOOL` carries the room (`treasury`, `lair` or `hatchery`) and the painter emits that room with every tile. Zoom (wheel) works in every state and does not change state. The hand holds at most eight imps; a left press on another imp while holding picks it up too. A right press while holding drops the most recently picked imp, or stays holding when the tile is not walkable. A Shift+left press on an imp while Idle queues `slap` and does not pick it up; Shift has no effect while Holding or Painting.
+`SELECT_ROOM_TOOL` carries the room (`treasury`, `lair`, `hatchery` or `training`) and the painter emits that room with every tile. Zoom (wheel) works in every state and does not change state. The hand holds at most eight imps; a left press on another imp while holding picks it up too. A right press while holding drops the most recently picked imp, or stays holding when the tile is not walkable. A Shift+left press on an imp while Idle queues `slap` and does not pick it up; Shift has no effect while Holding or Painting.
 
 ### Chart 3: tile lifecycle (hand-rolled, sim)
 
@@ -148,7 +148,7 @@ stateDiagram-v2
     TaggedGold --> GoldSeam: keeper untags
     TaggedGold --> Dirt: seam exhausted
     Dirt --> Claimed: imp finishes claiming [touches claimed floor]
-    Claimed --> Room: keeper paints treasury, lair or hatchery [gold paid]
+    Claimed --> Room: keeper paints treasury, lair, hatchery or training [gold paid]
     Room --> Claimed: keeper sells room
     Rock --> Rock: tag refused
     Portal --> Portal: tag refused
@@ -213,6 +213,9 @@ stateDiagram-v2
     Arriving --> ToBed: bed claimed, path found
     Arriving --> Arriving: bed unreachable
     ToBed --> Sleeping: reached bed
+    Sleeping --> ToTraining: level zero, free reachable training tile
+    ToTraining --> Training: reached training tile
+    Training --> ToBed: TRAIN_TICKS elapsed, level set to one
     Sleeping --> Hungry: hunger timer HUNGER_TICKS reaches zero
     Hungry --> ToFood: reachable chicken found
     Hungry --> Hungry: no chicken reachable, retry after HUNGER_RETRY_TICKS
@@ -221,6 +224,8 @@ stateDiagram-v2
     Arriving --> [*]: unpaid wage at PAY_TICKS (bed freed)
     ToBed --> [*]: unpaid wage at PAY_TICKS (bed freed)
     Sleeping --> [*]: unpaid wage at PAY_TICKS (bed freed)
+    ToTraining --> [*]: unpaid wage at PAY_TICKS (bed freed)
+    Training --> [*]: unpaid wage at PAY_TICKS (bed freed)
     Hungry --> [*]: unpaid wage at PAY_TICKS (bed freed)
     ToFood --> [*]: unpaid wage at PAY_TICKS (bed freed)
     Eating --> [*]: unpaid wage at PAY_TICKS (bed freed)
@@ -228,26 +233,28 @@ stateDiagram-v2
 
 A creature spawns only as a sim effect of `step`, never as a command. The portal is a walkable tile at `(32,35)`; when the world tick is a multiple of `ARRIVE_TICKS = 200`, a new creature spawns if the portal exists, live creatures are below `CREATURE_CAPACITY = 8`, and at least one lair tile has no live creature claiming it. Bed choice is deterministic: the free lair tile with the smallest tile index from the `roomsVersion`-cached lair list. A creature stores its `bedTile` for its whole life, so a bed is free iff no live creature has that `bedTile`. Arrival, path, state and bed claim are included in `hashWorld`. The single-writer arrival loop makes bed uniqueness a unit-test invariant rather than a TLA+ concurrency spec.
 
-A sleeping creature counts down `HUNGER_TICKS = 300`. When it reaches zero the creature is hungry and uses the single walkability flood to pick the nearest reachable live chicken, tie-breaking by chicken id, then reconstructs the path to that hatchery tile. `HUNGER_RETRY_TICKS = 40` throttles retries when no chicken is reachable. Eating counts down `EAT_TICKS = 20`, then removes that chicken from the board and returns the creature to its bed. Chickens spawn only as a sim effect of `step`: every `HATCH_TICKS = 100`, each hatchery tile under `CHICKEN_TILE_CAP = 2` live chickens receives one chicken in the first empty `ChickenBoard` slot, up to `CHICKEN_CAPACITY = 32`. The hatchery tile list is cached by `roomsVersion`; the chicken board and the per-tile chicken count are maintained exactly and hashed. The Hand of Evil and slap still apply only to imps.
+A sleeping creature with `level = 0` first looks for a free training tile. The training tile list is cached by `roomsVersion`, like the lair and hatchery lists. A tile is free iff no live creature is in `toTraining` or `training` for that tile, so one creature reserves one training tile. The creature uses the single walkability flood, picks the smallest free reachable training tile, walks there and trains for `TRAIN_TICKS = 80`. On completion it sets `level = 1` and returns to its bed; `bedTile` never changes, so its bed stays owned while it trains. Training rooms cost `TRAINING_COST = 40` per claimed tile. Training creatures are live creatures, so payday still charges them and an unpaid training creature leaves and frees its bed.
+
+A sleeping creature that is not training counts down `HUNGER_TICKS = 300`. When it reaches zero the creature is hungry and uses the single walkability flood to pick the nearest reachable live chicken, tie-breaking by chicken id, then reconstructs the path to that hatchery tile. `HUNGER_RETRY_TICKS = 40` throttles retries when no chicken is reachable. Eating counts down `EAT_TICKS = 20`, then removes that chicken from the board and returns the creature to its bed. Chickens spawn only as a sim effect of `step`: every `HATCH_TICKS = 100`, each hatchery tile under `CHICKEN_TILE_CAP = 2` live chickens receives one chicken in the first empty `ChickenBoard` slot, up to `CHICKEN_CAPACITY = 32`. The hatchery tile list is cached by `roomsVersion`; the chicken board and the per-tile chicken count are maintained exactly and hashed. The Hand of Evil and slap still apply only to imps.
 
 Every `PAY_TICKS = 450` ticks the world runs a payday before imps and creatures step. In stable creature id order it pays `CREATURE_WAGE = 10` from treasury stock (the smallest tile index with stock first) and then from `goldStored`. Paid wages increase `goldPaidOut`; they are not `goldSpent`, so gold conservation is seams, carried gold, `goldStored`, treasury stock, `goldSpent` and `goldPaidOut`. If the full wage cannot be paid, the creature leaves immediately: its slot becomes empty and its bed is free for a later portal arrival. Leaving is sandbox behaviour, not combat, and there is no defeat. `freeBedTiles` reports beds no live creature claims.
 
 ### Data shapes (summary)
 
-- `TileGrid`: `Uint8Array` kind plus `Uint16Array` gold left, indexed `y * width + x`. No per-tile objects. Rooms are a separate `Uint8Array` room kind (`none`, `treasury`, `lair`, `hatchery`) and a `Uint16Array` treasury stock, with a `tilesVersion`-keyed treasury tile cache and `roomsVersion`-keyed lair and hatchery tile caches. The portal is tile kind `portal`. `goldSpent` and `goldPaidOut` are on the world and hashed.
+- `TileGrid`: `Uint8Array` kind plus `Uint16Array` gold left, indexed `y * width + x`. No per-tile objects. Rooms are a separate `Uint8Array` room kind (`none`, `treasury`, `lair`, `hatchery`, `training`) and a `Uint16Array` treasury stock, with a `tilesVersion`-keyed treasury tile cache and `roomsVersion`-keyed lair, hatchery and training tile caches. The portal is tile kind `portal`. `goldSpent` and `goldPaidOut` are on the world and hashed.
 - `Imp`: discriminated union on `state.kind`, including `held`, plus a `boost` slot union (`{ kind: "none" } | { kind: "boosted"; remaining }`). The pool is empty or live slots (`{ kind: "empty" } | { kind: "live", imp }`), same shape as the job board.
 - `JobBoard`: fixed-size pool of empty or filled slots plus a per-tile slot index; jobs referenced by `JobId` (slot index), never by object identity.
 - `Hand`: fixed-size pool of empty or held slots carrying an `ImpId`, capped at eight; `hashWorld` includes it.
-- `Creature`: slot union `empty | live` in a fixed `CREATURE_CAPACITY` pool, branded `CreatureId`, with `bedTile`, tile position, path and a state union `arriving | toBed | sleeping | hungry | toFood | eating`. Creatures are hashed with their bed claims and hunger state; an unpaid creature's slot becomes empty, which frees its bed and changes the hash.
+- `Creature`: slot union `empty | live` in a fixed `CREATURE_CAPACITY` pool, branded `CreatureId`, with `bedTile`, `level`, tile position, path and a state union `arriving | toBed | sleeping | toTraining | training | hungry | toFood | eating`. Creatures are hashed with their bed claims, level, training tile and hunger state; an unpaid creature's slot becomes empty, which frees its bed and changes the hash.
 - `ChickenBoard`: slot union `empty | live` in a fixed `CHICKEN_CAPACITY` pool, branded `ChickenId`, each live chicken carrying its hatchery `tile`; the board, `chickensVersion` and per-tile counts are maintained exactly and hashed.
-- `Command`: discriminated union (`tag`, `untag`, `paintRoom`, `pickUp`, `drop`, `slap`, `spawnImp`, `addGold`), each with `tick`. Tag and untag update tiles and the job board together. `paintRoom` carries `room: "treasury" | "lair" | "hatchery"`.
+- `Command`: discriminated union (`tag`, `untag`, `paintRoom`, `pickUp`, `drop`, `slap`, `spawnImp`, `addGold`), each with `tick`. Tag and untag update tiles and the job board together. `paintRoom` carries `room: "treasury" | "lair" | "hatchery" | "training"`.
 - `CommandLog`: a branded, sorted command list. `sortCommands` returns a `CommandLog`; `requireSorted` validates that an existing log is already in stable sorted order; `step` and `run` accept only a `CommandLog`, so an unsorted `Command[]` cannot reach the sim.
 - `Save`: `{ version: 1, seed, tick, commands }` with commands sorted by `(tick, original index)`. `buildSave` exports the live seed, tick and command log; `parseSave` validates unknown JSON into `{ ok: true, save } | { ok: false, error }`; `replaySave` recreates the world from the seed and steps the imported log to the saved tick. Export, import and replay live in `src/sim/save.ts`.
 - Branded ids: `TileIndex`, `ImpId`, `JobId`, `WorkerId`, `CreatureId`, `ChickenId`, `Tick`. A raw number cannot be passed where an id is expected.
 
 ### Chart 0: sim step and render loop
 
-The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), run a payday when `world.tick` is a positive multiple of `PAY_TICKS`, step imps, step creatures, step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a `CommandLog`; `hashWorld` is stable for that pair and includes jobs, live imps, creatures, bed claims and the hand. A `Save` stores `{ version: 1, seed, tick, commands }`; replaying it from a fresh world must reproduce the live hash and tick. Sim core currently applies `noop`, `addGold`, `tag`, `untag`, `paintRoom`, `spawnImp`, `pickUp`, `drop` and `slap`. `paintRoom` carries `room: "treasury" | "lair" | "hatchery"`; a lair costs `LAIR_COST = 30`, a treasury costs `TREASURY_COST = 25`, a hatchery costs `HATCHERY_COST = 50`. Each tick then runs the `PAY_TICKS` payday, steps imps, hatches chickens on hatchery tiles at `HATCH_TICKS`, steps creatures (including the `ARRIVE_TICKS` portal arrival and hunger/eating effects) and the seeded PRNG. The HUD appends `pay T` for the ticks until the next payday, or `pay now` when one is due. The sandbox panel queues `spawnImp` and `addGold` commands through the same command list as the input layer; `spawnImp` fills the first empty imp slot at the heart and is refused at `IMP_CAPACITY`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. `pickUp` releases the imp's reserved job and clears any boost; `drop` writes no tile and only moves the imp onto a walkable tile; `slap` sets the boost timer on a live non-held imp and is refused otherwise. Reserve and release are job-board operations, not commands yet. Pathfinding reads the grid through `TileRead`.
+The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), run a payday when `world.tick` is a positive multiple of `PAY_TICKS`, step imps, step creatures, step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a `CommandLog`; `hashWorld` is stable for that pair and includes jobs, live imps, creatures, bed claims and the hand. A `Save` stores `{ version: 1, seed, tick, commands }`; replaying it from a fresh world must reproduce the live hash and tick. Sim core currently applies `noop`, `addGold`, `tag`, `untag`, `paintRoom`, `spawnImp`, `pickUp`, `drop` and `slap`. `paintRoom` carries `room: "treasury" | "lair" | "hatchery" | "training"`; a lair costs `LAIR_COST = 30`, a treasury costs `TREASURY_COST = 25`, a hatchery costs `HATCHERY_COST = 50`, and a training tile costs `TRAINING_COST = 40`. Each tick then runs the `PAY_TICKS` payday, steps imps, hatches chickens on hatchery tiles at `HATCH_TICKS`, steps creatures (including the `ARRIVE_TICKS` portal arrival, training and hunger/eating effects) and the seeded PRNG. The HUD appends `pay T` for the ticks until the next payday, or `pay now` when one is due. The sandbox panel queues `spawnImp` and `addGold` commands through the same command list as the input layer; `spawnImp` fills the first empty imp slot at the heart and is refused at `IMP_CAPACITY`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. `pickUp` releases the imp's reserved job and clears any boost; `drop` writes no tile and only moves the imp onto a walkable tile; `slap` sets the boost timer on a live non-held imp and is refused otherwise. Reserve and release are job-board operations, not commands yet. Pathfinding reads the grid through `TileRead`.
 
 Live play uses a fixed-step accumulator (dt 1/20 s, frame delta clamped to 100 ms, at most 4 sim steps per frame). Proof mode (`?proof=1`) never reads real time: Playwright calls `window.__keeper.step(n)`, which advances n sim ticks and draws once.
 
@@ -258,7 +265,7 @@ stateDiagram-v2
     Applying --> SteppingPayday: commands with command.tick == world.tick
     SteppingPayday --> SteppingImps: payday at PAY_TICKS, wages paid or unpaid creatures leave
     SteppingImps --> SteppingCreatures: idle, wandering, walking and working imps
-    SteppingCreatures --> SteppingRng: chicken hatching, creature movement, hunger, eating and portal arrivals
+    SteppingCreatures --> SteppingRng: chicken hatching, creature movement, training, hunger, eating and portal arrivals
     SteppingRng --> Advanced: seeded PRNG stepped
     Advanced --> Waiting: tick += 1
     [*] --> Live: default
@@ -272,7 +279,7 @@ stateDiagram-v2
 - Tile drawing lives in `src/render/`. It reads the sim `Uint8Array` grid and never writes sim state.
 - Four grouped `InstancedMesh` draws cover all nine tile kinds: terrain (earth, dirt, tagged earth), gold (seam, tagged gold), rock, and floor (claimed, treasury, lair, portal). Per-instance colours tint tagged tiles, treasury floors, lair beds and the portal; tagged instances pulse brighter inside their existing group. `syncMap` packs live tiles densely, sets `mesh.count` per group, and skips repacking when `world.tilesVersion` and `world.roomsVersion` match the last packed versions, while still updating the tagged pulse from render time. Picking maps a camera ray to the ground plane, then to a tile index.
 - A later pass can switch to tile-index instances with scale 0 for removed blocks; counts must still match the grid.
-- Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Working imps bob and tilt toward their work tile using render time only, without writing sim state. A freshly slapped imp flashes gold and leans. Held imps are skipped on the grid and drawn floating near the cursor through the same imp mesh. Creatures are one separate `InstancedMesh` of flat green-cyan octahedra, also interpolated between ticks. Treasury gold piles and hatchery chickens are drawn by one shared props `InstancedMesh`, dirty-synced by `treasuryVersion` and `chickensVersion`: one instance per stocked treasury tile scaled by `stock / TREASURY_CAPACITY`, and one small white-yellow instance per live chicken on its hatchery tile. The grouped tile meshes plus imps, creatures and props stay within 7 draw calls; room, lair, hatchery and portal floors reuse the floor group as per-instance tints rather than adding draw calls.
+- Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Working imps bob and tilt toward their work tile using render time only, without writing sim state. A freshly slapped imp flashes gold and leans. Held imps are skipped on the grid and drawn floating near the cursor through the same imp mesh. Creatures are one separate `InstancedMesh` of flat green-cyan octahedra, also interpolated between ticks; a creature with level one is drawn slightly larger and brighter through the same instance mesh. Treasury gold piles and hatchery chickens are drawn by one shared props `InstancedMesh`, dirty-synced by `treasuryVersion` and `chickensVersion`: one instance per stocked treasury tile scaled by `stock / TREASURY_CAPACITY`, and one small white-yellow instance per live chicken on its hatchery tile. The grouped tile meshes plus imps, creatures and props stay within 7 draw calls; room, lair, hatchery, training and portal floors reuse the floor group as per-instance tints rather than adding draw calls.
 - Camera: perspective, orbit around a ground target. Pitch is clamped to `[0.2, 1.35]` rad, zoom (distance) to `[12, 90]`, and the ground target to the map rectangle `[-MAP_HALF, MAP_WIDTH - MAP_HALF]` × `[-MAP_HALF, MAP_HEIGHT - MAP_HALF]`. Modes follow chart 2 in `src/input`; pose math lives in `src/camera`.
 - Visual style: low-poly blocks, moody dungeon light (one heart point light plus dim hemisphere and ambient), darker per-kind materials, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
 

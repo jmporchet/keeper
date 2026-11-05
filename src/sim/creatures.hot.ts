@@ -4,10 +4,14 @@ import {
   beginSleeping,
   beginToBed,
   beginToFood,
+  beginToTraining,
+  beginTraining,
   captureCreatureCurr,
   captureCreaturePrev,
+  CREATURE_MAX_LEVEL,
   CREATURE_STEPS_PER_TILE,
   finishEating,
+  finishTraining,
   setCreatureHeading,
   tryArrival,
   type Creature,
@@ -49,11 +53,25 @@ function stepLiveCreature(world: World, creature: Creature): void {
       }
       break;
     case "sleeping":
+      if (creature.level < CREATURE_MAX_LEVEL && beginToTraining(world, creature)) {
+        break;
+      }
       if (state.remaining > 0) {
         state.remaining -= 1;
         break;
       }
       beginHungry(creature);
+      break;
+    case "toTraining":
+      if (advanceAlongPath(creature, state, world.width, 1)) {
+        beginTraining(creature, state.tile);
+      }
+      break;
+    case "training":
+      state.remaining -= 1;
+      if (state.remaining <= 0) {
+        finishTraining(world, creature);
+      }
       break;
     case "hungry":
       if (state.retry > 0) {

@@ -35,6 +35,7 @@ import {
   PORTAL_Y,
   ROOM_KIND,
   TILE_KIND,
+  TRAINING_COST,
   TREASURY_COST,
   tileKindAt,
   type RoomTool,
@@ -61,6 +62,7 @@ export {
   TILE_KIND,
   TILE_KIND_COUNT,
   TILE_KINDS,
+  TRAINING_COST,
   TREASURY_CAPACITY,
   TREASURY_COST,
   tileKindAt,
@@ -186,6 +188,7 @@ export function createWorld(seed: number): World {
   const treasuryCache = new Int32Array(width * height);
   const lairCache = new Int32Array(width * height);
   const hatcheryCache = new Int32Array(width * height);
+  const trainingCache = new Int32Array(width * height);
   const chickenTileCount = new Uint16Array(width * height);
   let walkableTileCount = 0;
   for (let i = 0; i < tiles.length; i += 1) {
@@ -220,6 +223,9 @@ export function createWorld(seed: number): World {
     hatcheryCache,
     hatcheryCacheCount: 0,
     hatcheryCacheVersion: -1,
+    trainingCache,
+    trainingCacheCount: 0,
+    trainingCacheVersion: -1,
     chickenTileCount,
     chickens: createChickenBoard(),
     chickensVersion: 0,
@@ -393,6 +399,17 @@ function applyPaintRoom(world: World, tile: TileIndex, room: RoomTool): void {
       world.roomsVersion += 1;
       return;
     }
+    case "training": {
+      if (world.goldStored < TRAINING_COST) {
+        return;
+      }
+      world.goldStored -= TRAINING_COST;
+      world.goldSpent += TRAINING_COST;
+      setTile(world, tile, TILE_KIND.room);
+      world.rooms[tile] = ROOM_KIND.training;
+      world.roomsVersion += 1;
+      return;
+    }
     default: {
       const never: never = room;
       return never;
@@ -428,6 +445,17 @@ export function hatcheryTileCount(world: World): number {
   for (let i = 0; i < world.rooms.length; i += 1) {
     const room = world.rooms[i];
     if (room === ROOM_KIND.hatchery) {
+      total += 1;
+    }
+  }
+  return total;
+}
+
+export function trainingTileCount(world: World): number {
+  let total = 0;
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room === ROOM_KIND.training) {
       total += 1;
     }
   }

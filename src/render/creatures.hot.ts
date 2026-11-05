@@ -22,12 +22,13 @@ export function syncCreatureInstances(
         const t = alpha;
         const x = creature.prevX + (creature.currX - creature.prevX) * t;
         const z = creature.prevZ + (creature.currZ - creature.prevZ) * t;
-        dummy.position.set(x - MAP_HALF, 0.42, z - MAP_HALF);
-        dummy.scale.set(1, 0.8, 1);
+        const trained = creature.level >= 1;
+        dummy.position.set(x - MAP_HALF, trained ? 0.5 : 0.42, z - MAP_HALF);
+        dummy.scale.set(trained ? 1.3 : 1, trained ? 1.05 : 0.8, trained ? 1.3 : 1);
         dummy.rotation.set(0, 0, 0);
         dummy.updateMatrix();
         mesh.setMatrixAt(drawn, dummy.matrix);
-        color.setHex(0x38e0c0);
+        color.setHex(trained ? 0x9dff7a : 0x38e0c0);
         mesh.setColorAt(drawn, color);
         drawn += 1;
         break;

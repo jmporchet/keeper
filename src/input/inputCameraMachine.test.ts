@@ -87,6 +87,11 @@ describe("input and camera chart", () => {
     expect(actor.getSnapshot().context.room).toBe("hatchery");
     actor.send({ type: "ESCAPE" });
     expect(actor.getSnapshot().value).toBe("Idle");
+    actor.send({ type: "SELECT_ROOM_TOOL", room: "training" });
+    expect(actor.getSnapshot().value).toBe("Painting");
+    expect(actor.getSnapshot().context.room).toBe("training");
+    actor.send({ type: "CLEAR_TOOL" });
+    expect(actor.getSnapshot().value).toBe("Idle");
   });
 
   it("paints alongside holding and only picks up imps when not painting", () => {
