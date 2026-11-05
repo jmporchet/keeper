@@ -133,12 +133,13 @@ Illegal states this design rules out: rock that is tagged, a room on unclaimed f
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Walking: job reserved
+    Idle --> Walking: dig job reserved
     Idle --> Wandering: no job
     Wandering --> Idle: wander done
-    Walking --> Working: arrived at job tile
-    Walking --> Idle: job cancelled or path lost
-    Working --> Idle: job done
+    Walking --> Working: reached walkable neighbour
+    Walking --> Idle: job gone or path lost
+    Working --> Idle: dug (earth becomes dirt)
+    Working --> Idle: job gone
     Working --> Carrying: gold mined
     Carrying --> Idle: gold dropped in treasury
     Carrying --> Idle: no treasury (gold dropped on floor)
@@ -149,9 +150,9 @@ stateDiagram-v2
     HeldByHand --> Idle: dropped
 ```
 
-Each state carries only the data it needs, for example `{ kind: "walking", jobId, path, step }`. A slap is an effect (a speed boost timer), not a state.
+Each state carries only the data it needs, for example `{ kind: "walking", tile, path, step }` and `{ kind: "working", tile, remaining }`. A slap is an effect (a speed boost timer), not a state. Imps never store a `JobId`: walking and working keep the job tile and re-check `jobHeldBy` every tick.
 
-Walkable tiles: claimed floor, dirt, and rooms. Earth, gold seams, tagged earth, tagged gold and rock are not walkable. Idle imps with no job wander: pick a random reachable walkable tile with the seeded RNG, then follow a 4-neighbour grid path (BFS) one tile at a time. The sandbox starts with four imps on the heart's claimed patch. The job board exists; imps do not reserve jobs yet. Digging and the Hand of Evil are later.
+Walkable tiles: claimed floor, dirt, and rooms. Earth, gold seams, tagged earth, tagged gold and rock are not walkable. Idle imps first try to reserve an open `dig` job. If one is reserved, they BFS to a reachable walkable tile 4-adjacent to the job tile and walk there; if no neighbour is reachable they release the job and wander. Working imps count down `DIG_TICKS = 40`, then turn the tagged earth into dirt and free the job. If the job disappears mid-walk or mid-work, the imp returns to idle immediately. Idle imps with no job wander: pick a random reachable walkable tile with the seeded RNG, then follow a 4-neighbour grid path (BFS) one tile at a time. The sandbox starts with four imps on the heart's claimed patch. Gold mining, claiming and the Hand of Evil are later.
 
 ### Chart 5: job lifecycle (hand-rolled, sim)
 
@@ -160,22 +161,19 @@ stateDiagram-v2
     [*] --> Open: tile tagged or dirt next to territory
     Open --> Reserved: imp reserves
     Reserved --> Open: imp dropped, picked up or path lost
-    Reserved --> Done: imp finishes
-    Open --> Cancelled: keeper untags
-    Reserved --> Cancelled: keeper untags
-    Done --> [*]
-    Cancelled --> [*]
+    Open --> [*]: keeper untags
+    Reserved --> [*]: keeper untags or imp finishes
 ```
 
-Invariant: at most one worker reserves a job, a worker holds at most one job, and a cancelled job is never reserved. This is the first chart with a TLA+ spec (`specs/JobReservation.tla`), because two workers racing for one tile is the classic bug. Reservation is a sim function on branded `WorkerId` values; imps are not in this milestone slice yet.
+Slots are freed immediately, so there is no `done` or `cancelled` state on the board. Invariant: at most one worker reserves a job, a worker holds at most one job, and a cancelled or finished job has no holder. This is the first chart with a TLA+ spec (`specs/JobReservation.tla`), because two workers racing for one tile is the classic bug. Reservation is a sim function on branded `WorkerId` values, and imps map their `ImpId` to a `WorkerId` through one helper.
 
-Job priority follows KeeperFX's digger stack in spirit: dig tagged tiles, then mine gold, then carry gold, then claim dirt, then reinforce. Tagging earth opens a `dig` job; tagging gold opens `mineGold`. Untag cancels the job at that tile, including a reserved one. The job list is the occupied pool slots in index order and is mixed into `hashWorld`.
+Job priority follows KeeperFX's digger stack in spirit: dig tagged tiles, then mine gold, then carry gold, then claim dirt, then reinforce. Tagging earth opens a `dig` job; tagging gold opens `mineGold`. Untag cancels the job at that tile, including a reserved one. The job list is the occupied pool slots in index order and is mixed into `hashWorld`; a per-tile slot index makes `jobAtTile` and `openJob` lookups constant time without scanning the pool.
 
 ### Data shapes (summary)
 
 - `TileGrid`: `Uint8Array` kind plus `Uint16Array` gold left, indexed `y * width + x`. No per-tile objects.
 - `Imp`: discriminated union on `state.kind`. The pool is empty or live slots (`{ kind: "empty" } | { kind: "live", imp }`), same shape as the job board.
-- `JobBoard`: fixed-size pool of empty or filled slots; jobs referenced by `JobId` (slot index), never by object identity.
+- `JobBoard`: fixed-size pool of empty or filled slots plus a per-tile slot index; jobs referenced by `JobId` (slot index), never by object identity.
 - `Command`: discriminated union (`tag`, `untag`, `paintRoom`, `pickUp`, `drop`, `slap`, `spawnImp`, `addGold`), each with `tick`. Tag and untag update tiles and the job board together.
 - Branded ids: `TileIndex`, `ImpId`, `JobId`, `WorkerId`, `Tick`. A raw number cannot be passed where an id is expected.
 
@@ -190,7 +188,7 @@ stateDiagram-v2
     [*] --> Waiting
     Waiting --> Applying: step(state, commands)
     Applying --> SteppingImps: commands with command.tick == world.tick
-    SteppingImps --> SteppingRng: idle, wandering and walking imps
+    SteppingImps --> SteppingRng: idle, wandering, walking and working imps
     SteppingRng --> Advanced: seeded PRNG stepped
     Advanced --> Waiting: tick += 1
     [*] --> Live: default

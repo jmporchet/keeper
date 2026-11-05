@@ -11,6 +11,7 @@ export {
   type WorkerId,
 } from "./ids";
 export {
+  DIG_TICKS,
   findPath,
   hashImps,
   IMP_CAPACITY,
@@ -18,10 +19,12 @@ export {
   occupyWalkable,
   STARTING_IMP_COUNT,
   STEPS_PER_TILE,
+  workerOf,
   type Imp,
   type ImpBoard,
   type ImpSlot,
   type ImpState,
+  type ImpWorking,
 } from "./imps";
 export {
   assertJobInvariants,

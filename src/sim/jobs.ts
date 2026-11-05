@@ -1,14 +1,12 @@
 import { asJobId, type JobId, type TileIndex, type WorkerId } from "./ids";
+import { isWalkableCode } from "./path";
+import type { TileRead } from "./world";
 
 export const JOB_KINDS = ["dig", "mineGold", "carryGold", "claim", "reinforce"] as const;
 
 export type JobKind = (typeof JOB_KINDS)[number];
 
-export type JobLifecycle =
-  | { kind: "open" }
-  | { kind: "reserved"; worker: WorkerId }
-  | { kind: "done" }
-  | { kind: "cancelled" };
+export type JobLifecycle = { kind: "open" } | { kind: "reserved"; worker: WorkerId };
 
 export type Job = {
   id: JobId;
@@ -19,16 +17,34 @@ export type Job = {
 
 type JobSlot = { kind: "empty" } | { kind: "filled"; job: Job };
 
+type JobLink = { kind: "empty" } | { kind: "filled"; id: JobId };
+
 export type JobBoard = {
   slots: JobSlot[];
+  byTile: JobLink[];
+  byWorker: JobLink[];
+  filled: Int32Array;
+  filledCount: number;
 };
+
+const EMPTY_JOB_SLOT: JobSlot = { kind: "empty" };
+const EMPTY_JOB_LINK: JobLink = { kind: "empty" };
+const OPEN_LIFECYCLE: JobLifecycle = { kind: "open" };
 
 export function createJobBoard(capacity: number): JobBoard {
   const slots: JobSlot[] = [];
   for (let i = 0; i < capacity; i += 1) {
-    slots.push({ kind: "empty" });
+    slots.push(EMPTY_JOB_SLOT);
   }
-  return { slots };
+  const byTile: JobLink[] = [];
+  for (let i = 0; i < capacity; i += 1) {
+    byTile.push(EMPTY_JOB_LINK);
+  }
+  const byWorker: JobLink[] = [];
+  for (let i = 0; i < capacity; i += 1) {
+    byWorker.push(EMPTY_JOB_LINK);
+  }
+  return { slots, byTile, byWorker, filled: new Int32Array(capacity), filledCount: 0 };
 }
 
 export function jobPriority(kind: JobKind): number {
@@ -86,10 +102,6 @@ function mixLifecycle(h: number, lifecycle: JobLifecycle): number {
       return mix(h, 1);
     case "reserved":
       return mix(mix(h, 2), lifecycle.worker);
-    case "done":
-      return mix(h, 3);
-    case "cancelled":
-      return mix(h, 4);
     default: {
       const never: never = lifecycle;
       return never;
@@ -99,17 +111,46 @@ function mixLifecycle(h: number, lifecycle: JobLifecycle): number {
 
 export function hashJobs(board: JobBoard): number {
   let h = 2166136261;
-  const jobs = listJobs(board);
-  h = mix(h, jobs.length);
-  for (let i = 0; i < jobs.length; i += 1) {
-    const job = jobs[i];
-    if (job === undefined) {
+  let count = 0;
+  for (let i = 0; i < board.slots.length; i += 1) {
+    const slot = board.slots[i];
+    if (slot === undefined) {
       continue;
     }
-    h = mix(h, job.id);
-    h = mixKind(h, job.jobKind);
-    h = mix(h, job.tile);
-    h = mixLifecycle(h, job.lifecycle);
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "filled":
+        count += 1;
+        break;
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
+  }
+  h = mix(h, count);
+  for (let i = 0; i < board.slots.length; i += 1) {
+    const slot = board.slots[i];
+    if (slot === undefined) {
+      continue;
+    }
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "filled": {
+        const job = slot.job;
+        h = mix(h, job.id);
+        h = mixKind(h, job.jobKind);
+        h = mix(h, job.tile);
+        h = mixLifecycle(h, job.lifecycle);
+        break;
+      }
+      default: {
+        const never: never = slot;
+        return never;
+      }
+    }
   }
   return h >>> 0;
 }
@@ -137,10 +178,6 @@ function printJob(job: Job): string {
       return `${head} open`;
     case "reserved":
       return `${head} reserved worker=${job.lifecycle.worker}`;
-    case "done":
-      return `${head} done`;
-    case "cancelled":
-      return `${head} cancelled`;
     default: {
       const never: never = job.lifecycle;
       return never;
@@ -168,56 +205,128 @@ function findOpenSlot(board: JobBoard): number | undefined {
   return undefined;
 }
 
-export function jobAtTile(board: JobBoard, tile: TileIndex): Job | undefined {
-  const jobs = listJobs(board);
-  for (let i = 0; i < jobs.length; i += 1) {
-    const job = jobs[i];
-    if (job === undefined) {
-      continue;
-    }
-    if (job.tile === tile) {
-      return job;
+function slotJobAt(board: JobBoard, index: number): Job | undefined {
+  const slot = board.slots[index];
+  if (slot === undefined) {
+    return undefined;
+  }
+  switch (slot.kind) {
+    case "empty":
+      return undefined;
+    case "filled":
+      return slot.job;
+    default: {
+      const never: never = slot;
+      return never;
     }
   }
-  return undefined;
+}
+
+export function jobAtTile(board: JobBoard, tile: TileIndex): Job | undefined {
+  const mapped = board.byTile[tile];
+  if (mapped === undefined) {
+    return undefined;
+  }
+  switch (mapped.kind) {
+    case "empty":
+      return undefined;
+    case "filled": {
+      const job = slotJobAt(board, mapped.id);
+      if (job === undefined) {
+        return undefined;
+      }
+      return job.tile === tile ? job : undefined;
+    }
+    default: {
+      const never: never = mapped;
+      return never;
+    }
+  }
 }
 
 export function jobHeldBy(board: JobBoard, worker: WorkerId): Job | undefined {
-  const jobs = listJobs(board);
-  for (let i = 0; i < jobs.length; i += 1) {
-    const job = jobs[i];
-    if (job === undefined) {
-      continue;
-    }
-    switch (job.lifecycle.kind) {
-      case "reserved":
-        if (job.lifecycle.worker === worker) {
-          return job;
+  const mapped = board.byWorker[worker];
+  if (mapped === undefined) {
+    return undefined;
+  }
+  switch (mapped.kind) {
+    case "empty":
+      return undefined;
+    case "filled": {
+      const job = slotJobAt(board, mapped.id);
+      if (job === undefined) {
+        return undefined;
+      }
+      switch (job.lifecycle.kind) {
+        case "reserved":
+          return job.lifecycle.worker === worker ? job : undefined;
+        case "open":
+          return undefined;
+        default: {
+          const never: never = job.lifecycle;
+          return never;
         }
-        break;
-      case "open":
-      case "done":
-      case "cancelled":
-        break;
-      default: {
-        const never: never = job.lifecycle;
-        return never;
       }
     }
+    default: {
+      const never: never = mapped;
+      return never;
+    }
   }
-  return undefined;
 }
 
 function writeSlot(board: JobBoard, index: number, slot: JobSlot): void {
   board.slots[index] = slot;
 }
 
-function setLifecycle(board: JobBoard, job: Job, lifecycle: JobLifecycle): void {
-  writeSlot(board, job.id, { kind: "filled", job: { id: job.id, jobKind: job.jobKind, tile: job.tile, lifecycle } });
+function writeTileSlot(board: JobBoard, tile: TileIndex, slot: JobLink): void {
+  board.byTile[tile] = slot;
 }
 
-function freeSlot(board: JobBoard, id: JobId): void {
-  writeSlot(board, id, { kind: "empty" });
+function writeWorkerSlot(board: JobBoard, worker: WorkerId, slot: JobLink): void {
+  board.byWorker[worker] = slot;
+}
+
+function addFilled(board: JobBoard, id: JobId): void {
+  if (board.filledCount >= board.filled.length) {
+    throw new Error("filled list overflow");
+  }
+  board.filled[board.filledCount] = id;
+  board.filledCount += 1;
+}
+
+function removeFilled(board: JobBoard, id: JobId): void {
+  for (let i = 0; i < board.filledCount; i += 1) {
+    if (board.filled[i] === id) {
+      const last = board.filled[board.filledCount - 1];
+      if (last !== undefined) {
+        board.filled[i] = last;
+      }
+      board.filledCount -= 1;
+      return;
+    }
+  }
+}
+
+function setLifecycle(job: Job, lifecycle: JobLifecycle): void {
+  job.lifecycle = lifecycle;
+}
+
+function removeJob(board: JobBoard, job: Job): void {
+  switch (job.lifecycle.kind) {
+    case "reserved":
+      writeWorkerSlot(board, job.lifecycle.worker, EMPTY_JOB_LINK);
+      break;
+    case "open":
+      break;
+    default: {
+      const never: never = job.lifecycle;
+      throw never;
+    }
+  }
+  writeSlot(board, job.id, EMPTY_JOB_SLOT);
+  writeTileSlot(board, job.tile, EMPTY_JOB_LINK);
+  removeFilled(board, job.id);
 }
 
 export function openJob(board: JobBoard, tile: TileIndex, jobKind: JobKind): Job | undefined {
@@ -232,9 +341,11 @@ export function openJob(board: JobBoard, tile: TileIndex, jobKind: JobKind): Job
     id: asJobId(index),
     jobKind,
     tile,
-    lifecycle: { kind: "open" },
+    lifecycle: OPEN_LIFECYCLE,
   };
   writeSlot(board, index, { kind: "filled", job });
+  writeTileSlot(board, tile, { kind: "filled", id: job.id });
+  addFilled(board, job.id);
   return job;
 }
 
@@ -246,12 +357,8 @@ export function cancelJobAtTile(board: JobBoard, tile: TileIndex): boolean {
   switch (job.lifecycle.kind) {
     case "open":
     case "reserved":
-      setLifecycle(board, job, { kind: "cancelled" });
-      freeSlot(board, job.id);
+      removeJob(board, job);
       return true;
-    case "done":
-    case "cancelled":
-      return false;
     default: {
       const never: never = job.lifecycle;
       return never;
@@ -268,23 +375,70 @@ function betterJob(best: Job, candidate: Job): boolean {
   return candidate.id < best.id;
 }
 
-function pickOpenJob(board: JobBoard): Job | undefined {
-  const jobs = listJobs(board);
+function hasWalkableNeighbour(tiles: TileRead, width: number, tile: TileIndex): boolean {
+  const height = (tiles.length / width) | 0;
+  const y = (tile / width) | 0;
+  const x = tile - y * width;
+  if (y > 0) {
+    const code = tiles[(y - 1) * width + x];
+    if (code !== undefined && isWalkableCode(code)) {
+      return true;
+    }
+  }
+  if (x + 1 < width) {
+    const code = tiles[y * width + x + 1];
+    if (code !== undefined && isWalkableCode(code)) {
+      return true;
+    }
+  }
+  if (y + 1 < height) {
+    const code = tiles[(y + 1) * width + x];
+    if (code !== undefined && isWalkableCode(code)) {
+      return true;
+    }
+  }
+  if (x > 0) {
+    const code = tiles[y * width + x - 1];
+    if (code !== undefined && isWalkableCode(code)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function pickOpenJob(
+  board: JobBoard,
+  jobKind: JobKind | undefined,
+  tiles: TileRead | undefined,
+  width: number | undefined,
+): Job | undefined {
   let best: Job | undefined;
-  for (let i = 0; i < jobs.length; i += 1) {
-    const job = jobs[i];
+  for (let i = 0; i < board.filledCount; i += 1) {
+    const id = board.filled[i];
+    if (id === undefined) {
+      continue;
+    }
+    const job = slotJobAt(board, id);
     if (job === undefined) {
       continue;
     }
     switch (job.lifecycle.kind) {
       case "open":
-        if (best === undefined || betterJob(best, job)) {
-          best = job;
+        if (jobKind === undefined || job.jobKind === jobKind) {
+          if (
+            tiles !== undefined &&
+            width !== undefined &&
+            job.jobKind === "dig" &&
+            !hasWalkableNeighbour(tiles, width, job.tile)
+          ) {
+            break;
+          }
+          if (best === undefined || betterJob(best, job)) {
+            best = job;
+          }
         }
         break;
       case "reserved":
-      case "done":
-      case "cancelled":
         break;
       default: {
         const never: never = job.lifecycle;
@@ -295,16 +449,23 @@ function pickOpenJob(board: JobBoard): Job | undefined {
   return best;
 }
 
-export function reserveOpenJob(board: JobBoard, worker: WorkerId): Job | undefined {
+export function reserveOpenJob(
+  board: JobBoard,
+  worker: WorkerId,
+  jobKind?: JobKind,
+  tiles?: TileRead,
+  width?: number,
+): Job | undefined {
   if (jobHeldBy(board, worker) !== undefined) {
     return undefined;
   }
-  const job = pickOpenJob(board);
+  const job = pickOpenJob(board, jobKind, tiles, width);
   if (job === undefined) {
     return undefined;
   }
-  setLifecycle(board, job, { kind: "reserved", worker });
-  return jobAtTile(board, job.tile);
+  setLifecycle(job, { kind: "reserved", worker });
+  writeWorkerSlot(board, worker, { kind: "filled", id: job.id });
+  return job;
 }
 
 export function releaseWorker(board: JobBoard, worker: WorkerId): boolean {
@@ -312,7 +473,8 @@ export function releaseWorker(board: JobBoard, worker: WorkerId): boolean {
   if (job === undefined) {
     return false;
   }
-  setLifecycle(board, job, { kind: "open" });
+  setLifecycle(job, OPEN_LIFECYCLE);
+  writeWorkerSlot(board, worker, EMPTY_JOB_LINK);
   return true;
 }
 
@@ -321,34 +483,139 @@ export function completeJob(board: JobBoard, worker: WorkerId): boolean {
   if (job === undefined) {
     return false;
   }
-  setLifecycle(board, job, { kind: "done" });
-  freeSlot(board, job.id);
+  removeJob(board, job);
   return true;
+}
+
+function assertTileIndex(board: JobBoard, job: Job): void {
+  const mapped = board.byTile[job.tile];
+  if (mapped === undefined) {
+    throw new Error("job tile index missing");
+  }
+  switch (mapped.kind) {
+    case "empty":
+      throw new Error("job missing from tile index");
+    case "filled":
+      if (mapped.id !== job.id) {
+        throw new Error("job tile index points at another job");
+      }
+      break;
+    default: {
+      const never: never = mapped;
+      throw never;
+    }
+  }
+}
+
+function assertWorkerIndex(board: JobBoard, job: Job): void {
+  switch (job.lifecycle.kind) {
+    case "reserved": {
+      const mapped = board.byWorker[job.lifecycle.worker];
+      if (mapped === undefined) {
+        throw new Error("worker index missing");
+      }
+      switch (mapped.kind) {
+        case "empty":
+          throw new Error("reserved job missing from worker index");
+        case "filled":
+          if (mapped.id !== job.id) {
+            throw new Error("worker index points at another job");
+          }
+          break;
+        default: {
+          const never: never = mapped;
+          throw never;
+        }
+      }
+      break;
+    }
+    case "open":
+      break;
+    default: {
+      const never: never = job.lifecycle;
+      throw never;
+    }
+  }
 }
 
 export function assertJobInvariants(board: JobBoard): void {
   const seenWorkers = new Set<number>();
-  const jobs = listJobs(board);
-  for (let i = 0; i < jobs.length; i += 1) {
-    const job = jobs[i];
-    if (job === undefined) {
+  for (let i = 0; i < board.slots.length; i += 1) {
+    const slot = board.slots[i];
+    if (slot === undefined) {
       continue;
     }
-    switch (job.lifecycle.kind) {
-      case "reserved": {
-        if (seenWorkers.has(job.lifecycle.worker)) {
-          throw new Error("worker holds two jobs");
+    switch (slot.kind) {
+      case "empty":
+        break;
+      case "filled": {
+        const job = slot.job;
+        assertTileIndex(board, job);
+        assertWorkerIndex(board, job);
+        switch (job.lifecycle.kind) {
+          case "reserved": {
+            if (seenWorkers.has(job.lifecycle.worker)) {
+              throw new Error("worker holds two jobs");
+            }
+            seenWorkers.add(job.lifecycle.worker);
+            break;
+          }
+          case "open":
+            break;
+          default: {
+            const never: never = job.lifecycle;
+            throw never;
+          }
         }
-        seenWorkers.add(job.lifecycle.worker);
         break;
       }
-      case "cancelled":
-        throw new Error("cancelled job still on board");
-      case "open":
-      case "done":
-        break;
       default: {
-        const never: never = job.lifecycle;
+        const never: never = slot;
+        throw never;
+      }
+    }
+  }
+  for (let tile = 0; tile < board.byTile.length; tile += 1) {
+    const mapped = board.byTile[tile];
+    if (mapped === undefined) {
+      continue;
+    }
+    switch (mapped.kind) {
+      case "empty":
+        break;
+      case "filled": {
+        const job = slotJobAt(board, mapped.id);
+        if (job === undefined || job.tile !== tile) {
+          throw new Error("tile index points at a missing or misplaced job");
+        }
+        break;
+      }
+      default: {
+        const never: never = mapped;
+        throw never;
+      }
+    }
+  }
+  for (let worker = 0; worker < board.byWorker.length; worker += 1) {
+    const mapped = board.byWorker[worker];
+    if (mapped === undefined) {
+      continue;
+    }
+    switch (mapped.kind) {
+      case "empty":
+        break;
+      case "filled": {
+        const job = slotJobAt(board, mapped.id);
+        if (job === undefined) {
+          throw new Error("worker index points at a missing job");
+        }
+        if (job.lifecycle.kind !== "reserved" || job.lifecycle.worker !== worker) {
+          throw new Error("worker index points at a job held by another worker");
+        }
+        break;
+      }
+      default: {
+        const never: never = mapped;
         throw never;
       }
     }

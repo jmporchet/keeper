@@ -7,7 +7,7 @@ VARIABLES status, holder
 
 None == "none"
 
-Phases == {"absent", "open", "reserved", "done", "cancelled"}
+Phases == {"absent", "open", "reserved"}
 
 vars == <<status, holder>>
 
@@ -26,11 +26,6 @@ Create(j) ==
 
 Cancel(j) ==
   /\ status[j] \in {"open", "reserved"}
-  /\ status' = [status EXCEPT ![j] = "cancelled"]
-  /\ holder' = [holder EXCEPT ![j] = None]
-
-Recycle(j) ==
-  /\ status[j] \in {"cancelled", "done"}
   /\ status' = [status EXCEPT ![j] = "absent"]
   /\ holder' = [holder EXCEPT ![j] = None]
 
@@ -47,7 +42,7 @@ Release(j) ==
 
 Finish(j) ==
   /\ status[j] = "reserved"
-  /\ status' = [status EXCEPT ![j] = "done"]
+  /\ status' = [status EXCEPT ![j] = "absent"]
   /\ holder' = [holder EXCEPT ![j] = None]
 
 Idle ==
@@ -56,7 +51,6 @@ Idle ==
 Next ==
   \/ \E j \in Jobs : Create(j)
   \/ \E j \in Jobs : Cancel(j)
-  \/ \E j \in Jobs : Recycle(j)
   \/ \E j \in Jobs, w \in Workers : Reserve(j, w)
   \/ \E j \in Jobs : Release(j)
   \/ \E j \in Jobs : Finish(j)
@@ -71,10 +65,6 @@ OneImpPerJob ==
 OneJobPerWorker ==
   \A w \in Workers :
     Cardinality({j \in Jobs : status[j] = "reserved" /\ holder[j] = w}) <= 1
-
-CancelledNeverReserved ==
-  \A j \in Jobs :
-    status[j] = "cancelled" => holder[j] = None
 
 HolderMatchesPhase ==
   \A j \in Jobs :

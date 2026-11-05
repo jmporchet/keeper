@@ -92,11 +92,11 @@ function startPreview() {
   });
 }
 
-async function stepOnce(page, n = 1) {
+async function stepOnce(page, n = 1, waitMs = 80) {
   await page.evaluate((count) => {
     globalThis.__keeper.step(count);
   }, n);
-  await delay(80);
+  await delay(waitMs);
 }
 
 async function pagePointForTile(page, box, tx, ty) {
@@ -118,6 +118,45 @@ async function panUntilTileVisible(page, box, tx, ty) {
   }
   await page.keyboard.up("KeyA");
   throw new Error(`tile ${String(tx)},${String(ty)} stayed off screen`);
+}
+
+async function panToTileCenter(page, box, tx, ty) {
+  const targetX = tx - 32;
+  const targetZ = ty - 32;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  for (let i = 0; i < 240; i += 1) {
+    const point = await pagePointForTile(page, box, tx, ty);
+    if (point !== null && Math.abs(point.x - cx) <= 16 && Math.abs(point.y - cy) <= 16) {
+      return point;
+    }
+    const pose = await page.evaluate(() => globalThis.__keeper.camera);
+    const dx = targetX - pose.targetX;
+    const dz = targetZ - pose.targetZ;
+    const right = dx * Math.cos(pose.yaw) - dz * Math.sin(pose.yaw);
+    const forward = dx * Math.sin(pose.yaw) + dz * Math.cos(pose.yaw);
+    const keys = [];
+    if (right > 0.05) {
+      keys.push("KeyD");
+    }
+    if (right < -0.05) {
+      keys.push("KeyA");
+    }
+    if (forward > 0.05) {
+      keys.push("KeyW");
+    }
+    if (forward < -0.05) {
+      keys.push("KeyS");
+    }
+    for (const key of keys) {
+      await page.keyboard.down(key);
+    }
+    await stepOnce(page);
+    for (const key of keys) {
+      await page.keyboard.up(key);
+    }
+  }
+  throw new Error(`tile ${String(tx)},${String(ty)} never reached screen center`);
 }
 
 async function run() {
@@ -147,7 +186,9 @@ async function run() {
       const cy = box.y + box.height / 2;
       await page.mouse.move(cx, cy);
 
-      const sweepXs = [24, 25, 26, 27, 28];
+      const dirtAtStart = await page.evaluate(() => globalThis.__keeper.dirtCount);
+
+      const sweepXs = [25, 26, 27, 28, 29];
       const sweepPts = [];
       for (const tx of sweepXs) {
         const point = await pagePointForTile(page, box, tx, 32);
@@ -189,17 +230,9 @@ async function run() {
       }
 
       await page.keyboard.up("KeyA");
-      for (let i = 0; i < 40; i += 1) {
-        const heart = await pagePointForTile(page, box, 32, 32);
-        if (heart !== null) {
-          break;
-        }
-        await page.keyboard.down("KeyD");
-        await stepOnce(page);
-      }
-      await page.keyboard.up("KeyD");
+      await panToTileCenter(page, box, 28, 32);
       await page.mouse.move(cx, cy);
-      for (let i = 0; i < 5; i += 1) {
+      for (let i = 0; i < 4; i += 1) {
         await page.mouse.wheel(0, -240);
         await stepOnce(page, 2);
       }
@@ -209,7 +242,13 @@ async function run() {
         await stepOnce(page, 3);
       }
       await page.mouse.up({ button: "right" });
-      for (let i = 0; i < 16; i += 1) {
+      for (let x = 25; x <= 30; x += 1) {
+        const point = await pagePointForTile(page, box, x, 32);
+        if (point === null) {
+          throw new Error(`corridor tile ${String(x)},32 is off screen`);
+        }
+      }
+      for (let i = 0; i < 12; i += 1) {
         await stepOnce(page, 5);
       }
 
@@ -229,10 +268,25 @@ async function run() {
         await stepOnce(page);
       }
 
+      let extraTicks = 0;
+      let dirtNow = await page.evaluate(() => globalThis.__keeper.dirtCount);
+      while (dirtNow < dirtAtStart + 5 && extraTicks < 1500) {
+        await stepOnce(page, 5, 50);
+        extraTicks += 5;
+        dirtNow = await page.evaluate(() => globalThis.__keeper.dirtCount);
+      }
+      if (dirtNow < dirtAtStart + 5) {
+        throw new Error(`corridor not fully dug after ${String(extraTicks)} extra ticks: dirtCount ${String(dirtNow)}`);
+      }
+      while (Date.now() - recordStart < 12000) {
+        await stepOnce(page, 3, 50);
+      }
+
       const result = await page.evaluate(() => ({
         tick: globalThis.__keeper.tick,
         hash: globalThis.__keeper.hash,
         taggedCount: globalThis.__keeper.taggedCount,
+        dirtCount: globalThis.__keeper.dirtCount,
         drawCalls: globalThis.__keeper.drawCalls,
         camera: globalThis.__keeper.camera,
       }));
@@ -242,8 +296,11 @@ async function run() {
       if (result.drawCalls > 8) {
         throw new Error(`tile draw calls ${String(result.drawCalls)} exceed 8`);
       }
-      if (result.taggedCount !== 5) {
+      if (result.taggedCount !== 0) {
         throw new Error(`tagged count ended at ${String(result.taggedCount)}`);
+      }
+      if (result.dirtCount !== dirtAtStart + 5) {
+        throw new Error(`dirt count ended at ${String(result.dirtCount)}`);
       }
       console.log(
         beforePause,
@@ -252,14 +309,11 @@ async function run() {
         result.hash,
         result.drawCalls,
         result.taggedCount,
+        result.dirtCount,
         result.camera.targetX,
         result.camera.targetZ,
         result.camera.distance,
       );
-      const hold = 12000 - (Date.now() - recordStart);
-      if (hold > 0) {
-        await delay(hold);
-      }
       await page.screenshot({ path: "proof/shot.png" });
       await context.close();
       const files = await readdir("proof/tmp");
