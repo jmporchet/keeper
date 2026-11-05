@@ -49,8 +49,8 @@ async function convertWebm(webmPath) {
 
 function startPreview() {
   const preview = spawn(
-    "npx",
-    ["vite", "preview", "--host", "127.0.0.1", "--port", String(PORT), "--strictPort"],
+    "node_modules/.bin/vite",
+    ["preview", "--host", "127.0.0.1", "--port", String(PORT), "--strictPort"],
     { stdio: "inherit" },
   );
   return new Promise((resolve, reject) => {
