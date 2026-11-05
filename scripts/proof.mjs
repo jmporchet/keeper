@@ -81,8 +81,31 @@ async function run() {
       const page = await context.newPage();
       await page.goto(`${ORIGIN}/?proof=1`);
       await page.waitForFunction(() => globalThis.__keeper !== undefined);
-      const until = Date.now() + 15000;
-      while (Date.now() < until) {
+      const runUntil = Date.now() + 5000;
+      while (Date.now() < runUntil) {
+        await page.evaluate(() => {
+          globalThis.__keeper.step(1);
+        });
+        await delay(50);
+      }
+      const beforePause = await page.evaluate(() => globalThis.__keeper.tick);
+      await page.keyboard.press("Escape");
+      await page.waitForSelector("#pause-overlay.visible");
+      const pausedUntil = Date.now() + 5000;
+      while (Date.now() < pausedUntil) {
+        await page.evaluate(() => {
+          globalThis.__keeper.step(1);
+        });
+        await delay(50);
+      }
+      const duringPause = await page.evaluate(() => globalThis.__keeper.tick);
+      if (duringPause !== beforePause) {
+        throw new Error(`tick advanced while paused: ${String(beforePause)} -> ${String(duringPause)}`);
+      }
+      await page.keyboard.press("Escape");
+      await page.waitForSelector("#pause-overlay.visible", { state: "hidden" });
+      const resumeUntil = Date.now() + 5000;
+      while (Date.now() < resumeUntil) {
         await page.evaluate(() => {
           globalThis.__keeper.step(1);
         });
@@ -92,7 +115,10 @@ async function run() {
         tick: globalThis.__keeper.tick,
         hash: globalThis.__keeper.hash,
       }));
-      console.log(result.tick, result.hash);
+      if (result.tick <= duringPause) {
+        throw new Error(`tick did not advance after resume: ${String(duringPause)} -> ${String(result.tick)}`);
+      }
+      console.log(beforePause, duringPause, result.tick, result.hash);
       await page.screenshot({ path: "proof/shot.png" });
       await context.close();
       const files = await readdir("proof/tmp");
