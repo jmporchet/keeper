@@ -1,5 +1,5 @@
-export const ORBIT_RADIUS = 12;
-export const ORBIT_HEIGHT = 8;
+export const ORBIT_RADIUS = 56;
+export const ORBIT_HEIGHT = 42;
 export const TICKS_PER_TURN = 360;
 export const ANGLE_PER_TICK = (Math.PI * 2) / TICKS_PER_TURN;
 

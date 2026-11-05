@@ -17,8 +17,11 @@ export {
   MAX_FRAME_DELTA,
   MAX_STEPS_PER_FRAME,
   run,
+  sortCommands,
   step,
+  TILE_KIND,
+  tileKindAt,
   TICK_DT,
   TICK_HZ,
 } from "./world";
-export type { Command, TileKind, World } from "./world";
+export type { Command, TileKind, TileKindCode, World } from "./world";
