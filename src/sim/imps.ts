@@ -552,8 +552,8 @@ export function goIdle(imp: Imp): void {
   imp.headingY = 0;
 }
 
-export function boostImp(imp: Imp): void {
-  imp.boostBoosted.remaining = SLAP_TICKS;
+export function boostImp(imp: Imp, durationTicks: number = SLAP_TICKS): void {
+  imp.boostBoosted.remaining = durationTicks;
   imp.boost = imp.boostBoosted;
 }
 

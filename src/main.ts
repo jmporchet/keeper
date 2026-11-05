@@ -69,6 +69,9 @@ import {
   HEAL_AMOUNT,
   HEAL_COOLDOWN_TICKS,
   HEAL_COST,
+  SPEED_IMPS_COOLDOWN_TICKS,
+  SPEED_IMPS_COST,
+  SPEED_IMPS_DURATION_TICKS,
   type Command,
   type CommandLog,
   type CreatureId,
@@ -144,6 +147,10 @@ declare global {
       healCost: number;
       healAmount: number;
       healCooldownTicks: number;
+      speedImpsCooldown: number;
+      speedImpsCost: number;
+      speedImpsDurationTicks: number;
+      speedImpsCooldownTicks: number;
       doorCount: number;
       trapCount: number;
       liveCreatureCount: number;
@@ -241,6 +248,7 @@ const lightningFlash = document.getElementById("lightning-flash");
 const proof = new URLSearchParams(window.location.search).has("proof");
 let prevLightningCooldown = 0;
 let prevHealCooldown = 0;
+let prevSpeedImpsCooldown = 0;
 
 function flashLightning(): void {
   if (lightningFlash === null) {
@@ -402,6 +410,10 @@ function castHealAtFirstCreature(): void {
   commands.push({ kind: "castHeal", tick: world.tick, creatureId });
 }
 
+function castSpeedImps(): void {
+  commands.push({ kind: "castSpeedImps", tick: world.tick });
+}
+
 function togglePaint(tool: PaintTool): void {
   const snapshot = cameraInput.actor.getSnapshot();
   cameraInput.actor.send(paintToolEvent(isPainting(snapshot), snapshot.context.tool, tool));
@@ -476,6 +488,7 @@ const sandboxPanel = createSandboxPanel(
   possessFirstCreature,
   castLightningAtFirstHero,
   castHealAtFirstCreature,
+  castSpeedImps,
 );
 
 function syncPaintMode(): void {
@@ -507,6 +520,7 @@ function syncHud(): void {
     world.repairsDone,
     world.lightningCooldown,
     world.healCooldown,
+    world.speedImpsCooldown,
   );
   if (world.lightningCooldown > prevLightningCooldown) {
     flashLightning();
@@ -516,6 +530,10 @@ function syncHud(): void {
     flashLightning();
   }
   prevHealCooldown = world.healCooldown;
+  if (world.speedImpsCooldown > prevSpeedImpsCooldown) {
+    flashLightning();
+  }
+  prevSpeedImpsCooldown = world.speedImpsCooldown;
   const snapshot = actor.getSnapshot();
   const paused = isPaused(snapshot);
   const defeated = isDefeated(snapshot);
@@ -834,6 +852,18 @@ if (proof) {
     },
     get healCooldownTicks() {
       return HEAL_COOLDOWN_TICKS;
+    },
+    get speedImpsCooldown() {
+      return world.speedImpsCooldown;
+    },
+    get speedImpsCost() {
+      return SPEED_IMPS_COST;
+    },
+    get speedImpsDurationTicks() {
+      return SPEED_IMPS_DURATION_TICKS;
+    },
+    get speedImpsCooldownTicks() {
+      return SPEED_IMPS_COOLDOWN_TICKS;
     },
     get doorCount() {
       return doorCount(world);

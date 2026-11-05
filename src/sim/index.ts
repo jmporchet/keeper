@@ -235,6 +235,13 @@ export {
   HEAL_COST,
   stepHealCooldown,
 } from "./heal";
+export {
+  applyCastSpeedImps,
+  SPEED_IMPS_COOLDOWN_TICKS,
+  SPEED_IMPS_COST,
+  SPEED_IMPS_DURATION_TICKS,
+  stepSpeedImpsCooldown,
+} from "./speedImps";
 export { CREATURE_WAGE, PAY_TICKS, ticksUntilPayday } from "./wages";
 export {
   applyPossess,
