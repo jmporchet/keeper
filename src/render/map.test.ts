@@ -12,8 +12,10 @@ import {
   STARTING_IMP_COUNT,
   step,
   TILE_KIND,
+  TILE_KINDS,
   type TileRead,
 } from "../sim";
+import { atlasCellForKind } from "./atlas";
 import { createImpMeshes, syncImps } from "./imps";
 import { countTilesByKind, createMapMeshes, syncMap } from "./map";
 
@@ -100,6 +102,35 @@ describe("map instances", () => {
     syncMap(world, map, 0);
     expect(map.syncedVersion).toBe(world.tilesVersion);
     expect(spy).toHaveBeenCalled();
+  });
+
+  it("assigns an atlas cell to each packed tile instance", () => {
+    const world = createWorld(1);
+    const scene = new THREE.Scene();
+    const map = createMapMeshes(scene);
+    syncMap(world, map, 0);
+    const slots = new Uint32Array(map.meshes.length);
+    for (let i = 0; i < world.tiles.length; i += 1) {
+      const code = world.tiles[i];
+      if (code === undefined) {
+        continue;
+      }
+      const kind = TILE_KINDS[code];
+      if (kind === undefined) {
+        continue;
+      }
+      const group = map.kindToGroup[code];
+      if (group === undefined) {
+        continue;
+      }
+      const slot = slots[group];
+      const attribute = map.atlasAttributes[group];
+      if (slot === undefined || attribute === undefined) {
+        continue;
+      }
+      expect(attribute.array[slot]).toBe(atlasCellForKind(kind));
+      slots[group] = slot + 1;
+    }
   });
 
   it("draws one instance per live imp", () => {

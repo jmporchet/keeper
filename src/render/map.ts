@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { MAP_HEIGHT, MAP_WIDTH, TILE_KINDS, TILE_KIND, type TileKind, type TileRead, type World } from "../sim";
+import { atlasCellForKind, createTileAtlasMaterial, createTileAtlasTexture } from "./atlas";
 import { syncMapInstances } from "./map.hot";
 import { TILE_COLOR, TILE_HEIGHT, TILE_KIND_COUNT } from "./tileLookups";
 
@@ -8,6 +9,8 @@ export const TILE_GROUP_COUNT = 4;
 export type MapMeshes = {
   meshes: THREE.InstancedMesh[];
   materials: THREE.MeshLambertMaterial[];
+  atlasAttributes: THREE.InstancedBufferAttribute[];
+  atlasCells: Uint8Array;
   dummy: THREE.Object3D;
   color: THREE.Color;
   counts: Uint32Array;
@@ -48,12 +51,16 @@ function groupForKind(kind: TileKind): number {
 }
 
 export function createMapMeshes(scene: THREE.Scene): MapMeshes {
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
   const meshes: THREE.InstancedMesh[] = [];
   const materials: THREE.MeshLambertMaterial[] = [];
+  const atlasAttributes: THREE.InstancedBufferAttribute[] = [];
+  const material = createTileAtlasMaterial(createTileAtlasTexture());
   const color = new THREE.Color(0xffffff);
   for (let g = 0; g < TILE_GROUP_COUNT; g += 1) {
-    const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const atlasCells = new THREE.InstancedBufferAttribute(new Float32Array(CAPACITY), 1);
+    atlasCells.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute("atlasCell", atlasCells);
     const mesh = new THREE.InstancedMesh(geometry, material, CAPACITY);
     mesh.count = 0;
     mesh.frustumCulled = false;
@@ -66,15 +73,20 @@ export function createMapMeshes(scene: THREE.Scene): MapMeshes {
     scene.add(mesh);
     meshes.push(mesh);
     materials.push(material);
+    atlasAttributes.push(atlasCells);
   }
   const kindToGroup = new Uint8Array(TILE_KIND_COUNT);
+  const atlasCellByKind = new Uint8Array(TILE_KIND_COUNT);
   for (const kind of TILE_KINDS) {
     const code = TILE_KIND[kind];
     kindToGroup[code] = groupForKind(kind);
+    atlasCellByKind[code] = atlasCellForKind(kind);
   }
   return {
     meshes,
     materials,
+    atlasAttributes,
+    atlasCells: atlasCellByKind,
     dummy: new THREE.Object3D(),
     color,
     counts: new Uint32Array(TILE_KIND_COUNT),
@@ -145,6 +157,8 @@ export function syncMap(world: World, map: MapMeshes, time: number): void {
     map.counts,
     map.groupCounts,
     map.kindToGroup,
+    map.atlasCells,
+    map.atlasAttributes,
     map.taggedGroups,
     map.taggedSlots,
     map.taggedKinds,

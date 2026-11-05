@@ -1,4 +1,4 @@
-import type { Color, InstancedMesh, Object3D } from "three";
+import type { Color, InstancedBufferAttribute, InstancedMesh, Object3D } from "three";
 import { MAP_HALF, ROOM_KIND, TILE_KIND, TRAP_GAS_LIVE, TRAP_GAS_SPENT, type TileRead } from "../sim";
 import {
   DOOR_COLOR,
@@ -30,6 +30,8 @@ export function syncMapInstances(
   counts: Uint32Array,
   groupCounts: Uint32Array,
   kindToGroup: Uint8Array,
+  atlasCells: Uint8Array,
+  atlasAttributes: InstancedBufferAttribute[],
   taggedGroups: Uint8Array,
   taggedSlots: Int32Array,
   taggedKinds: Uint8Array,
@@ -103,6 +105,11 @@ export function syncMapInstances(
     mesh.setMatrixAt(slot, dummy.matrix);
     color.setHex(hex);
     mesh.setColorAt(slot, color);
+    const atlasCell = atlasCells[code];
+    const atlasAttribute = atlasAttributes[group];
+    if (atlasCell !== undefined && atlasAttribute !== undefined) {
+      atlasAttribute.array[slot] = atlasCell;
+    }
     if (code === TILE_KIND.taggedEarth || code === TILE_KIND.taggedGold) {
       taggedGroups[taggedCount] = group;
       taggedSlots[taggedCount] = slot;
@@ -125,6 +132,10 @@ export function syncMapInstances(
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor !== null) {
       mesh.instanceColor.needsUpdate = true;
+    }
+    const atlasAttribute = atlasAttributes[g];
+    if (atlasAttribute !== undefined) {
+      atlasAttribute.needsUpdate = true;
     }
   }
   return taggedCount;
