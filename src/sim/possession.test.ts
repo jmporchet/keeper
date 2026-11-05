@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARRIVE_TICKS, freeBedTiles, liveCreatureCount, type Creature } from "./creatures";
+import { ARRIVE_TICKS, BEETLE_HP, freeBedTiles, liveCreatureCount, type Creature } from "./creatures";
 import { FIGHT_TICKS, HERO_ARRIVE_TICKS, type Hero } from "./heroes";
 import { asCreatureId, asTick, asTileIndex, type CreatureId, type TileIndex } from "./ids";
 import {
@@ -163,6 +163,24 @@ describe("possession commands", () => {
     expect(first.tileY).toBe(firstY);
     expect(second.tileX).toBe(secondX);
     expect(second.tileY).toBe(secondY);
+  });
+
+  it("possesses a beetle and moves it", () => {
+    const world = setupSleepingCreatures(1);
+    const creature = liveCreature(world, asCreatureId(0));
+    creature.kind = "beetle";
+    creature.hp = BEETLE_HP;
+    creature.maxHp = BEETLE_HP;
+    const bedY = (creature.bedTile / MAP_WIDTH) | 0;
+    const bedX = creature.bedTile - bedY * MAP_WIDTH;
+    creature.tileX = bedX;
+    creature.tileY = bedY;
+    stepWith(world, [{ kind: "possess", tick: world.tick, creatureId: creature.id }]);
+    expect(world.possession).toEqual({ kind: "creature", id: creature.id });
+    stepWith(world, [{ kind: "possessMove", tick: world.tick, creatureId: creature.id, dx: 1, dy: 0 }]);
+    expect(creature.tileX).toBe(bedX + 1);
+    expect(creature.tileY).toBe(bedY);
+    expect(world.possession).toEqual({ kind: "creature", id: creature.id });
   });
 
   it("refuses diagonal, non-walkable and rock destinations", () => {

@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   ARRIVE_TICKS,
+  BEETLE_HP,
   beginWander,
   CREATURE_CAPACITY,
+  createCreature,
+  createCreatureBoard,
   freeBedTiles,
+  hashCreatures,
   HUNGER_TICKS,
   lairTileCount,
   liveCreatureCount,
   type Creature,
+  type CreatureKind,
 } from "./creatures";
 import { asTick, asTileIndex, type TileIndex } from "./ids";
 import { CREATURE_WAGE, PAY_TICKS } from "./wages";
@@ -110,6 +115,53 @@ describe("creature portal", () => {
     expect(bedX).toBe(30);
     expect(bedY).toBe(30);
     expect(world.rooms[creature.bedTile]).toBe(ROOM_KIND.lair);
+  });
+
+  it("arrives as both fly and beetle over repeated arrival ticks", () => {
+    const commands = lairSetup(CREATURE_CAPACITY);
+    commands.push(addGold(0, 5000));
+    const world = createWorld(1);
+    const sorted = sortCommands(commands);
+    const seen = new Set<CreatureKind>();
+    for (let t = 0; t < ARRIVE_TICKS * 4; t += 1) {
+      step(world, sorted);
+      for (const creature of creatures(world)) {
+        seen.add(creature.kind);
+      }
+    }
+    expect(seen.has("fly")).toBe(true);
+    expect(seen.has("beetle")).toBe(true);
+  });
+
+  it("gives a beetle more hp than a fly", () => {
+    const bed = asTileIndex(30 * MAP_WIDTH + 30);
+    const fly = createCreature(0, PORTAL_X, PORTAL_Y, bed, "fly");
+    const beetle = createCreature(1, PORTAL_X, PORTAL_Y, bed, "beetle");
+    expect(beetle.kind).toBe("beetle");
+    expect(beetle.hp).toBe(BEETLE_HP);
+    expect(beetle.maxHp).toBe(BEETLE_HP);
+    expect(beetle.hp).toBeGreaterThan(fly.hp);
+  });
+
+  it("hashes creature kind", () => {
+    const bed = asTileIndex(30 * MAP_WIDTH + 30);
+    const fly = createCreature(0, PORTAL_X, PORTAL_Y, bed, "fly");
+    const beetle = createCreature(0, PORTAL_X, PORTAL_Y, bed, "beetle");
+    beetle.hp = fly.hp;
+    beetle.maxHp = fly.maxHp;
+    const flyBoard = createCreatureBoard();
+    const beetleBoard = createCreatureBoard();
+    flyBoard.slots[0] = { kind: "live", creature: fly };
+    beetleBoard.slots[0] = { kind: "live", creature: beetle };
+    expect(hashCreatures(flyBoard)).not.toBe(hashCreatures(beetleBoard));
+  });
+
+  it("includes creature kind in the world hash", () => {
+    const world = run(1, sortCommands(lairSetup(1)), ARRIVE_TICKS + 1);
+    const creature = liveCreature(world, 0);
+    const before = hashWorld(world);
+    creature.kind = creature.kind === "fly" ? "beetle" : "fly";
+    expect(hashWorld(world)).not.toBe(before);
   });
 
   it("walks to its bed and sleeps there", () => {

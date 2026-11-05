@@ -24,12 +24,37 @@ export function syncCreatureInstances(
         const x = creature.prevX + (creature.currX - creature.prevX) * t;
         const z = creature.prevZ + (creature.currZ - creature.prevZ) * t;
         const trained = creature.level >= 1;
-        dummy.position.set(x - MAP_HALF, trained ? 0.5 : 0.42, z - MAP_HALF);
-        dummy.scale.set(trained ? 1.3 : 1, trained ? 1.05 : 0.8, trained ? 1.3 : 1);
+        let y: number;
+        let scaleX: number;
+        let scaleY: number;
+        let scaleZ: number;
+        let hex: number;
+        switch (creature.kind) {
+          case "fly":
+            y = trained ? 0.5 : 0.42;
+            scaleX = trained ? 1.3 : 1;
+            scaleY = trained ? 1.05 : 0.8;
+            scaleZ = trained ? 1.3 : 1;
+            hex = trained ? 0x9dff7a : 0x38e0c0;
+            break;
+          case "beetle":
+            y = trained ? 0.44 : 0.36;
+            scaleX = trained ? 1.55 : 1.25;
+            scaleY = trained ? 0.78 : 0.6;
+            scaleZ = trained ? 1.4 : 1.15;
+            hex = trained ? 0xe0b050 : 0x8b5a2b;
+            break;
+          default: {
+            const never: never = creature.kind;
+            throw never;
+          }
+        }
+        dummy.position.set(x - MAP_HALF, y, z - MAP_HALF);
+        dummy.scale.set(scaleX, scaleY, scaleZ);
         dummy.rotation.set(0, 0, 0);
         dummy.updateMatrix();
         mesh.setMatrixAt(drawn, dummy.matrix);
-        color.setHex(trained ? 0x9dff7a : 0x38e0c0);
+        color.setHex(hex);
         mesh.setColorAt(drawn, color);
         drawn += 1;
         break;

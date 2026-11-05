@@ -41,6 +41,7 @@ export {
 } from "./hand";
 export {
   ARRIVE_TICKS,
+  BEETLE_HP,
   beginEating,
   beginHungry,
   beginSleeping,
@@ -72,6 +73,7 @@ export {
   worldCreatureZ,
   type Creature,
   type CreatureBoard,
+  type CreatureKind,
   type CreatureSlot,
   type CreatureState,
   type CreatureToTraining,
