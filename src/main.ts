@@ -61,6 +61,9 @@ declare global {
       impSnapshot(): ImpDebug[];
       dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
       step(n: number): void;
+      spawnImps(n: number): void;
+      benchSim(batches: number, ticksPerBatch: number): number[];
+      benchFrame(frames: number): number[];
     };
   }
 }
@@ -367,6 +370,46 @@ if (proof) {
       placeCamera();
       syncHud();
       render();
+    },
+    spawnImps(n: number) {
+      const tick = world.tick;
+      for (let i = 0; i < n; i += 1) {
+        commands.push({ kind: "spawnImp", tick });
+      }
+    },
+    benchSim(batches: number, ticksPerBatch: number) {
+      const perTickMs: number[] = [];
+      for (let b = 0; b < batches; b += 1) {
+        const start = performance.now();
+        for (let t = 0; t < ticksPerBatch; t += 1) {
+          step(world, commands);
+        }
+        const elapsed = performance.now() - start;
+        perTickMs.push(elapsed / ticksPerBatch);
+      }
+      return perTickMs;
+    },
+    benchFrame(frames: number) {
+      const gl = renderer.getContext();
+      const pixel = new Uint8Array(4);
+      const perFrameMs: number[] = [];
+      const startFrame = renderer.info.render.frame;
+      for (let f = 0; f < frames; f += 1) {
+        const start = performance.now();
+        syncMap(world.tiles, world.width, world.tilesVersion, map);
+        syncImps(world.imps, 1, impsVisual);
+        placeCamera();
+        syncHud();
+        renderer.render(scene, camera);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        const elapsed = performance.now() - start;
+        perFrameMs.push(elapsed);
+      }
+      const advanced = renderer.info.render.frame - startFrame;
+      if (advanced !== frames) {
+        throw new Error(`benchFrame rendered ${String(advanced)} of ${String(frames)} frames`);
+      }
+      return perFrameMs;
     },
   };
 } else {

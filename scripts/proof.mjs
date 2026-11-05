@@ -7,6 +7,49 @@ import { chromium } from "playwright";
 const PORT = Number(process.env.PROOF_PORT ?? "4173");
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
+function medianOf(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const count = sorted.length;
+  if (count === 0) {
+    throw new Error("median requires at least one value");
+  }
+  const middle = Math.floor(count / 2);
+  if (count % 2 === 1) {
+    return sorted[middle];
+  }
+  return (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function percentileOf(values, p) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const count = sorted.length;
+  if (count === 0) {
+    throw new Error("percentile requires at least one value");
+  }
+  if (p <= 0) {
+    return sorted[0];
+  }
+  const rank = Math.ceil((p / 100) * count);
+  return sorted[Math.min(rank, count) - 1];
+}
+
+function maxOf(values) {
+  if (values.length === 0) {
+    throw new Error("max requires at least one value");
+  }
+  let result = values[0];
+  for (let i = 1; i < values.length; i += 1) {
+    if (values[i] > result) {
+      result = values[i];
+    }
+  }
+  return result;
+}
+
+function ms(value) {
+  return value.toFixed(3);
+}
+
 async function waitUntilReady() {
   const deadline = Date.now() + 20000;
   while (Date.now() < deadline) {
@@ -464,6 +507,74 @@ async function run() {
       }
       for (let i = 0; i < 40; i += 1) {
         await stepOnce(page, 1, 20);
+      }
+
+      const targetImps = 200;
+      const beforeSpawn = await page.evaluate(() => globalThis.__keeper.impCount);
+      const toSpawn = targetImps - beforeSpawn;
+      if (toSpawn < 0) {
+        throw new Error(`imp count ${String(beforeSpawn)} already above ${String(targetImps)}`);
+      }
+      if (toSpawn > 0) {
+        await page.evaluate((n) => globalThis.__keeper.spawnImps(n), toSpawn);
+      }
+      await stepOnce(page, 2);
+      const spawnedImps = await page.evaluate(() => globalThis.__keeper.impCount);
+      if (spawnedImps !== targetImps) {
+        throw new Error(`spawnImps ended at ${String(spawnedImps)} imps, expected ${String(targetImps)}`);
+      }
+      await page.mouse.move(cx, cy);
+      for (let i = 0; i < 2; i += 1) {
+        await page.mouse.wheel(0, 240);
+        await stepOnce(page, 1, 20);
+      }
+      for (let i = 0; i < 5; i += 1) {
+        await stepOnce(page, 2, 30);
+      }
+
+      const simWarmup = await page.evaluate(() => globalThis.__keeper.benchSim(5, 20));
+      if (simWarmup.length !== 5) {
+        throw new Error(`benchSim warm-up returned ${String(simWarmup.length)} samples`);
+      }
+      const tickBeforeBench = await page.evaluate(() => globalThis.__keeper.tick);
+      const simSamples = await page.evaluate(() => globalThis.__keeper.benchSim(30, 20));
+      const tickAfterBench = await page.evaluate(() => globalThis.__keeper.tick);
+      if (tickAfterBench - tickBeforeBench !== 30 * 20) {
+        throw new Error(`benchSim advanced tick by ${String(tickAfterBench - tickBeforeBench)}, expected ${String(30 * 20)}`);
+      }
+      const impsAfterBench = await page.evaluate(() => globalThis.__keeper.impCount);
+      if (impsAfterBench !== targetImps) {
+        throw new Error(`benchSim ended at ${String(impsAfterBench)} imps, expected ${String(targetImps)}`);
+      }
+
+      const frameWarmup = await page.evaluate(() => globalThis.__keeper.benchFrame(5));
+      if (frameWarmup.length !== 5) {
+        throw new Error(`benchFrame warm-up returned ${String(frameWarmup.length)} samples`);
+      }
+      const frameSamples = await page.evaluate(() => globalThis.__keeper.benchFrame(30));
+      if (frameSamples.length !== 30) {
+        throw new Error(`benchFrame returned ${String(frameSamples.length)} samples`);
+      }
+
+      const simMedian = medianOf(simSamples);
+      const simP95 = percentileOf(simSamples, 95);
+      const simMax = maxOf(simSamples);
+      const frameMedian = medianOf(frameSamples);
+      const frameP95 = percentileOf(frameSamples, 95);
+      const frameMax = maxOf(frameSamples);
+      const perfDrawCalls = await page.evaluate(() => globalThis.__keeper.drawCalls);
+      if (simMedian > 2.0) {
+        throw new Error(`sim median ${ms(simMedian)} ms/tick exceeds 2.0 ms with ${String(targetImps)} imps`);
+      }
+      if (simP95 > 4.0) {
+        throw new Error(`sim p95 ${ms(simP95)} ms/tick exceeds 4.0 ms with ${String(targetImps)} imps`);
+      }
+      console.log(
+        `perf imps=${String(targetImps)} sim_ms_per_tick median=${ms(simMedian)} p95=${ms(simP95)} max=${ms(simMax)} frame_ms median=${ms(frameMedian)} p95=${ms(frameP95)} max=${ms(frameMax)} drawCalls=${String(perfDrawCalls)}`,
+      );
+
+      for (let i = 0; i < 3; i += 1) {
+        await stepOnce(page, 2, 30);
       }
 
       const result = await page.evaluate(() => ({
