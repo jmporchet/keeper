@@ -11,23 +11,46 @@ import {
   STARTING_IMP_COUNT,
   step,
   TILE_KIND,
+  type TileRead,
 } from "../sim";
 import { createImpMeshes, syncImps } from "./imps";
 import { countTilesByKind, createMapMeshes, syncMap } from "./map";
+
+function expectedGroupCounts(map: ReturnType<typeof createMapMeshes>, tiles: TileRead): Uint32Array {
+  const expected = countTilesByKind(tiles);
+  const groups = new Uint32Array(map.meshes.length);
+  for (let k = 0; k < expected.length; k += 1) {
+    const group = map.kindToGroup[k];
+    const count = expected[k];
+    if (group === undefined || count === undefined) {
+      continue;
+    }
+    const current = groups[group];
+    if (current === undefined) {
+      continue;
+    }
+    groups[group] = current + count;
+  }
+  return groups;
+}
 
 describe("map instances", () => {
   it("instance counts per kind match the grid", () => {
     const world = createWorld(1);
     const scene = new THREE.Scene();
     const map = createMapMeshes(scene);
-    syncMap(world.tiles, world.width, world.tilesVersion, map);
+    syncMap(world, map);
     const expected = countTilesByKind(world.tiles);
-    for (let k = 0; k < map.meshes.length; k += 1) {
-      const mesh = map.meshes[k];
+    for (let k = 0; k < expected.length; k += 1) {
+      expect(map.counts[k]).toBe(expected[k]);
+    }
+    const groups = expectedGroupCounts(map, world.tiles);
+    for (let g = 0; g < map.meshes.length; g += 1) {
+      const mesh = map.meshes[g];
       if (mesh === undefined) {
         throw new Error("missing mesh");
       }
-      expect(mesh.count).toBe(expected[k]);
+      expect(mesh.count).toBe(groups[g]);
     }
     expect(map.counts[TILE_KIND.earth]).toBe(expected[TILE_KIND.earth]);
     expect(map.counts[TILE_KIND.rock]).toBe(expected[TILE_KIND.rock]);
@@ -37,15 +60,20 @@ describe("map instances", () => {
     expect(map.counts[TILE_KIND.room]).toBe(0);
     expect(map.counts[TILE_KIND.taggedEarth]).toBe(0);
     expect(map.counts[TILE_KIND.taggedGold]).toBe(0);
+    expect(map.counts[TILE_KIND.portal]).toBe(1);
     setTile(world, 0, TILE_KIND.dirt);
-    syncMap(world.tiles, world.width, world.tilesVersion, map);
+    syncMap(world, map);
     const after = countTilesByKind(world.tiles);
-    for (let k = 0; k < map.meshes.length; k += 1) {
-      const mesh = map.meshes[k];
+    for (let k = 0; k < after.length; k += 1) {
+      expect(map.counts[k]).toBe(after[k]);
+    }
+    const groupsAfter = expectedGroupCounts(map, world.tiles);
+    for (let g = 0; g < map.meshes.length; g += 1) {
+      const mesh = map.meshes[g];
       if (mesh === undefined) {
         throw new Error("missing mesh");
       }
-      expect(mesh.count).toBe(after[k]);
+      expect(mesh.count).toBe(groupsAfter[g]);
     }
   });
 
@@ -53,18 +81,22 @@ describe("map instances", () => {
     const world = createWorld(1);
     const scene = new THREE.Scene();
     const map = createMapMeshes(scene);
-    syncMap(world.tiles, world.width, world.tilesVersion, map);
-    const mesh = map.meshes[TILE_KIND.earth];
+    syncMap(world, map);
+    const group = map.kindToGroup[TILE_KIND.earth];
+    if (group === undefined) {
+      throw new Error("missing earth group");
+    }
+    const mesh = map.meshes[group];
     if (mesh === undefined) {
       throw new Error("missing mesh");
     }
     const spy = vi.spyOn(mesh, "setMatrixAt");
     const version = world.tilesVersion;
-    syncMap(world.tiles, world.width, version, map);
+    syncMap(world, map);
     expect(map.syncedVersion).toBe(version);
     expect(spy).not.toHaveBeenCalled();
     setTile(world, 0, TILE_KIND.dirt);
-    syncMap(world.tiles, world.width, world.tilesVersion, map);
+    syncMap(world, map);
     expect(map.syncedVersion).toBe(world.tilesVersion);
     expect(spy).toHaveBeenCalled();
   });

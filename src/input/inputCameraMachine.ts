@@ -1,5 +1,5 @@
 import { assign, setup, type SnapshotFrom } from "xstate";
-import { HAND_CAPACITY } from "../sim";
+import { HAND_CAPACITY, type RoomTool } from "../sim";
 
 export type InputCameraEvent =
   | { type: "RIGHT_DOWN" }
@@ -9,7 +9,7 @@ export type InputCameraEvent =
   | { type: "PAN_KEY_UP" }
   | { type: "LEFT_DOWN_TILE" }
   | { type: "LEFT_DOWN_IMP" }
-  | { type: "SELECT_ROOM_TOOL" }
+  | { type: "SELECT_ROOM_TOOL"; room: RoomTool }
   | { type: "CLEAR_TOOL" }
   | { type: "ESCAPE" }
   | { type: "DROP_WALKABLE" }
@@ -21,6 +21,7 @@ export type InputCameraContext = {
   panKeys: number;
   pointerPan: boolean;
   heldCount: number;
+  room: RoomTool;
 };
 
 export const inputCameraMachine = setup({
@@ -39,13 +40,14 @@ export const inputCameraMachine = setup({
     clearPointerPan: assign({ pointerPan: false }),
     incPanKeys: assign({ panKeys: ({ context }) => context.panKeys + 1 }),
     decPanKeys: assign({ panKeys: ({ context }) => Math.max(0, context.panKeys - 1) }),
+    selectRoom: assign({ room: ({ event }) => (event.type === "SELECT_ROOM_TOOL" ? event.room : "treasury") }),
     incHeld: assign({ heldCount: ({ context }) => context.heldCount + 1 }),
     decHeld: assign({ heldCount: ({ context }) => Math.max(0, context.heldCount - 1) }),
   },
 }).createMachine({
   id: "inputCamera",
   initial: "Idle",
-  context: { panKeys: 0, pointerPan: false, heldCount: 0 },
+  context: { panKeys: 0, pointerPan: false, heldCount: 0, room: "treasury" },
   states: {
     Idle: {
       on: {
@@ -53,7 +55,7 @@ export const inputCameraMachine = setup({
         MIDDLE_DOWN: { target: "Panning", actions: "markPointerPan" },
         PAN_KEY_DOWN: { target: "Panning", actions: "incPanKeys" },
         LEFT_DOWN_TILE: "Tagging",
-        SELECT_ROOM_TOOL: "Painting",
+        SELECT_ROOM_TOOL: { target: "Painting", actions: "selectRoom" },
         LEFT_DOWN_IMP: { target: "Holding", guard: "handHasRoom", actions: "incHeld" },
         SLAP_IMP: {},
       },

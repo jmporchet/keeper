@@ -2,6 +2,11 @@ import { TILE_KIND, TILE_KIND_COUNT, TILE_KINDS, type TileKind } from "../sim";
 
 export { TILE_KIND_COUNT };
 
+export const ROOM_TREASURY_COLOR = 0x9a6a48;
+export const ROOM_LAIR_COLOR = 0x3f8f7f;
+export const ROOM_FLOOR_COLOR = 0x9a6a48;
+export const PORTAL_COLOR = 0x8a5cff;
+
 export function colorForKind(kind: TileKind): number {
   switch (kind) {
     case "earth":
@@ -15,11 +20,13 @@ export function colorForKind(kind: TileKind): number {
     case "claimed":
       return 0xa08a70;
     case "room":
-      return 0x9a6a48;
+      return ROOM_TREASURY_COLOR;
     case "taggedEarth":
       return 0xff7a38;
     case "taggedGold":
       return 0xfff06a;
+    case "portal":
+      return PORTAL_COLOR;
     default: {
       const never: never = kind;
       return never;
@@ -32,6 +39,7 @@ export function heightForKind(kind: TileKind): number {
     case "claimed":
     case "dirt":
     case "room":
+    case "portal":
       return 0.2;
     case "earth":
     case "goldSeam":

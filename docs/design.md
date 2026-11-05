@@ -23,16 +23,17 @@ Free play. No objective, no defeat, no enemies.
 
 In scope:
 
-- One fixed 64x64 map: earth, impenetrable rock, gold seams, a dungeon heart, a starting patch of claimed floor.
+- One fixed 64x64 map: earth, impenetrable rock, gold seams, a dungeon heart, a starting patch of claimed floor, and one portal at `(32,35)` just south of the starting patch.
 - Free 3D camera: pan, rotate, zoom, tilt. Mouse plus keyboard first. Touch later.
 - Tag and untag tiles for digging.
 - Imps: dig, mine gold, carry gold, claim dirt. Idle imps wander.
-- Rooms: treasury only, painted on claimed floor, paid in gold.
+- Rooms: treasury and lair, painted on claimed floor, paid in gold.
+- Creatures: one fly kind arrives through the portal every `ARRIVE_TICKS`, claims the smallest free lair tile and walks there to sleep.
 - Hand of Evil: pick up and drop imps, slap.
 - A sandbox panel to spawn imps and add gold.
 - HUD: gold, imp count, sim tick.
 
-Out of scope for milestone 1: combat, enemy keepers, creatures other than imps, spells, traps, doors, possession, sound, saving, multiplayer, localization.
+Out of scope for milestone 1: combat, enemy keepers, creature kinds other than the fly, hatcheries, training, spells, traps, doors, possession, sound, saving, multiplayer, localization.
 
 ## Tech stack
 
@@ -61,7 +62,7 @@ app chart (XState) owns: boot, loading, sandbox, paused, WebGL lost
 
 ### Statechart library decision
 
-Sim entities (imps, tiles, jobs) use hand-rolled typed state machines: a discriminated union per entity plus a pure transition function, run in the fixed-step loop. App flow, input modes and camera modes use XState v5.
+Sim entities (imps, creatures, tiles, jobs) use hand-rolled typed state machines: a discriminated union per entity plus a pure transition function, run in the fixed-step loop. App flow, input modes and camera modes use XState v5.
 
 Why, in one sentence: XState allocates a new snapshot on every transition (about 1.6M events/s in the Dunky benchmark), which suits a few low-frequency UI charts but not hundreds of imps stepping 20 times per second in a zero-allocation, deterministic hot loop.
 
@@ -98,7 +99,7 @@ stateDiagram-v2
     Panning --> Idle: release
     Idle --> Tagging: left press on a tile
     Tagging --> Idle: release (tag/untag commands for the sweep)
-    Idle --> Painting: room tool selected
+    Idle --> Painting: treasury or lair tool selected
     Painting --> Idle: escape or tool cleared
     Idle --> Holding: left press on imp (pickUp)
     Holding --> Holding: left press on imp (pickUp, hand not full)
@@ -108,7 +109,7 @@ stateDiagram-v2
     Idle --> Idle: Shift+left press on imp (slap)
 ```
 
-Zoom (wheel) works in every state and does not change state. The hand holds at most eight imps; a left press on another imp while holding picks it up too. A right press while holding drops the most recently picked imp, or stays holding when the tile is not walkable. A Shift+left press on an imp while Idle queues `slap` and does not pick it up; Shift has no effect while Holding or Painting.
+`SELECT_ROOM_TOOL` carries the room (`treasury` or `lair`) and the painter emits that room with every tile. Zoom (wheel) works in every state and does not change state. The hand holds at most eight imps; a left press on another imp while holding picks it up too. A right press while holding drops the most recently picked imp, or stays holding when the tile is not walkable. A Shift+left press on an imp while Idle queues `slap` and does not pick it up; Shift has no effect while Holding or Painting.
 
 ### Chart 3: tile lifecycle (hand-rolled, sim)
 
@@ -117,6 +118,7 @@ stateDiagram-v2
     [*] --> Earth
     [*] --> GoldSeam
     [*] --> Rock
+    [*] --> Portal: hard-coded map
     Earth --> TaggedEarth: keeper tags
     TaggedEarth --> Earth: keeper untags
     TaggedEarth --> Dirt: imp finishes digging
@@ -124,12 +126,13 @@ stateDiagram-v2
     TaggedGold --> GoldSeam: keeper untags
     TaggedGold --> Dirt: seam exhausted
     Dirt --> Claimed: imp finishes claiming [touches claimed floor]
-    Claimed --> Room: keeper paints room [gold paid]
+    Claimed --> Room: keeper paints treasury or lair [gold paid]
     Room --> Claimed: keeper sells room
     Rock --> Rock: tag refused
+    Portal --> Portal: tag refused
 ```
 
-Illegal states this design rules out: rock that is tagged, a room on unclaimed floor, a claimed tile with no claimed neighbour path to the heart.
+Illegal states this design rules out: rock that is tagged, a room on unclaimed floor, a claimed tile with no claimed neighbour path to the heart, a portal that gets overwritten.
 
 ### Chart 4: imp behaviour (hand-rolled, sim)
 
@@ -160,7 +163,7 @@ Each state carries only the data it needs, for example `{ kind: "walking", tile,
 
 Carrying imps choose the nearest reachable treasury tile with free capacity from the single walkability flood, then fall back to the heart. Delivery deposits up to `TREASURY_CAPACITY` into that tile; excess stays carried and the imp retargets. The treasury tile list is cached by `tilesVersion`, so delivery never rescans the map. Gold conservation counts seams, carried gold (including held imps), `goldStored`, treasury stock and `goldSpent` exactly.
 
-Walkable tiles: claimed floor, dirt, and rooms. Earth, gold seams, tagged earth, tagged gold and rock are not walkable. Idle imps first try to reserve an open `dig` job. If one is reserved, they BFS to a reachable walkable tile 4-adjacent to the job tile and walk there; if no neighbour is reachable they release the job and wander. Working imps count down `DIG_TICKS = 40`, then turn the tagged earth into dirt and free the job. If the job disappears mid-walk or mid-work, the imp returns to idle immediately. Idle imps with no job wander: pick a random reachable walkable tile with the seeded RNG, then follow a 4-neighbour grid path (BFS) one tile at a time. The sandbox starts with four imps on the heart's claimed patch. The Hand of Evil holds at most eight imps: `pickUp` releases any reserved job back to `Open` and takes the imp off the grid in the `held` state, keeping any carried gold unchanged; `drop` is accepted only on a walkable tile and returns the imp to idle there with its carry intact, so a dropped carrier walks its gold to the heart, while a refused drop leaves it held. Both commands apply at tick boundaries like every other command. `slap` is refused for held imps and empty slots, costs nothing, and applies the speed boost; `pickUp` clears any boost. Hand capacity, job release, boost bounds and the held-never-boosted rule are checked in `specs/HandOfEvil.tla`.
+Walkable tiles: claimed floor, dirt, rooms and the portal. Earth, gold seams, tagged earth, tagged gold and rock are not walkable. Idle imps first try to reserve an open `dig` job. If one is reserved, they BFS to a reachable walkable tile 4-adjacent to the job tile and walk there; if no neighbour is reachable they release the job and wander. Working imps count down `DIG_TICKS = 40`, then turn the tagged earth into dirt and free the job. If the job disappears mid-walk or mid-work, the imp returns to idle immediately. Idle imps with no job wander: pick a random reachable walkable tile with the seeded RNG, then follow a 4-neighbour grid path (BFS) one tile at a time. The sandbox starts with four imps on the heart's claimed patch. The Hand of Evil holds at most eight imps: `pickUp` releases any reserved job back to `Open` and takes the imp off the grid in the `held` state, keeping any carried gold unchanged; `drop` is accepted only on a walkable tile and returns the imp to idle there with its carry intact, so a dropped carrier walks its gold to the heart, while a refused drop leaves it held. Both commands apply at tick boundaries like every other command. `slap` is refused for held imps and empty slots, costs nothing, and applies the speed boost; `pickUp` clears any boost. Hand capacity, job release, boost bounds and the held-never-boosted rule are checked in `specs/HandOfEvil.tla`.
 
 ### Chart 5: job lifecycle (hand-rolled, sim)
 
@@ -177,18 +180,32 @@ Slots are freed immediately, so there is no `done` or `cancelled` state on the b
 
 Job priority follows KeeperFX's digger stack in spirit: dig tagged tiles, then mine gold, then carry gold, then claim dirt, then reinforce. Tagging earth opens a `dig` job; tagging gold opens `mineGold`. Untag cancels the job at that tile, including a reserved one. The job list is the occupied pool slots in index order and is mixed into `hashWorld`; a per-tile slot index makes `jobAtTile` and `openJob` lookups constant time without scanning the pool.
 
+### Chart 6: creature lifecycle (hand-rolled, sim)
+
+```mermaid
+stateDiagram-v2
+    [*] --> Arriving: portal spawn at ARRIVE_TICKS [free bed exists]
+    Arriving --> ToBed: bed claimed, path found
+    Arriving --> Arriving: bed unreachable
+    ToBed --> Sleeping: reached bed
+    Sleeping --> Sleeping: remains on its bed
+```
+
+A creature spawns only as a sim effect of `step`, never as a command. The portal is a walkable tile at `(32,35)`; when the world tick is a multiple of `ARRIVE_TICKS = 200`, a new creature spawns if the portal exists, live creatures are below `CREATURE_CAPACITY = 8`, and at least one lair tile has no live creature claiming it. Bed choice is deterministic: the free lair tile with the smallest tile index from the `roomsVersion`-cached lair list. A creature stores its `bedTile` for its whole life, so a bed is free iff no live creature has that `bedTile`. Arrival, path, state and bed claim are included in `hashWorld`. The single-writer arrival loop makes bed uniqueness a unit-test invariant rather than a TLA+ concurrency spec.
+
 ### Data shapes (summary)
 
-- `TileGrid`: `Uint8Array` kind plus `Uint16Array` gold left, indexed `y * width + x`. No per-tile objects. Rooms are a separate `Uint8Array` room kind and a `Uint16Array` treasury stock, with a `tilesVersion`-keyed treasury tile cache. `goldSpent` is on the world and hashed.
+- `TileGrid`: `Uint8Array` kind plus `Uint16Array` gold left, indexed `y * width + x`. No per-tile objects. Rooms are a separate `Uint8Array` room kind (`none`, `treasury`, `lair`) and a `Uint16Array` treasury stock, with a `tilesVersion`-keyed treasury tile cache and a `roomsVersion`-keyed lair tile cache. The portal is tile kind `portal`. `goldSpent` is on the world and hashed.
 - `Imp`: discriminated union on `state.kind`, including `held`, plus a `boost` slot union (`{ kind: "none" } | { kind: "boosted"; remaining }`). The pool is empty or live slots (`{ kind: "empty" } | { kind: "live", imp }`), same shape as the job board.
 - `JobBoard`: fixed-size pool of empty or filled slots plus a per-tile slot index; jobs referenced by `JobId` (slot index), never by object identity.
 - `Hand`: fixed-size pool of empty or held slots carrying an `ImpId`, capped at eight; `hashWorld` includes it.
-- `Command`: discriminated union (`tag`, `untag`, `paintRoom`, `pickUp`, `drop`, `slap`, `spawnImp`, `addGold`), each with `tick`. Tag and untag update tiles and the job board together.
-- Branded ids: `TileIndex`, `ImpId`, `JobId`, `WorkerId`, `Tick`. A raw number cannot be passed where an id is expected.
+- `Creature`: slot union `empty | live` in a fixed `CREATURE_CAPACITY` pool, branded `CreatureId`, with `bedTile`, tile position, path and a state union `arriving | toBed | sleeping`. Creatures are hashed with their bed claims.
+- `Command`: discriminated union (`tag`, `untag`, `paintRoom`, `pickUp`, `drop`, `slap`, `spawnImp`, `addGold`), each with `tick`. Tag and untag update tiles and the job board together. `paintRoom` carries `room: "treasury" | "lair"`.
+- Branded ids: `TileIndex`, `ImpId`, `JobId`, `WorkerId`, `CreatureId`, `Tick`. A raw number cannot be passed where an id is expected.
 
 ### Chart 0: sim step and render loop
 
-The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step imps, step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a command log; `hashWorld` is stable for that pair and includes jobs, live imps and the hand. Sim core currently applies `noop`, `addGold`, `tag`, `untag`, `paintRoom`, `spawnImp`, `pickUp`, `drop` and `slap`. The sandbox panel queues `spawnImp` and `addGold` commands through the same command list as the input layer; `spawnImp` fills the first empty imp slot at the heart and is refused at `IMP_CAPACITY`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. `pickUp` releases the imp's reserved job and clears any boost; `drop` writes no tile and only moves the imp onto a walkable tile; `slap` sets the boost timer on a live non-held imp and is refused otherwise. Reserve and release are job-board operations, not commands yet. Pathfinding reads the grid through `TileRead`.
+The sim is a hand-rolled loop: at each tick, apply commands whose `tick` equals `world.tick` (stable order), step imps, step creatures, step the seeded PRNG, then increment `tick`. Commands never apply mid-tick. A run is a seed plus a command log; `hashWorld` is stable for that pair and includes jobs, live imps, creatures, bed claims and the hand. Sim core currently applies `noop`, `addGold`, `tag`, `untag`, `paintRoom`, `spawnImp`, `pickUp`, `drop` and `slap`. `paintRoom` carries `room: "treasury" | "lair"`; a lair costs `LAIR_COST = 30`, a treasury costs `TREASURY_COST = 25`. Each tick then steps imps, steps creatures (including the `ARRIVE_TICKS` portal arrival effect) and the seeded PRNG. The sandbox panel queues `spawnImp` and `addGold` commands through the same command list as the input layer; `spawnImp` fills the first empty imp slot at the heart and is refused at `IMP_CAPACITY`. Chart 2 `Tagging` queues those tile commands; `setTile` is the only writer of the grid (`World.tiles` is read-only). `tag` on earth or gold seam becomes tagged earth or tagged gold and opens a job; `tag` on rock (and any non-diggable kind) is refused; `untag` reverses a tag and cancels the job. `pickUp` releases the imp's reserved job and clears any boost; `drop` writes no tile and only moves the imp onto a walkable tile; `slap` sets the boost timer on a live non-held imp and is refused otherwise. Reserve and release are job-board operations, not commands yet. Pathfinding reads the grid through `TileRead`.
 
 Live play uses a fixed-step accumulator (dt 1/20 s, frame delta clamped to 100 ms, at most 4 sim steps per frame). Proof mode (`?proof=1`) never reads real time: Playwright calls `window.__keeper.step(n)`, which advances n sim ticks and draws once.
 
@@ -197,7 +214,8 @@ stateDiagram-v2
     [*] --> Waiting
     Waiting --> Applying: step(state, commands)
     Applying --> SteppingImps: commands with command.tick == world.tick
-    SteppingImps --> SteppingRng: idle, wandering, walking and working imps
+    SteppingImps --> SteppingCreatures: idle, wandering, walking and working imps
+    SteppingCreatures --> SteppingRng: creature movement and portal arrivals
     SteppingRng --> Advanced: seeded PRNG stepped
     Advanced --> Waiting: tick += 1
     [*] --> Live: default
@@ -209,9 +227,9 @@ stateDiagram-v2
 ### Rendering
 
 - Tile drawing lives in `src/render/`. It reads the sim `Uint8Array` grid and never writes sim state.
-- One `InstancedMesh` per tile kind (eight kinds, including tagged earth and tagged gold). Sync packs live tiles densely and sets `mesh.count` to the number of tiles of that kind, so tile draw calls stay at most 8. `syncMap` skips when `world.tilesVersion` matches the last packed version. Tagged kinds use a brighter emissive material. Picking maps a camera ray to the ground plane, then to a tile index.
+- Five grouped `InstancedMesh` draws cover all nine tile kinds: terrain (earth, dirt, tagged earth), gold (seam, tagged gold), rock, claimed, and room (treasury, lair, portal). Per-instance colours tint tagged tiles, treasury floors, lair beds and the portal. `syncMap` packs live tiles densely, sets `mesh.count` per group, and skips when `world.tilesVersion` and `world.roomsVersion` match the last packed versions. Picking maps a camera ray to the ground plane, then to a tile index.
 - A later pass can switch to tile-index instances with scale 0 for removed blocks; counts must still match the grid.
-- Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Held imps are skipped on the grid and drawn floating near the cursor through the same imp mesh, so tile kinds plus imps stay within 8 draw calls. Treasury gold piles are one additional `InstancedMesh`, dirty-synced by `treasuryVersion`, with one instance per stocked treasury tile scaled by `stock / TREASURY_CAPACITY`; treasury floors reuse the existing room tile mesh.
+- Imps are one `InstancedMesh` of low-poly cones, interpolated between the last two ticks. Held imps are skipped on the grid and drawn floating near the cursor through the same imp mesh. Creatures are one separate `InstancedMesh` of flat green-cyan octahedra, also interpolated between ticks. Treasury gold piles are one additional `InstancedMesh`, dirty-synced by `treasuryVersion`, with one instance per stocked treasury tile scaled by `stock / TREASURY_CAPACITY`. The grouped tile meshes plus imps, creatures and gold piles stay within 8 draw calls; lair beds reuse the room group as a tint rather than adding a draw call.
 - Camera: perspective, orbit around a ground target. Pitch is clamped to `[0.2, 1.35]` rad, zoom (distance) to `[12, 90]`, and the ground target to the map rectangle `[-MAP_HALF, MAP_WIDTH - MAP_HALF]` × `[-MAP_HALF, MAP_HEIGHT - MAP_HALF]`. Modes follow chart 2 in `src/input`; pose math lives in `src/camera`.
 - Visual style: low-poly blocks, moody dungeon light (one heart point light plus dim hemisphere and ambient), darker per-kind materials, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
 

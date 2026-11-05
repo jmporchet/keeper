@@ -25,7 +25,12 @@ export function createPathScratch(): PathScratch {
 }
 
 export function isWalkableCode(code: number): boolean {
-  return code === TILE_KIND.claimed || code === TILE_KIND.dirt || code === TILE_KIND.room;
+  return (
+    code === TILE_KIND.claimed ||
+    code === TILE_KIND.dirt ||
+    code === TILE_KIND.room ||
+    code === TILE_KIND.portal
+  );
 }
 
 export function bumpPathGen(scratch: PathScratch): number {

@@ -44,6 +44,8 @@ function asciiChar(kind: TileKind): string {
       return "*";
     case "taggedGold":
       return "S";
+    case "portal":
+      return "P";
     default: {
       const never: never = kind;
       return never;
@@ -117,6 +119,7 @@ describe("tile grid", () => {
     let claimed = 0;
     let dirt = 0;
     let room = 0;
+    let portal = 0;
     for (let y = 0; y < world.height; y += 1) {
       for (let x = 0; x < world.width; x += 1) {
         const i = y * world.width + x;
@@ -144,6 +147,9 @@ describe("tile grid", () => {
           case "room":
             room += 1;
             break;
+          case "portal":
+            portal += 1;
+            break;
           case "taggedEarth":
           case "taggedGold":
             throw new Error("starting map must not be tagged");
@@ -156,6 +162,7 @@ describe("tile grid", () => {
     }
     expect(dirt).toBe(0);
     expect(room).toBe(0);
+    expect(portal).toBe(1);
     expect(gold).toBeGreaterThan(0);
     expect(claimed).toBe(25);
     expect(earth).toBeGreaterThan(0);
@@ -169,11 +176,12 @@ describe("tile grid", () => {
     expect(TILE_KIND.room).toBe(5);
     expect(TILE_KIND.taggedEarth).toBe(6);
     expect(TILE_KIND.taggedGold).toBe(7);
+    expect(TILE_KIND.portal).toBe(8);
   });
 
   it("TILE_KIND codes match TILE_KINDS order", () => {
     expect(TILE_KINDS.length).toBe(TILE_KIND_COUNT);
-    expect(TILE_KIND_COUNT).toBe(8);
+    expect(TILE_KIND_COUNT).toBe(9);
     for (let i = 0; i < TILE_KINDS.length; i += 1) {
       const kind = TILE_KINDS[i];
       if (kind === undefined) {
@@ -244,7 +252,7 @@ function commandList(): fc.Arbitrary<Command[]> {
         fc.integer({ min: 0, max: TICKS - 1 }),
         fc.integer({ min: 1, max: 8 }),
         fc.integer({ min: 0, max: MAP_WIDTH * MAP_HEIGHT - 1 }),
-        fc.integer({ min: 0, max: 7 }),
+        fc.integer({ min: 0, max: 8 }),
       )
       .map(([tick, amount, tile, kind]) => {
         switch (kind) {
@@ -271,6 +279,16 @@ function commandList(): fc.Arbitrary<Command[]> {
               tick: asTick(tick),
               tile: asTileIndex(tileY * MAP_WIDTH + tileX),
               room: "treasury",
+            };
+          }
+          case 7: {
+            const tileX = 30 + (tile % 5);
+            const tileY = 30 + ((tile >> 3) % 5);
+            return {
+              kind: "paintRoom",
+              tick: asTick(tick),
+              tile: asTileIndex(tileY * MAP_WIDTH + tileX),
+              room: "lair",
             };
           }
           default:

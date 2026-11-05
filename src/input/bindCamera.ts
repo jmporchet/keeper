@@ -52,6 +52,7 @@ function sweepModeFor(kind: TileKind): SweepMode {
     case "dirt":
     case "claimed":
     case "room":
+    case "portal":
       return undefined;
     default: {
       const never: never = kind;
@@ -109,7 +110,12 @@ export function bindCameraInput(
       return;
     }
     painted[tile] = 1;
-    enqueue({ kind: "paintRoom", tick: world.tick, tile: asTileIndex(tile), room: "treasury" });
+    enqueue({
+      kind: "paintRoom",
+      tick: world.tick,
+      tile: asTileIndex(tile),
+      room: actor.getSnapshot().context.room,
+    });
   }
 
   function applySweepTile(tile: TileIndex): void {

@@ -70,20 +70,23 @@ describe("input and camera chart", () => {
     expect(isTagging(actor.getSnapshot())).toBe(false);
   });
 
-  it("paints until the tool is cleared", () => {
+  it("paints until the tool is cleared and carries the selected room", () => {
     const actor = startInput();
-    actor.send({ type: "SELECT_ROOM_TOOL" });
+    actor.send({ type: "SELECT_ROOM_TOOL", room: "treasury" });
     expect(actor.getSnapshot().value).toBe("Painting");
+    expect(actor.getSnapshot().context.room).toBe("treasury");
     actor.send({ type: "ESCAPE" });
     expect(actor.getSnapshot().value).toBe("Idle");
-    actor.send({ type: "SELECT_ROOM_TOOL" });
+    actor.send({ type: "SELECT_ROOM_TOOL", room: "lair" });
+    expect(actor.getSnapshot().value).toBe("Painting");
+    expect(actor.getSnapshot().context.room).toBe("lair");
     actor.send({ type: "CLEAR_TOOL" });
     expect(actor.getSnapshot().value).toBe("Idle");
   });
 
   it("paints alongside holding and only picks up imps when not painting", () => {
     const actor = startInput();
-    actor.send({ type: "SELECT_ROOM_TOOL" });
+    actor.send({ type: "SELECT_ROOM_TOOL", room: "lair" });
     actor.send({ type: "LEFT_DOWN_IMP" });
     expect(actor.getSnapshot().value).toBe("Painting");
     expect(actor.getSnapshot().context.heldCount).toBe(0);

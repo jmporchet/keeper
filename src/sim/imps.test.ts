@@ -70,6 +70,8 @@ function asciiChar(kind: TileKind): string {
       return "*";
     case "taggedGold":
       return "S";
+    case "portal":
+      return "P";
     default: {
       const never: never = kind;
       return never;

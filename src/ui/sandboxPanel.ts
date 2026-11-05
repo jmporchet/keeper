@@ -1,4 +1,4 @@
-import type { Command, Tick } from "../sim";
+import type { Command, RoomTool, Tick } from "../sim";
 
 export type SandboxAction = "spawnImp" | "addGold";
 
@@ -17,18 +17,19 @@ export function sandboxCommand(action: SandboxAction, tick: Tick): Command {
 
 export type SandboxPanel = {
   setPaused(paused: boolean): void;
-  setPainting(painting: boolean): void;
+  setPainting(painting: boolean, room: RoomTool): void;
 };
 
 export function createSandboxPanel(
   root: HTMLElement | null,
   getTick: () => Tick,
   enqueue: (command: Command) => void,
-  togglePaint: () => void,
+  togglePaint: (room: RoomTool) => void,
 ): SandboxPanel {
   const spawnButton = root === null ? null : root.querySelector<HTMLButtonElement>("#spawn-imp");
   const goldButton = root === null ? null : root.querySelector<HTMLButtonElement>("#add-gold");
-  const paintButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-treasury");
+  const paintTreasuryButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-treasury");
+  const paintLairButton = root === null ? null : root.querySelector<HTMLButtonElement>("#paint-lair");
   let paused = false;
 
   if (spawnButton !== null) {
@@ -47,12 +48,20 @@ export function createSandboxPanel(
       enqueue(sandboxCommand("addGold", getTick()));
     });
   }
-  if (paintButton !== null) {
-    paintButton.addEventListener("click", () => {
+  if (paintTreasuryButton !== null) {
+    paintTreasuryButton.addEventListener("click", () => {
       if (paused) {
         return;
       }
-      togglePaint();
+      togglePaint("treasury");
+    });
+  }
+  if (paintLairButton !== null) {
+    paintLairButton.addEventListener("click", () => {
+      if (paused) {
+        return;
+      }
+      togglePaint("lair");
     });
   }
 
@@ -67,14 +76,20 @@ export function createSandboxPanel(
     if (goldButton !== null) {
       goldButton.disabled = next;
     }
-    if (paintButton !== null) {
-      paintButton.disabled = next;
+    if (paintTreasuryButton !== null) {
+      paintTreasuryButton.disabled = next;
+    }
+    if (paintLairButton !== null) {
+      paintLairButton.disabled = next;
     }
   }
 
-  function setPainting(painting: boolean): void {
-    if (paintButton !== null) {
-      paintButton.setAttribute("aria-pressed", painting ? "true" : "false");
+  function setPainting(painting: boolean, room: RoomTool): void {
+    if (paintTreasuryButton !== null) {
+      paintTreasuryButton.setAttribute("aria-pressed", painting && room === "treasury" ? "true" : "false");
+    }
+    if (paintLairButton !== null) {
+      paintLairButton.setAttribute("aria-pressed", painting && room === "lair" ? "true" : "false");
     }
   }
 

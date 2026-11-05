@@ -296,6 +296,70 @@ async function run() {
       }
 
       console.log("checkpoint paint", Date.now() - recordStart);
+      await page.click("#add-gold");
+      await stepOnce(page);
+      await panToTileCenter(page, box, 31, 31);
+      const lairXs = [30, 31, 32];
+      const lairY = 31;
+      const lairPoints = [];
+      for (const tx of lairXs) {
+        const point = await pagePointForTile(page, box, tx, lairY);
+        if (point === null) {
+          throw new Error(`lair tile ${String(tx)},${String(lairY)} is off screen`);
+        }
+        lairPoints.push(point);
+      }
+      await page.click("#paint-lair");
+      const lairPaintingOn = await page.evaluate(() => globalThis.__keeper.painting);
+      if (!lairPaintingOn) {
+        throw new Error("paint lair tool did not select Painting");
+      }
+      const lairFirst = lairPoints[0];
+      await page.mouse.move(lairFirst.x, lairFirst.y);
+      await page.mouse.down();
+      for (let i = 1; i < lairPoints.length; i += 1) {
+        const point = lairPoints[i];
+        await page.mouse.move(point.x, point.y);
+      }
+      await page.mouse.up();
+      await stepOnce(page);
+      const lairTiles = await page.evaluate(() => globalThis.__keeper.lairTileCount);
+      if (lairTiles !== 3) {
+        throw new Error(`expected 3 lair tiles after drag, got ${String(lairTiles)}`);
+      }
+      const spentAfterLair = await page.evaluate(() => globalThis.__keeper.goldSpent);
+      if (spentAfterLair !== 165) {
+        throw new Error(`expected 165 gold spent after treasury and lair, got ${String(spentAfterLair)}`);
+      }
+      await page.click("#paint-lair");
+      const lairPaintingOff = await page.evaluate(() => globalThis.__keeper.painting);
+      if (lairPaintingOff) {
+        throw new Error("paint lair tool stayed selected after toggle");
+      }
+
+      let creatureTicks = 0;
+      for (;;) {
+        const snapshot = await page.evaluate(() => globalThis.__keeper.creatureSnapshot());
+        if (snapshot.some((creature) => creature.state === "sleeping")) {
+          break;
+        }
+        if (creatureTicks >= 600) {
+          throw new Error(`creature did not reach a bed after ${String(creatureTicks)} ticks`);
+        }
+        await stepOnce(page, 12, 20);
+        creatureTicks += 12;
+      }
+      const creaturesAfterWalk = await page.evaluate(() => globalThis.__keeper.creatureSnapshot());
+      if (creaturesAfterWalk.length < 1) {
+        throw new Error("no creature arrived at the portal");
+      }
+      const bedCreature = creaturesAfterWalk.find((creature) => creature.state === "sleeping");
+      if (bedCreature === undefined) {
+        throw new Error("no creature was sleeping on a bed");
+      }
+      await panToTileCenter(page, box, bedCreature.bedTileX, bedCreature.bedTileY);
+      await page.screenshot({ path: "proof/lair.png" });
+      console.log("checkpoint lair", Date.now() - recordStart);
       await panToTileCenter(page, box, 29, 32);
 
       const { target, point: pickPoint } = await locateHandTarget(page, box);
@@ -336,7 +400,7 @@ async function run() {
 
       const holdStart = Date.now();
       let angle = 0;
-      while (Date.now() - holdStart < 400) {
+      while (Date.now() - holdStart < 200) {
         angle += 0.16;
         await page.mouse.move(
           cx + Math.cos(angle) * box.width * 0.32,
@@ -494,6 +558,7 @@ async function run() {
           carryingCount: globalThis.__keeper.carryingCount,
           tagged: globalThis.__keeper.taggedCount,
           claimed: globalThis.__keeper.claimedCount,
+          lairTileCount: globalThis.__keeper.lairTileCount,
         }));
         if (counts.carryingCount > maxCarrying) {
           maxCarrying = counts.carryingCount;
@@ -507,7 +572,7 @@ async function run() {
           counts.treasuryStockTotal >= 20 &&
           carryingSeen &&
           counts.tagged === 0 &&
-          counts.claimed + counts.treasuryTileCount === claimedAtStart + 5 &&
+          counts.claimed + counts.treasuryTileCount + counts.lairTileCount === claimedAtStart + 5 &&
           elapsed >= 1000
         ) {
           break;
@@ -517,8 +582,8 @@ async function run() {
             `gold and treasury proof not complete after ${String(extraTicks)} extra ticks: goldStored ${String(counts.goldStored)}, goldSpent ${String(counts.goldSpent)}, treasuryTiles ${String(counts.treasuryTileCount)}, treasuryStock ${String(counts.treasuryStockTotal)}, maxCarrying ${String(maxCarrying)}, tagged ${String(counts.tagged)}, claimed ${String(counts.claimed)} (start ${String(claimedAtStart)}), elapsed ${String(elapsed)} ms`,
           );
         }
-        await stepOnce(page, 4, 1);
-        extraTicks += 4;
+        await stepOnce(page, 16, 1);
+        extraTicks += 16;
       }
       console.log("checkpoint wait", Date.now() - recordStart);
       await panToTileCenter(page, box, 31, 30);
@@ -656,6 +721,8 @@ async function run() {
         goldStored: globalThis.__keeper.goldStored,
         impCount: globalThis.__keeper.impCount,
         carryingCount: globalThis.__keeper.carryingCount,
+        creatureCount: globalThis.__keeper.creatureCount,
+        lairTileCount: globalThis.__keeper.lairTileCount,
         hudText: globalThis.__keeper.hudText,
         drawCalls: globalThis.__keeper.drawCalls,
         camera: globalThis.__keeper.camera,
@@ -668,6 +735,12 @@ async function run() {
       }
       if (result.goldStored < 40) {
         throw new Error(`goldStored ended at ${String(result.goldStored)}`);
+      }
+      if (result.creatureCount < 1) {
+        throw new Error(`creatureCount ended at ${String(result.creatureCount)}`);
+      }
+      if (result.lairTileCount !== 3) {
+        throw new Error(`lairTileCount ended at ${String(result.lairTileCount)}`);
       }
       for (let x = 30; x <= 39; x += 1) {
         const point = await pagePointForTile(page, box, x, 32);
