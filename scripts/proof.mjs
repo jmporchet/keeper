@@ -114,11 +114,15 @@ async function run() {
       const result = await page.evaluate(() => ({
         tick: globalThis.__keeper.tick,
         hash: globalThis.__keeper.hash,
+        drawCalls: globalThis.__keeper.drawCalls,
       }));
       if (result.tick <= duringPause) {
         throw new Error(`tick did not advance after resume: ${String(duringPause)} -> ${String(result.tick)}`);
       }
-      console.log(beforePause, duringPause, result.tick, result.hash);
+      if (result.drawCalls > 8) {
+        throw new Error(`tile draw calls ${String(result.drawCalls)} exceed 8`);
+      }
+      console.log(beforePause, duringPause, result.tick, result.hash, result.drawCalls);
       await page.screenshot({ path: "proof/shot.png" });
       await context.close();
       const files = await readdir("proof/tmp");

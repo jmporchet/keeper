@@ -198,11 +198,12 @@ stateDiagram-v2
 
 ### Rendering
 
-- One `InstancedMesh` per tile visual kind. A tile change updates one instance matrix. A removed block gets scale 0, so the instance index can stay the tile index.
+- Tile drawing lives in `src/render/`. It reads the sim `Uint8Array` grid and never writes sim state.
+- One `InstancedMesh` per tile kind (six kinds today). Sync packs live tiles densely and sets `mesh.count` to the number of tiles of that kind, so tile draw calls stay at most 8.
+- A later pass can switch to tile-index instances with scale 0 for removed blocks; counts must still match the grid.
 - Imps are instanced too. Animation is cheap vertex or transform motion, no skinned meshes in milestone 1.
 - Camera: perspective, orbit around a ground target, pitch clamped, zoom clamped, target clamped to the map. Scaffold uses a fixed-radius orbit from `src/orbit.ts`; later PRs replace it with chart 2.
-- Visual style: low-poly blocks, warm torchlight, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
-- Placeholder map: a 9×9 tile grid owned by the sim (`earth` | `goldSeam` | `claimed`). Three.js only reads that grid.
+- Visual style: low-poly blocks, warm torchlight (hemisphere fill plus point lights over the heart, claimed floor and map), no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
 
 ## Open questions
 
