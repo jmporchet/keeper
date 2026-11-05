@@ -1,4 +1,5 @@
-import { asImpId, asTick, asTileIndex } from "./ids";
+import { CREATURE_CAPACITY } from "./creatures";
+import { asCreatureId, asImpId, asTick, asTileIndex } from "./ids";
 import { IMP_CAPACITY } from "./imps";
 import { MAP_HEIGHT, MAP_WIDTH } from "./map";
 import {
@@ -33,7 +34,9 @@ export type CommandErrorReason =
   | "invalidTile"
   | "invalidRoom"
   | "invalidImpId"
-  | "invalidDropTile";
+  | "invalidDropTile"
+  | "invalidCreatureId"
+  | "invalidMove";
 
 export type SaveError =
   | { kind: "invalidJson" }
@@ -105,6 +108,28 @@ function parseCommand(value: unknown): CommandResult {
     }
     case "spawnImp":
       return { ok: true, command: { kind: "spawnImp", tick } };
+    case "possess": {
+      if (!isIntegerInRange(value.creatureId, 0, CREATURE_CAPACITY - 1)) {
+        return { ok: false, reason: "invalidCreatureId" };
+      }
+      return { ok: true, command: { kind: "possess", tick, creatureId: asCreatureId(value.creatureId) } };
+    }
+    case "releasePossess":
+      return { ok: true, command: { kind: "releasePossess", tick } };
+    case "possessMove": {
+      if (!isIntegerInRange(value.creatureId, 0, CREATURE_CAPACITY - 1)) {
+        return { ok: false, reason: "invalidCreatureId" };
+      }
+      const dx = value.dx;
+      const dy = value.dy;
+      if (!isIntegerInRange(dx, -1, 1) || !isIntegerInRange(dy, -1, 1) || Math.abs(dx) + Math.abs(dy) !== 1) {
+        return { ok: false, reason: "invalidMove" };
+      }
+      return {
+        ok: true,
+        command: { kind: "possessMove", tick, creatureId: asCreatureId(value.creatureId), dx, dy },
+      };
+    }
     case "pickUp":
     case "slap": {
       if (!isIntegerInRange(value.impId, 0, IMP_CAPACITY - 1)) {

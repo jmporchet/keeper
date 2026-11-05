@@ -1,10 +1,12 @@
 import { createActor } from "xstate";
 import { describe, expect, it } from "vitest";
+import { asCreatureId } from "../sim";
 import {
   inputCameraMachine,
   isHolding,
   isOrbiting,
   isPanning,
+  isPossessed,
   isTagging,
 } from "./inputCameraMachine";
 
@@ -170,5 +172,45 @@ describe("input and camera chart", () => {
     actor.send({ type: "PAN_KEY_DOWN" });
     actor.send({ type: "LEFT_DOWN_TILE" });
     expect(actor.getSnapshot().value).toBe("Orbiting");
+  });
+});
+
+describe("possession input", () => {
+  it("enters Possessed from Idle and returns on EXIT_POSSESS", () => {
+    const actor = startInput();
+    actor.send({ type: "POSSESS_CREATURE", creatureId: asCreatureId(2) });
+    expect(actor.getSnapshot().value).toBe("Possessed");
+    expect(isPossessed(actor.getSnapshot())).toBe(true);
+    expect(actor.getSnapshot().context.possession).toEqual({ kind: "creature", id: 2 });
+    actor.send({ type: "EXIT_POSSESS" });
+    expect(actor.getSnapshot().value).toBe("Idle");
+    expect(actor.getSnapshot().context.possession).toEqual({ kind: "none" });
+  });
+
+  it("returns to Idle from Possessed on Escape", () => {
+    const actor = startInput();
+    actor.send({ type: "POSSESS_CREATURE", creatureId: asCreatureId(0) });
+    actor.send({ type: "ESCAPE" });
+    expect(actor.getSnapshot().value).toBe("Idle");
+    expect(isPossessed(actor.getSnapshot())).toBe(false);
+  });
+
+  it("ignores possessMove while Idle", () => {
+    const actor = startInput();
+    actor.send({ type: "POSSESS_MOVE", dx: 1, dy: 0 });
+    expect(actor.getSnapshot().value).toBe("Idle");
+  });
+
+  it("does not enter Tagging, Holding or Painting while Possessed", () => {
+    const actor = startInput();
+    actor.send({ type: "POSSESS_CREATURE", creatureId: asCreatureId(1) });
+    actor.send({ type: "LEFT_DOWN_TILE" });
+    expect(actor.getSnapshot().value).toBe("Possessed");
+    actor.send({ type: "LEFT_DOWN_IMP" });
+    expect(actor.getSnapshot().value).toBe("Possessed");
+    actor.send({ type: "SELECT_ROOM_TOOL", room: "lair" });
+    expect(actor.getSnapshot().value).toBe("Possessed");
+    actor.send({ type: "POSSESS_MOVE", dx: 0, dy: 1 });
+    expect(actor.getSnapshot().value).toBe("Possessed");
   });
 });

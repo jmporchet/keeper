@@ -7,6 +7,7 @@ import type { ImpBoard } from "./imps";
 import type { JobBoard } from "./jobs";
 import type { TileKindCode, TileRead } from "./map";
 import { isWalkableCode, type PathScratch } from "./path";
+import type { Possession } from "./possession";
 
 export type World = {
   seed: number;
@@ -45,6 +46,7 @@ export type World = {
   creatures: CreatureBoard;
   heroes: HeroBoard;
   hand: Hand;
+  possession: Possession;
   pathScratch: PathScratch;
   walkableSaturated: boolean;
   walkableTileCount: number;

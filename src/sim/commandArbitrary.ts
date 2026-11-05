@@ -1,5 +1,6 @@
 import * as fc from "fast-check";
-import { asImpId, asTick, asTileIndex } from "./ids";
+import { CREATURE_CAPACITY } from "./creatures";
+import { asCreatureId, asImpId, asTick, asTileIndex } from "./ids";
 import { MAP_WIDTH } from "./map";
 import type { Command } from "./world";
 
@@ -10,7 +11,7 @@ export function commandList(maxTick: number): fc.Arbitrary<Command[]> {
         fc.integer({ min: 0, max: maxTick - 1 }),
         fc.integer({ min: 1, max: 8 }),
         fc.integer({ min: 0, max: MAP_WIDTH * MAP_WIDTH - 1 }),
-        fc.integer({ min: 0, max: 11 }),
+        fc.integer({ min: 0, max: 14 }),
       )
       .map(([tick, amount, tile, kind]) => {
         switch (kind) {
@@ -71,8 +72,51 @@ export function commandList(maxTick: number): fc.Arbitrary<Command[]> {
               room: "training",
             };
           }
-          default:
+          case 11:
             return { kind: "slap", tick: asTick(tick), impId: asImpId(tile % 4) };
+          case 12:
+            return { kind: "possess", tick: asTick(tick), creatureId: asCreatureId(tile % CREATURE_CAPACITY) };
+          case 13:
+            return { kind: "releasePossess", tick: asTick(tick) };
+          case 14: {
+            const direction = tile % 4;
+            if (direction === 0) {
+              return {
+                kind: "possessMove",
+                tick: asTick(tick),
+                creatureId: asCreatureId(tile % CREATURE_CAPACITY),
+                dx: 0,
+                dy: -1,
+              };
+            }
+            if (direction === 1) {
+              return {
+                kind: "possessMove",
+                tick: asTick(tick),
+                creatureId: asCreatureId(tile % CREATURE_CAPACITY),
+                dx: 1,
+                dy: 0,
+              };
+            }
+            if (direction === 2) {
+              return {
+                kind: "possessMove",
+                tick: asTick(tick),
+                creatureId: asCreatureId(tile % CREATURE_CAPACITY),
+                dx: 0,
+                dy: 1,
+              };
+            }
+            return {
+              kind: "possessMove",
+              tick: asTick(tick),
+              creatureId: asCreatureId(tile % CREATURE_CAPACITY),
+              dx: -1,
+              dy: 0,
+            };
+          }
+          default:
+            return { kind: "noop", tick: asTick(tick) };
         }
       }),
     { maxLength: 16 },

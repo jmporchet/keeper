@@ -1,5 +1,5 @@
 import { assign, setup, type SnapshotFrom } from "xstate";
-import { HAND_CAPACITY, type RoomTool } from "../sim";
+import { HAND_CAPACITY, type CreatureId, type Possession, type RoomTool } from "../sim";
 
 export type InputCameraEvent =
   | { type: "RIGHT_DOWN" }
@@ -15,13 +15,17 @@ export type InputCameraEvent =
   | { type: "DROP_WALKABLE" }
   | { type: "DROP_REFUSED" }
   | { type: "TAG_RELEASE" }
-  | { type: "SLAP_IMP" };
+  | { type: "SLAP_IMP" }
+  | { type: "POSSESS_CREATURE"; creatureId: CreatureId }
+  | { type: "EXIT_POSSESS" }
+  | { type: "POSSESS_MOVE"; dx: number; dy: number };
 
 export type InputCameraContext = {
   panKeys: number;
   pointerPan: boolean;
   heldCount: number;
   room: RoomTool;
+  possession: Possession;
 };
 
 export const inputCameraMachine = setup({
@@ -43,11 +47,19 @@ export const inputCameraMachine = setup({
     selectRoom: assign({ room: ({ event }) => (event.type === "SELECT_ROOM_TOOL" ? event.room : "treasury") }),
     incHeld: assign({ heldCount: ({ context }) => context.heldCount + 1 }),
     decHeld: assign({ heldCount: ({ context }) => Math.max(0, context.heldCount - 1) }),
+    setPossession: assign({
+      possession: ({ event }): Possession =>
+        event.type === "POSSESS_CREATURE"
+          ? { kind: "creature", id: event.creatureId }
+          : { kind: "none" },
+    }),
+    clearPossession: assign({ possession: (): Possession => ({ kind: "none" }) }),
+    resetPan: assign({ panKeys: 0, pointerPan: false }),
   },
 }).createMachine({
   id: "inputCamera",
   initial: "Idle",
-  context: { panKeys: 0, pointerPan: false, heldCount: 0, room: "treasury" },
+  context: { panKeys: 0, pointerPan: false, heldCount: 0, room: "treasury", possession: { kind: "none" } },
   states: {
     Idle: {
       on: {
@@ -58,6 +70,7 @@ export const inputCameraMachine = setup({
         SELECT_ROOM_TOOL: { target: "Painting", actions: "selectRoom" },
         LEFT_DOWN_IMP: { target: "Holding", guard: "handHasRoom", actions: "incHeld" },
         SLAP_IMP: {},
+        POSSESS_CREATURE: { target: "Possessed", actions: ["setPossession", "resetPan"] },
       },
     },
     Orbiting: {
@@ -101,6 +114,14 @@ export const inputCameraMachine = setup({
         DROP_REFUSED: "Holding",
       },
     },
+    Possessed: {
+      on: {
+        EXIT_POSSESS: { target: "Idle", actions: "clearPossession" },
+        ESCAPE: { target: "Idle", actions: "clearPossession" },
+        POSSESS_CREATURE: { target: "Possessed", actions: "setPossession" },
+        POSSESS_MOVE: {},
+      },
+    },
   },
 });
 
@@ -124,4 +145,8 @@ export function isHolding(snapshot: InputCameraSnapshot): boolean {
 
 export function isPainting(snapshot: InputCameraSnapshot): boolean {
   return snapshot.matches("Painting");
+}
+
+export function isPossessed(snapshot: InputCameraSnapshot): boolean {
+  return snapshot.matches("Possessed");
 }
