@@ -16,11 +16,19 @@ const simRestrictedImports = [
         name: "three",
         message: "src/sim cannot import three.",
       },
+      {
+        name: "xstate",
+        message: "src/sim cannot import xstate.",
+      },
     ],
     patterns: [
       {
         group: ["three/*", "three/**"],
         message: "src/sim cannot import three.",
+      },
+      {
+        group: ["xstate/*", "xstate/**", "@xstate/*", "@xstate/**"],
+        message: "src/sim cannot import xstate.",
       },
       {
         regex: "(^|/)render(/|$)",
@@ -116,6 +124,37 @@ const hotRestrictedSyntax = [
     selector: "CallExpression[callee.property.name='concat']",
     message: "Do not allocate with Array#concat in *.hot.ts.",
   },
+  {
+    selector: "TemplateLiteral[expressions.length>0]",
+    message: "Do not build strings with template expressions in *.hot.ts.",
+  },
+  {
+    selector: "BinaryExpression[operator='+'] > Literal[raw=/^['\"]/]",
+    message: "Do not concatenate strings in *.hot.ts.",
+  },
+  {
+    selector: "AssignmentExpression[operator='+='] > Literal[raw=/^['\"]/]",
+    message: "Do not concatenate strings in *.hot.ts.",
+  },
+];
+
+const simRestrictedProperties = [
+  "error",
+  {
+    object: "Math",
+    property: "random",
+    message: "src/sim cannot use Math.random.",
+  },
+  {
+    object: "Date",
+    property: "now",
+    message: "src/sim cannot use Date.now.",
+  },
+  {
+    object: "performance",
+    property: "now",
+    message: "src/sim cannot use performance.now.",
+  },
 ];
 
 export default tseslint.config(
@@ -160,6 +199,7 @@ export default tseslint.config(
     rules: {
       "no-restricted-globals": simRestrictedGlobals,
       "no-restricted-imports": simRestrictedImports,
+      "no-restricted-properties": simRestrictedProperties,
     },
   },
   {

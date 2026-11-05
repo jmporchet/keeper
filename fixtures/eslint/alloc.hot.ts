@@ -11,5 +11,7 @@ export function tick(xs: number[]): number[] {
   const filtered = xs.filter((x) => x > 0);
   const sliced = xs.slice(0);
   const concatted = xs.concat(arr);
-  return concatted.concat(mapped, filtered, sliced, spread, [arrow(), inner(), obj.a, made.message.length]);
+  const templated = `n${xs.length}`;
+  const joined = "a" + "b";
+  return concatted.concat(mapped, filtered, sliced, spread, [arrow(), inner(), obj.a, made.message.length, templated.length, joined.length]);
 }

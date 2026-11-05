@@ -57,6 +57,23 @@ describe("lint guardrails", () => {
     expect(good.errorCount).toBe(0);
   });
 
+  it("forbids xstate imports in src/sim", async () => {
+    const bad = await lintFixture("fixtures/eslint/sim/xstate.bad.ts");
+    expect(ruleIds(bad)).toContain("no-restricted-imports");
+    expect(messagesFor(bad, "no-restricted-imports").join("\n")).toMatch(/xstate/);
+  });
+
+  it("forbids Math.random, Date.now and performance.now in src/sim", async () => {
+    const bad = await lintFixture("fixtures/eslint/sim/clock.bad.ts");
+    const good = await lintFixture("fixtures/eslint/sim/pure.good.ts");
+    const props = messagesFor(bad, "no-restricted-properties");
+    expect(props.some((message) => message.includes("Math.random"))).toBe(true);
+    expect(props.some((message) => message.includes("Date.now"))).toBe(true);
+    expect(props.some((message) => message.includes("performance.now"))).toBe(true);
+    expect(ruleIds(good)).not.toContain("no-restricted-properties");
+    expect(good.errorCount).toBe(0);
+  });
+
   it("forbids three imports in src/sim", async () => {
     const bad = await lintFixture("fixtures/eslint/sim/three.bad.ts");
     expect(ruleIds(bad)).toContain("no-restricted-imports");
@@ -82,6 +99,8 @@ describe("lint guardrails", () => {
     expect(syntax.some((message) => message.includes("Array#filter"))).toBe(true);
     expect(syntax.some((message) => message.includes("Array#slice"))).toBe(true);
     expect(syntax.some((message) => message.includes("Array#concat"))).toBe(true);
+    expect(syntax.some((message) => message.includes("template expressions"))).toBe(true);
+    expect(syntax.some((message) => message.includes("concatenate strings"))).toBe(true);
     expect(ruleIds(good)).not.toContain("no-restricted-syntax");
     expect(good.errorCount).toBe(0);
   });
