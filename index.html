@@ -5,21 +5,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>keeper</title>
     <style>
+      :root {
+        --stone-deep: #070605;
+        --stone-dark: #1b1612;
+        --stone-mid: #2c251e;
+        --stone-light: #4a3f33;
+        --gold: #e7c877;
+        --gold-bright: #ffe3a1;
+        --gold-dim: #b9934a;
+        --panel-width: 226px;
+      }
       html,
       body {
         margin: 0;
         height: 100%;
         overflow: hidden;
-        background: #000;
-        font-family: sans-serif;
+        background: radial-gradient(circle at 50% 40%, #14100d 0%, #050403 75%);
+        font-family: Georgia, "Times New Roman", serif;
       }
       #hud {
         position: fixed;
         top: 12px;
         left: 12px;
-        color: #f4e6c4;
-        font-size: 18px;
+        padding: 10px 16px 10px 22px;
+        color: var(--gold-bright);
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-shadow: 0 1px 0 #000, 0 0 10px rgba(255, 202, 104, 0.2);
+        background-color: var(--stone-mid);
+        background-image:
+          radial-gradient(ellipse at 20% 10%, rgba(255, 238, 202, 0.1) 0%, rgba(255, 238, 202, 0) 42%),
+          radial-gradient(ellipse at 80% 20%, rgba(0, 0, 0, 0.32) 0%, rgba(0, 0, 0, 0) 50%),
+          radial-gradient(ellipse at 30% 85%, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0) 55%),
+          repeating-linear-gradient(0deg, transparent 0 22px, rgba(0, 0, 0, 0.16) 22px 23px),
+          repeating-linear-gradient(90deg, transparent 0 29px, rgba(255, 255, 255, 0.03) 29px 30px),
+          linear-gradient(160deg, #40372d 0%, #2c251e 40%, #1b1612 100%);
+        border: 1px solid var(--stone-deep);
+        border-top-color: #6c5d49;
+        border-left-color: #544938;
+        border-right-color: #15110d;
+        border-bottom-color: #090705;
+        border-radius: 3px;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 238, 200, 0.22),
+          inset 0 -2px 2px rgba(0, 0, 0, 0.7),
+          inset 0 0 12px rgba(0, 0, 0, 0.35),
+          0 6px 16px rgba(0, 0, 0, 0.65);
         pointer-events: none;
+      }
+      #hud::before {
+        content: "";
+        position: absolute;
+        left: 7px;
+        top: 50%;
+        width: 4px;
+        height: 16px;
+        transform: translateY(-50%);
+        border-radius: 1px;
+        background: linear-gradient(180deg, #ffe9ae, #a77925);
+        box-shadow: 0 0 6px rgba(255, 205, 96, 0.55);
       }
       #sandbox-panel {
         position: fixed;
@@ -27,24 +72,200 @@
         right: 12px;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 0;
+        width: var(--panel-width);
+        max-height: calc(100vh - 24px);
+        overflow-y: auto;
+        box-sizing: border-box;
+        padding: 10px 12px 12px;
+        color: var(--gold);
+        background-color: var(--stone-mid);
+        background-image:
+          radial-gradient(ellipse at 18% 8%, rgba(255, 238, 202, 0.12) 0%, rgba(255, 238, 202, 0) 40%),
+          radial-gradient(ellipse at 82% 22%, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0) 48%),
+          radial-gradient(ellipse at 28% 88%, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 55%),
+          repeating-linear-gradient(0deg, transparent 0 23px, rgba(0, 0, 0, 0.18) 23px 24px),
+          repeating-linear-gradient(90deg, transparent 0 30px, rgba(255, 255, 255, 0.035) 30px 31px),
+          linear-gradient(160deg, #433a2f 0%, #2d261f 42%, #1a1511 100%);
+        border: 2px solid var(--stone-deep);
+        border-top-color: #71624d;
+        border-left-color: #5c5040;
+        border-right-color: #15110d;
+        border-bottom-color: #080605;
+        border-radius: 4px;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 238, 200, 0.24),
+          inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+          inset 0 -3px 4px rgba(0, 0, 0, 0.65),
+          inset 0 0 24px rgba(0, 0, 0, 0.45),
+          0 10px 26px rgba(0, 0, 0, 0.72);
+        scrollbar-width: thin;
+        scrollbar-color: #6b5a45 #1b1612;
         z-index: 10;
       }
+      #sandbox-panel::after {
+        content: "";
+        position: absolute;
+        inset: 3px;
+        border: 1px solid rgba(255, 226, 170, 0.07);
+        border-radius: 2px;
+        pointer-events: none;
+      }
+      .panel-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 1px 2px 8px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.75);
+        box-shadow: 0 1px 0 rgba(255, 230, 190, 0.09);
+      }
+      .panel-header::before,
+      .panel-header::after {
+        content: "";
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        transform: rotate(45deg);
+        background: linear-gradient(135deg, #d7b56c, #7c5c22 70%, #3d2d12);
+        border: 1px solid var(--stone-deep);
+        box-shadow: inset 0 1px 0 rgba(255, 240, 190, 0.4), 0 0 5px rgba(230, 185, 90, 0.3);
+      }
+      .panel-title {
+        flex: 1;
+        text-align: center;
+        color: var(--gold-bright);
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        text-shadow: 0 1px 0 #000, 0 0 12px rgba(255, 202, 104, 0.28);
+      }
+      .panel-section {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 7px 0 3px;
+      }
+      .panel-section + .panel-section {
+        margin-top: 2px;
+        border-top: 1px solid rgba(0, 0, 0, 0.55);
+        box-shadow: 0 -1px 0 rgba(255, 230, 190, 0.07);
+      }
+      .panel-section-title {
+        padding: 0 2px 1px;
+        color: var(--gold-dim);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        text-shadow: 0 1px 0 #000;
+      }
       #sandbox-panel button {
+        position: relative;
         font: inherit;
-        color: #f4e6c4;
-        background: #3a2f26;
-        border: 1px solid #6b5a45;
-        border-radius: 4px;
-        padding: 6px 10px;
+        font-size: 13.5px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--gold);
+        text-align: center;
+        text-shadow: 0 1px 1px #000, 0 0 6px rgba(255, 200, 100, 0.12);
+        background-color: var(--stone-light);
+        background-image:
+          linear-gradient(180deg, rgba(255, 240, 210, 0.14) 0%, rgba(255, 240, 210, 0) 42%),
+          linear-gradient(180deg, #4a4034 0%, #352c24 45%, #211b16 100%);
+        border: 1px solid var(--stone-deep);
+        border-top-color: #7a6a54;
+        border-left-color: #5c5040;
+        border-right-color: #17120e;
+        border-bottom-color: #070604;
+        border-radius: 3px;
+        padding: 7px 10px;
         cursor: pointer;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 238, 200, 0.2),
+          inset 0 -2px 2px rgba(0, 0, 0, 0.55),
+          inset 0 0 8px rgba(0, 0, 0, 0.25),
+          0 1px 0 rgba(0, 0, 0, 0.7);
+        transition: color 120ms ease, background-color 120ms ease, box-shadow 120ms ease, transform 60ms ease;
       }
       #sandbox-panel button:disabled {
-        opacity: 0.45;
+        opacity: 0.5;
         cursor: default;
+        color: #b7a789;
+        filter: saturate(0.65);
+      }
+      #sandbox-panel button:not(:disabled):hover {
+        color: var(--gold-bright);
+        background-color: #5a4d3d;
+        background-image:
+          linear-gradient(180deg, rgba(255, 245, 220, 0.2) 0%, rgba(255, 245, 220, 0) 45%),
+          linear-gradient(180deg, #5a4d3d 0%, #42372b 45%, #2a221b 100%);
+        border-top-color: #9c8a70;
+        border-left-color: #77664f;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 245, 210, 0.28),
+          inset 0 -2px 2px rgba(0, 0, 0, 0.5),
+          0 0 10px rgba(232, 196, 110, 0.2),
+          0 1px 0 rgba(0, 0, 0, 0.8);
+      }
+      #sandbox-panel button:not(:disabled):active {
+        transform: translateY(1px);
+        color: var(--gold-bright);
+        background-image:
+          linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.05) 45%),
+          linear-gradient(180deg, #241e19 0%, #2c241d 50%, #382e25 100%);
+        box-shadow:
+          inset 0 3px 6px rgba(0, 0, 0, 0.8),
+          inset 0 0 0 1px rgba(0, 0, 0, 0.6),
+          0 0 8px rgba(232, 196, 110, 0.12);
       }
       #sandbox-panel button[aria-pressed="true"] {
-        background: #6b5a45;
+        color: #ffe6a8;
+        background-color: #4b3a1e;
+        background-image:
+          linear-gradient(180deg, rgba(255, 235, 180, 0.2) 0%, rgba(255, 235, 180, 0) 45%),
+          linear-gradient(180deg, #6b552c 0%, #4b3a1e 50%, #2a2116 100%);
+        border-top-color: #c4a25e;
+        border-left-color: #977b43;
+        border-right-color: #1a130b;
+        border-bottom-color: #0a0705;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 240, 190, 0.35),
+          inset 0 -2px 3px rgba(0, 0, 0, 0.55),
+          inset 0 0 12px rgba(245, 195, 90, 0.2),
+          0 0 9px rgba(235, 185, 80, 0.25),
+          0 1px 0 rgba(0, 0, 0, 0.7);
+      }
+      #sandbox-panel button[aria-pressed="true"]::before {
+        content: "";
+        position: absolute;
+        left: 4px;
+        top: 5px;
+        bottom: 5px;
+        width: 2px;
+        border-radius: 1px;
+        background: linear-gradient(180deg, #ffe8a8, #c28d2b);
+        box-shadow: 0 0 5px rgba(255, 205, 95, 0.7);
+      }
+      #sandbox-panel button[aria-pressed="true"]:not(:disabled):hover {
+        color: #fff0bd;
+        background-image:
+          linear-gradient(180deg, rgba(255, 240, 190, 0.26) 0%, rgba(255, 240, 190, 0) 45%),
+          linear-gradient(180deg, #7a6233 0%, #564322 50%, #302518 100%);
+      }
+      #sandbox-panel button[aria-pressed="true"]:not(:disabled):active {
+        transform: translateY(1px);
+        background-image:
+          linear-gradient(180deg, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.04) 45%),
+          linear-gradient(180deg, #3a2c17 0%, #4a391d 50%, #5c4725 100%);
+        box-shadow:
+          inset 0 3px 6px rgba(0, 0, 0, 0.75),
+          inset 0 0 10px rgba(245, 195, 90, 0.2),
+          0 0 7px rgba(235, 185, 80, 0.2);
+      }
+      #sandbox-panel button:focus-visible {
+        outline: 2px solid var(--gold);
+        outline-offset: 2px;
       }
       #pause-overlay {
         display: none;
@@ -52,9 +273,15 @@
         inset: 0;
         align-items: center;
         justify-content: center;
-        color: #f4e6c4;
-        font-size: 32px;
-        background: rgba(0, 0, 0, 0.35);
+        color: var(--gold-bright);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 40px;
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        text-shadow: 0 2px 0 #000, 0 0 22px rgba(255, 200, 90, 0.35);
+        background:
+          radial-gradient(ellipse at center, rgba(20, 16, 12, 0.5) 0%, rgba(0, 0, 0, 0.74) 70%);
         pointer-events: none;
       }
       #pause-overlay.visible {
@@ -65,20 +292,30 @@
   <body>
     <div id="hud">gold 0 · imps 4 · tick 0</div>
     <div id="sandbox-panel">
-      <button id="spawn-imp" type="button">Spawn imp</button>
-      <button id="add-gold" type="button">Add 100 gold</button>
-      <button id="repair-heart" type="button">Repair heart</button>
-      <button id="paint-treasury" type="button" aria-pressed="false">Paint treasury</button>
-      <button id="paint-lair" type="button" aria-pressed="false">Paint lair</button>
-      <button id="paint-hatchery" type="button" aria-pressed="false">Paint hatchery</button>
-      <button id="paint-training" type="button" aria-pressed="false">Paint training</button>
-      <button id="paint-workshop" type="button" aria-pressed="false">Paint workshop</button>
-      <button id="paint-library" type="button" aria-pressed="false">Paint library</button>
-      <button id="paint-door" type="button" aria-pressed="false">Paint door</button>
-      <button id="paint-trap" type="button" aria-pressed="false">Paint trap</button>
-      <button id="possess" type="button">Possess</button>
-      <button id="save-game" type="button">Save</button>
-      <button id="load-game" type="button">Load</button>
+      <div class="panel-header"><span class="panel-title">Sandbox</span></div>
+      <div class="panel-section">
+        <div class="panel-section-title">Commands</div>
+        <button id="spawn-imp" type="button">Spawn imp</button>
+        <button id="add-gold" type="button">Add 100 gold</button>
+        <button id="repair-heart" type="button">Repair heart</button>
+      </div>
+      <div class="panel-section">
+        <div class="panel-section-title">Rooms</div>
+        <button id="paint-treasury" type="button" aria-pressed="false">Paint treasury</button>
+        <button id="paint-lair" type="button" aria-pressed="false">Paint lair</button>
+        <button id="paint-hatchery" type="button" aria-pressed="false">Paint hatchery</button>
+        <button id="paint-training" type="button" aria-pressed="false">Paint training</button>
+        <button id="paint-workshop" type="button" aria-pressed="false">Paint workshop</button>
+        <button id="paint-library" type="button" aria-pressed="false">Paint library</button>
+        <button id="paint-door" type="button" aria-pressed="false">Paint door</button>
+        <button id="paint-trap" type="button" aria-pressed="false">Paint trap</button>
+      </div>
+      <div class="panel-section">
+        <div class="panel-section-title">Keeper</div>
+        <button id="possess" type="button">Possess</button>
+        <button id="save-game" type="button">Save</button>
+        <button id="load-game" type="button">Load</button>
+      </div>
       <input id="load-file" type="file" accept="application/json" hidden />
     </div>
     <div id="pause-overlay">Pause</div>
