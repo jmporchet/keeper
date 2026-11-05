@@ -4,6 +4,7 @@ import { PORTAL_X, PORTAL_Y, ROOM_KIND, tileKindAt } from "./map";
 import { bumpPathGen, PATH_CELL_COUNT } from "./path";
 import { floodWalkable, reconstructPath } from "./path.hot";
 import { findPath, STEPS_PER_TILE } from "./pathfind";
+import { advanceRng } from "./rng";
 import type { World } from "./worldCore";
 
 export const CREATURE_CAPACITY = 8;
@@ -13,6 +14,9 @@ export const HUNGER_TICKS = 300;
 export const HUNGER_RETRY_TICKS = 40;
 export const EAT_TICKS = 20;
 export const TRAIN_TICKS = 80;
+export const WANDER_PERIOD = 40;
+export const WANDER_CHANCE = 1;
+export const WANDER_ROLL = 2;
 export const CREATURE_MAX_LEVEL = 1;
 export const CREATURE_HP = 3;
 export const CREATURE_HP_PER_LEVEL = 1;
@@ -33,6 +37,13 @@ export type CreatureToTraining = {
   progress: number;
 };
 export type CreatureTraining = { kind: "training"; tile: TileIndex; remaining: number };
+export type CreatureWandering = {
+  kind: "wandering";
+  pathStep: number;
+  pathLength: number;
+  progress: number;
+  remaining: number;
+};
 export type CreatureHungry = { kind: "hungry"; retry: number };
 export type CreatureToFood = {
   kind: "toFood";
@@ -48,6 +59,7 @@ export type CreatureState =
   | CreatureSleeping
   | CreatureToTraining
   | CreatureTraining
+  | CreatureWandering
   | CreatureHungry
   | CreatureToFood
   | CreatureEating;
@@ -73,6 +85,7 @@ export type Creature = {
   sleeping: CreatureSleeping;
   toTraining: CreatureToTraining;
   training: CreatureTraining;
+  wandering: CreatureWandering;
   hungry: CreatureHungry;
   toFood: CreatureToFood;
   eating: CreatureEating;
@@ -97,6 +110,13 @@ export function createCreature(index: number, tileX: number, tileY: number, bedT
     progress: 0,
   };
   const training: CreatureTraining = { kind: "training", tile: bedTile, remaining: TRAIN_TICKS };
+  const wandering: CreatureWandering = {
+    kind: "wandering",
+    pathStep: 0,
+    pathLength: 0,
+    progress: 0,
+    remaining: HUNGER_TICKS,
+  };
   const hungry: CreatureHungry = { kind: "hungry", retry: 0 };
   const toFood: CreatureToFood = {
     kind: "toFood",
@@ -127,6 +147,7 @@ export function createCreature(index: number, tileX: number, tileY: number, bedT
     sleeping,
     toTraining,
     training,
+    wandering,
     hungry,
     toFood,
     eating,
@@ -330,7 +351,12 @@ function tileIndex(x: number, y: number, width: number): number {
 
 export function setCreatureHeading(creature: Creature, width: number): void {
   const state = creature.state;
-  if (state.kind !== "toBed" && state.kind !== "toFood" && state.kind !== "toTraining") {
+  if (
+    state.kind !== "toBed" &&
+    state.kind !== "toFood" &&
+    state.kind !== "toTraining" &&
+    state.kind !== "wandering"
+  ) {
     creature.headingX = 0;
     creature.headingY = 0;
     return;
@@ -375,11 +401,58 @@ export function beginToBed(world: World, creature: Creature): void {
   setCreatureHeading(creature, world.width);
 }
 
-export function beginSleeping(creature: Creature): void {
+export function resumeSleeping(creature: Creature, remaining: number): void {
   creature.headingX = 0;
   creature.headingY = 0;
-  creature.sleeping.remaining = HUNGER_TICKS;
+  creature.sleeping.remaining = remaining;
   creature.state = creature.sleeping;
+}
+
+export function beginSleeping(creature: Creature): void {
+  resumeSleeping(creature, HUNGER_TICKS);
+}
+
+export function beginWander(world: World, creature: Creature): boolean {
+  const start = tileIndex(creature.tileX, creature.tileY, world.width);
+  const gen = bumpPathGen(world.pathScratch);
+  const count = floodWalkable(
+    world.tiles,
+    world.width,
+    world.height,
+    start,
+    world.pathScratch.queue,
+    world.pathScratch.generation,
+    gen,
+    world.pathScratch.cameFrom,
+    world.pathScratch.reachable,
+    world.pathScratch.distance,
+  );
+  if (count <= 1) {
+    return false;
+  }
+  advanceRng(world);
+  const slot = 1 + (world.rng % (count - 1));
+  const dest = world.pathScratch.reachable[slot];
+  if (dest === undefined) {
+    return false;
+  }
+  const length = reconstructPath(
+    start,
+    dest,
+    world.pathScratch.cameFrom,
+    world.pathScratch.reverseBuf,
+    creature.path,
+  );
+  if (length <= 1) {
+    return false;
+  }
+  creature.wandering.pathStep = 0;
+  creature.wandering.pathLength = length;
+  creature.wandering.progress = 0;
+  creature.wandering.remaining = creature.sleeping.remaining;
+  creature.state = creature.wandering;
+  setCreatureHeading(creature, world.width);
+  return true;
 }
 
 export function beginTraining(creature: Creature, tile: TileIndex): void {
@@ -618,7 +691,12 @@ export function worldCreatureZ(tileY: number, headingY: number, progress: number
 export function captureCreatureCurr(creature: Creature): void {
   const state = creature.state;
   const progress =
-    state.kind === "toBed" || state.kind === "toFood" || state.kind === "toTraining" ? state.progress : 0;
+    state.kind === "toBed" ||
+    state.kind === "toFood" ||
+    state.kind === "toTraining" ||
+    state.kind === "wandering"
+      ? state.progress
+      : 0;
   creature.currX = worldCreatureX(creature.tileX, creature.headingX, progress);
   creature.currZ = worldCreatureZ(creature.tileY, creature.headingY, progress);
 }
@@ -668,6 +746,8 @@ function creatureStateCode(kind: CreatureState["kind"]): number {
       return 7;
     case "eating":
       return 8;
+    case "wandering":
+      return 9;
     default: {
       const never: never = kind;
       return never;
@@ -720,6 +800,15 @@ export function hashCreatures(board: CreatureBoard): number {
             const state = creature.state;
             h = mix(h, state.tile);
             h = mix(h, state.remaining);
+            break;
+          }
+          case "wandering": {
+            const state = creature.state;
+            h = mix(h, state.remaining);
+            h = mix(h, state.pathStep);
+            h = mix(h, state.pathLength);
+            h = mix(h, state.progress);
+            h = mixPath(h, creature.path, state.pathLength);
             break;
           }
           case "hungry": {

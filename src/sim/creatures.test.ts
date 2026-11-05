@@ -1,14 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { ARRIVE_TICKS, CREATURE_CAPACITY, lairTileCount, liveCreatureCount, type Creature } from "./creatures";
+import {
+  ARRIVE_TICKS,
+  beginWander,
+  CREATURE_CAPACITY,
+  freeBedTiles,
+  HUNGER_TICKS,
+  lairTileCount,
+  liveCreatureCount,
+  type Creature,
+} from "./creatures";
 import { asTick, asTileIndex, type TileIndex } from "./ids";
+import { CREATURE_WAGE, PAY_TICKS } from "./wages";
 import {
   sortCommands,
+  createWorld,
   hashWorld,
   MAP_WIDTH,
   PORTAL_X,
   PORTAL_Y,
   ROOM_KIND,
   run,
+  step,
   tileKindAt,
   type Command,
   type World,
@@ -123,25 +135,39 @@ describe("creature portal", () => {
   });
 
   it("stops at CREATURE_CAPACITY even with spare beds", () => {
-    const world = run(1, sortCommands(lairSetup(CREATURE_CAPACITY + 2)), ARRIVE_TICKS * (CREATURE_CAPACITY + 1) + 1);
+    const world = createWorld(1);
+    const commands = sortCommands(lairSetup(CREATURE_CAPACITY + 2));
+    let peak = 0;
+    for (let t = 0; t < ARRIVE_TICKS * (CREATURE_CAPACITY + 1) * 4; t += 1) {
+      step(world, commands);
+      const count = liveCreatureCount(world.creatures);
+      expect(count).toBeLessThanOrEqual(CREATURE_CAPACITY);
+      if (count > peak) {
+        peak = count;
+      }
+    }
     expect(lairTileCount(world)).toBe(CREATURE_CAPACITY + 2);
-    expect(liveCreatureCount(world.creatures)).toBe(CREATURE_CAPACITY);
+    expect(peak).toBe(CREATURE_CAPACITY);
   });
 
   it("never lets two creatures claim the same bed", () => {
-    const world = run(1, sortCommands(lairSetup(4)), ARRIVE_TICKS * 12 + 1);
-    const live = creatures(world);
-    expect(live.length).toBe(4);
-    const seen = new Set<number>();
-    for (let i = 0; i < live.length; i += 1) {
-      const creature = live[i];
-      if (creature === undefined) {
-        continue;
+    const world = createWorld(1);
+    const commands = sortCommands(lairSetup(4));
+    let peak = 0;
+    for (let t = 0; t < ARRIVE_TICKS * 12 + 1; t += 1) {
+      step(world, commands);
+      const live = creatures(world);
+      if (live.length > peak) {
+        peak = live.length;
       }
-      expect(world.rooms[creature.bedTile]).toBe(ROOM_KIND.lair);
-      expect(seen.has(creature.bedTile)).toBe(false);
-      seen.add(creature.bedTile);
+      const seen = new Set<number>();
+      for (const creature of live) {
+        expect(world.rooms[creature.bedTile]).toBe(ROOM_KIND.lair);
+        expect(seen.has(creature.bedTile)).toBe(false);
+        seen.add(creature.bedTile);
+      }
     }
+    expect(peak).toBe(4);
   });
 
   it("is deterministic after 10000 ticks with lair paint and arrivals", () => {
@@ -158,5 +184,108 @@ describe("creature portal", () => {
     const before = hashWorld(run(1, sortCommands(commands), ARRIVE_TICKS));
     const after = hashWorld(run(1, sortCommands(commands), ARRIVE_TICKS + 1));
     expect(before).not.toBe(after);
+  });
+});
+
+describe("creature wandering", () => {
+  it("wanders from sleep to a different tile and keeps its bed", () => {
+    const world = createWorld(1);
+    const commands = sortCommands(lairSetup(1));
+    let bed = -1;
+    let sawSleeping = false;
+    let sawWandering = false;
+    let reachedDifferent = false;
+    for (let t = 0; t < 1200; t += 1) {
+      step(world, commands);
+      for (const creature of creatures(world)) {
+        if (creature.state.kind === "sleeping") {
+          sawSleeping = true;
+          bed = creature.bedTile;
+        }
+        if (creature.state.kind === "wandering") {
+          sawWandering = true;
+          expect(freeBedTiles(world)).not.toContain(creature.bedTile);
+        }
+        if (bed < 0) {
+          continue;
+        }
+        expect(creature.bedTile).toBe(bed);
+        const bedY = (bed / MAP_WIDTH) | 0;
+        const bedX = bed - bedY * MAP_WIDTH;
+        if (creature.tileX !== bedX || creature.tileY !== bedY) {
+          reachedDifferent = true;
+        }
+      }
+    }
+    expect(sawSleeping).toBe(true);
+    expect(sawWandering).toBe(true);
+    expect(reachedDifferent).toBe(true);
+  });
+
+  it("keeps counting hunger down while wandering", () => {
+    const world = createWorld(1);
+    const commands = sortCommands(lairSetup(1));
+    let checked = false;
+    for (let t = 0; t < 1600 && !checked; t += 1) {
+      step(world, commands);
+      const creature = creatures(world)[0];
+      if (creature === undefined || creature.state.kind !== "wandering") {
+        continue;
+      }
+      const state = creature.state;
+      if (state.remaining <= 10 || state.pathLength - state.pathStep <= 1) {
+        continue;
+      }
+      const start = state.remaining;
+      for (let i = 0; i < 8; i += 1) {
+        step(world, commands);
+        const next = creature.state;
+        if (next.kind !== "wandering") {
+          throw new Error("wander ended before hunger check finished");
+        }
+        expect(next.remaining).toBe(start - i - 1);
+      }
+      expect(creature.state.kind).toBe("wandering");
+      expect(start).toBeGreaterThan(creature.state.remaining);
+      expect(creature.state.remaining).not.toBe(HUNGER_TICKS);
+      checked = true;
+    }
+    expect(checked).toBe(true);
+  });
+
+  it("pays a wandering creature at payday", () => {
+    const world = createWorld(1);
+    const commands = sortCommands(lairSetup(1));
+    while (world.tick < PAY_TICKS) {
+      step(world, commands);
+    }
+    const creature = creatures(world)[0];
+    if (creature === undefined) {
+      throw new Error("missing creature before payday");
+    }
+    creature.state = creature.sleeping;
+    expect(beginWander(world, creature)).toBe(true);
+    step(world, commands);
+    expect(creature.state.kind).toBe("wandering");
+    expect(world.goldPaidOut).toBe(CREATURE_WAGE);
+    expect(liveCreatureCount(world.creatures)).toBe(1);
+  });
+
+  it("becomes hungry when hunger reaches zero mid-wander", () => {
+    const world = createWorld(1);
+    const commands = sortCommands(lairSetup(1));
+    let checked = false;
+    for (let t = 0; t < 1600 && !checked; t += 1) {
+      step(world, commands);
+      const creature = creatures(world)[0];
+      if (creature === undefined || creature.state.kind !== "wandering") {
+        continue;
+      }
+      creature.state.remaining = 1;
+      step(world, commands);
+      expect(creature.state.kind).toBe("hungry");
+      checked = true;
+    }
+    expect(checked).toBe(true);
   });
 });

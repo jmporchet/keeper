@@ -77,9 +77,46 @@ export async function run(ctx) {
   if (bedCreature === undefined) {
     throw new Error("no creature was sleeping on a bed");
   }
-  await ctx.panToTileCenter(bedCreature.bedTileX, bedCreature.bedTileY);
-  await ctx.screenshot("proof/lair.png", "lair");
+  const bedX = bedCreature.bedTileX;
+  const bedY = bedCreature.bedTileY;
+  await ctx.panToTileCenter(bedX, bedY);
   await ctx.checkpoint("lair");
+  let wanderTicks = 0;
+  let wanderer = bedCreature;
+  for (;;) {
+    const snapshot = await page.evaluate(() => globalThis.__keeper.creatureSnapshot());
+    const wandering = snapshot.find((creature) => creature.state === "wandering");
+    if (wandering !== undefined) {
+      wanderer = wandering;
+      break;
+    }
+    if (wanderTicks >= 600) {
+      throw new Error(`creature did not wander after ${String(wanderTicks)} ticks`);
+    }
+    await ctx.stepOnce(6, 8);
+    wanderTicks += 6;
+  }
+  if (wanderer.bedTileX !== bedX || wanderer.bedTileY !== bedY) {
+    throw new Error(
+      `wandering creature bed changed from ${String(bedX)},${String(bedY)} to ${String(wanderer.bedTileX)},${String(wanderer.bedTileY)}`,
+    );
+  }
+  await ctx.panToTileCenter(wanderer.tileX, wanderer.tileY);
+  for (let i = 0; i < 8; i += 1) {
+    await ctx.stepOnce(2, 40);
+  }
+  const afterWander = await page.evaluate(() => globalThis.__keeper.creatureSnapshot());
+  const wanderCheck = afterWander.find((creature) => creature.id === wanderer.id);
+  if (wanderCheck === undefined) {
+    throw new Error("wandering creature disappeared before resume");
+  }
+  if (wanderCheck.bedTileX !== bedX || wanderCheck.bedTileY !== bedY) {
+    throw new Error(
+      `resumed creature bed changed from ${String(bedX)},${String(bedY)} to ${String(wanderCheck.bedTileX)},${String(wanderCheck.bedTileY)}`,
+    );
+  }
+  await ctx.screenshot("proof/lair.png", "lair");
+  await ctx.checkpoint("lair-wander");
   const result = await page.evaluate(() => ({
     tick: globalThis.__keeper.tick,
     hash: globalThis.__keeper.worldHash,
@@ -94,7 +131,7 @@ export async function run(ctx) {
     throw new Error(`lairTileCount ended at ${String(result.lairTileCount)}`);
   }
   console.log(
-    `lair tick=${String(result.tick)} creatures=${String(result.creatureCount)} lairTiles=${String(result.lairTileCount)} goldSpent=${String(result.goldSpent)} bed=${String(bedCreature.bedTileX)},${String(bedCreature.bedTileY)}`,
+    `lair tick=${String(result.tick)} creatures=${String(result.creatureCount)} lairTiles=${String(result.lairTileCount)} goldSpent=${String(result.goldSpent)} bed=${String(bedX)},${String(bedY)} wanderTicks=${String(wanderTicks)}`,
   );
   for (let i = 0; i < 3; i += 1) {
     await ctx.panToTileCenter(i % 2 === 0 ? 35 : 30, 32);
@@ -102,7 +139,7 @@ export async function run(ctx) {
     await page.mouse.wheel(0, i % 2 === 0 ? -240 : 240);
     await ctx.stepOnce(1, 150);
   }
-  await ctx.panToTileCenter(bedCreature.bedTileX, bedCreature.bedTileY);
+  await ctx.panToTileCenter(bedX, bedY);
   await ctx.stepOnce(1, 150);
   ctx.clipEnd();
 }
