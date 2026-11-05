@@ -49,7 +49,7 @@ Axes:
 
 - Floors and walls: floor textures plus cave wall faces on dug edges.
 - Low-poly silhouettes for imps, fly, beetle and heroes.
-- Torch point lights, darker falloff and optional fog: a warm heart light plus a fixed six-light pool at room anchors, short distance and decay 2, unused lights at zero intensity, and optional dark `FogExp2` behind an exported constant.
+- Torch point lights, darker falloff and optional fog: a warm heart light plus a fixed six-light pool at room anchors, short distance and decay 2, unused lights at zero intensity, and optional dark `FogExp2` behind an exported constant; fill light and fog are tuned for periphery readability while keeping short-distance warm falloff.
 - Readable room props: treasury piles, lair beds, hatchery chickens.
 - HUD and panel restyled toward a classic DK dark stone panel using HTML/CSS.
 

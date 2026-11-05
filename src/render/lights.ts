@@ -1,19 +1,24 @@
 import * as THREE from "three";
 import { HEART_X, HEART_Y, MAP_HALF, ROOM_KIND, type World } from "../sim";
 
-export const DUNGEON_EXPOSURE = 1.05;
+export const DUNGEON_EXPOSURE = 1.5;
 export const FOG_ENABLED = true;
-export const FOG_COLOR = 0x0b0806;
-export const FOG_DENSITY = 0.012;
+export const FOG_COLOR = 0x2a221c;
+export const FOG_DENSITY = 0.002;
+export const HEMISPHERE_SKY_COLOR = 0x8a7a6a;
+export const HEMISPHERE_GROUND_COLOR = 0x2a2018;
+export const HEMISPHERE_LIGHT_INTENSITY = 2.4;
+export const AMBIENT_LIGHT_COLOR = 0x8a7a6a;
+export const AMBIENT_LIGHT_INTENSITY = 8.5;
 export const TORCH_LIGHT_COUNT = 6;
 export const TORCH_LIGHT_COLOR = 0xff8a3c;
-export const TORCH_LIGHT_INTENSITY = 14;
-export const TORCH_LIGHT_DISTANCE = 12;
+export const TORCH_LIGHT_INTENSITY = 16;
+export const TORCH_LIGHT_DISTANCE = 20;
 export const TORCH_LIGHT_DECAY = 2;
 export const TORCH_LIGHT_HEIGHT = 2;
 export const HEART_LIGHT_COLOR = 0xffb060;
 export const HEART_LIGHT_INTENSITY = 28;
-export const HEART_LIGHT_DISTANCE = 18;
+export const HEART_LIGHT_DISTANCE = 30;
 export const HEART_LIGHT_HEIGHT = 3;
 
 const TORCH_ROOM_KINDS = [
@@ -33,8 +38,8 @@ export type TorchLightPool = {
 };
 
 export function createTorchLighting(scene: THREE.Scene): TorchLightPool {
-  scene.add(new THREE.HemisphereLight(0x4a4038, 0x080604, 0.35));
-  scene.add(new THREE.AmbientLight(0x1a1512, 0.25));
+  scene.add(new THREE.HemisphereLight(HEMISPHERE_SKY_COLOR, HEMISPHERE_GROUND_COLOR, HEMISPHERE_LIGHT_INTENSITY));
+  scene.add(new THREE.AmbientLight(AMBIENT_LIGHT_COLOR, AMBIENT_LIGHT_INTENSITY));
   const heart = new THREE.PointLight(HEART_LIGHT_COLOR, HEART_LIGHT_INTENSITY, HEART_LIGHT_DISTANCE, TORCH_LIGHT_DECAY);
   heart.position.set(HEART_X - MAP_HALF, HEART_LIGHT_HEIGHT, HEART_Y - MAP_HALF);
   scene.add(heart);
