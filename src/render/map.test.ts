@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
-import { createWorld, TILE_KIND } from "../sim";
+import { describe, expect, it, vi } from "vitest";
+import { createWorld, setTile, TILE_KIND } from "../sim";
 import { countTilesByKind, createMapMeshes, syncMap } from "./map";
 
 describe("map instances", () => {
@@ -8,7 +8,7 @@ describe("map instances", () => {
     const world = createWorld(1);
     const scene = new THREE.Scene();
     const map = createMapMeshes(scene);
-    syncMap(world.tiles, world.width, map);
+    syncMap(world.tiles, world.width, world.tilesVersion, map);
     const expected = countTilesByKind(world.tiles);
     for (let k = 0; k < map.meshes.length; k += 1) {
       const mesh = map.meshes[k];
@@ -23,8 +23,8 @@ describe("map instances", () => {
     expect(map.counts[TILE_KIND.claimed]).toBe(expected[TILE_KIND.claimed]);
     expect(map.counts[TILE_KIND.dirt]).toBe(0);
     expect(map.counts[TILE_KIND.room]).toBe(0);
-    world.tiles[0] = TILE_KIND.dirt;
-    syncMap(world.tiles, world.width, map);
+    setTile(world, 0, TILE_KIND.dirt);
+    syncMap(world.tiles, world.width, world.tilesVersion, map);
     const after = countTilesByKind(world.tiles);
     for (let k = 0; k < map.meshes.length; k += 1) {
       const mesh = map.meshes[k];
@@ -33,5 +33,25 @@ describe("map instances", () => {
       }
       expect(mesh.count).toBe(after[k]);
     }
+  });
+
+  it("does not rewrite instance matrices when tilesVersion is unchanged", () => {
+    const world = createWorld(1);
+    const scene = new THREE.Scene();
+    const map = createMapMeshes(scene);
+    syncMap(world.tiles, world.width, world.tilesVersion, map);
+    const mesh = map.meshes[TILE_KIND.earth];
+    if (mesh === undefined) {
+      throw new Error("missing mesh");
+    }
+    const spy = vi.spyOn(mesh, "setMatrixAt");
+    const version = world.tilesVersion;
+    syncMap(world.tiles, world.width, version, map);
+    expect(map.syncedVersion).toBe(version);
+    expect(spy).not.toHaveBeenCalled();
+    setTile(world, 0, TILE_KIND.dirt);
+    syncMap(world.tiles, world.width, world.tilesVersion, map);
+    expect(map.syncedVersion).toBe(world.tilesVersion);
+    expect(spy).toHaveBeenCalled();
   });
 });

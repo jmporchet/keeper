@@ -9,6 +9,8 @@ export const MAP_WIDTH = 64;
 export const MAP_HEIGHT = 64;
 export const MAP_HALF = 32;
 
+export const TILE_KINDS = ["earth", "goldSeam", "rock", "dirt", "claimed", "room"] as const;
+
 export const TILE_KIND = {
   earth: 0,
   goldSeam: 1,
@@ -18,17 +20,10 @@ export const TILE_KIND = {
   room: 5,
 } as const;
 
-export type TileKind = keyof typeof TILE_KIND;
-export type TileKindCode = (typeof TILE_KIND)[TileKind];
+export const TILE_KIND_COUNT = TILE_KINDS.length;
 
-const TILE_KIND_FROM_CODE: readonly TileKind[] = [
-  "earth",
-  "goldSeam",
-  "rock",
-  "dirt",
-  "claimed",
-  "room",
-];
+export type TileKind = (typeof TILE_KINDS)[number];
+export type TileKindCode = (typeof TILE_KIND)[TileKind];
 
 export type Command =
   | { kind: "noop"; tick: Tick }
@@ -41,6 +36,7 @@ export type World = {
   width: number;
   height: number;
   tiles: Uint8Array;
+  tilesVersion: number;
   goldStored: number;
   commandCursor: number;
 };
@@ -50,7 +46,7 @@ export function tileKindAt(tiles: Uint8Array, index: number): TileKind {
   if (code === undefined) {
     throw new Error("tile index out of range");
   }
-  const kind = TILE_KIND_FROM_CODE[code];
+  const kind = TILE_KINDS[code];
   if (kind === undefined) {
     throw new Error("invalid tile kind");
   }
@@ -100,6 +96,7 @@ export function createWorld(seed: number): World {
     width,
     height,
     tiles,
+    tilesVersion: 1,
     goldStored: 0,
     commandCursor: 0,
   };
@@ -114,6 +111,14 @@ function nextRng(world: World): void {
 
 function mix(h: number, v: number): number {
   return Math.imul(h ^ (v >>> 0), 16777619) >>> 0;
+}
+
+export function setTile(world: World, index: number, code: TileKindCode): void {
+  if (index < 0 || index >= world.tiles.length) {
+    throw new Error("tile index out of range");
+  }
+  world.tiles[index] = code;
+  world.tilesVersion += 1;
 }
 
 export function hashWorld(world: World): number {

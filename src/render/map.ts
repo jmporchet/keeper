@@ -7,6 +7,7 @@ export type MapMeshes = {
   meshes: THREE.InstancedMesh[];
   dummy: THREE.Object3D;
   counts: Uint32Array;
+  syncedVersion: number;
 };
 
 const CAPACITY = MAP_WIDTH * MAP_HEIGHT;
@@ -30,10 +31,15 @@ export function createMapMeshes(scene: THREE.Scene): MapMeshes {
     meshes,
     dummy: new THREE.Object3D(),
     counts: new Uint32Array(TILE_KIND_COUNT),
+    syncedVersion: -1,
   };
 }
 
-export function syncMap(tiles: Uint8Array, width: number, map: MapMeshes): void {
+export function syncMap(tiles: Uint8Array, width: number, tilesVersion: number, map: MapMeshes): void {
+  if (map.syncedVersion === tilesVersion) {
+    return;
+  }
+  map.syncedVersion = tilesVersion;
   syncMapInstances(tiles, width, map.meshes, map.dummy, map.counts);
 }
 

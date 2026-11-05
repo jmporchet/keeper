@@ -199,11 +199,11 @@ stateDiagram-v2
 ### Rendering
 
 - Tile drawing lives in `src/render/`. It reads the sim `Uint8Array` grid and never writes sim state.
-- One `InstancedMesh` per tile kind (six kinds today). Sync packs live tiles densely and sets `mesh.count` to the number of tiles of that kind, so tile draw calls stay at most 8.
+- One `InstancedMesh` per tile kind (six kinds today). Sync packs live tiles densely and sets `mesh.count` to the number of tiles of that kind, so tile draw calls stay at most 8. `syncMap` skips when `world.tilesVersion` matches the last packed version.
 - A later pass can switch to tile-index instances with scale 0 for removed blocks; counts must still match the grid.
 - Imps are instanced too. Animation is cheap vertex or transform motion, no skinned meshes in milestone 1.
 - Camera: perspective, orbit around a ground target. Pitch is clamped to `[0.2, 1.35]` rad, zoom (distance) to `[12, 90]`, and the ground target to the map rectangle `[-MAP_HALF, MAP_WIDTH - MAP_HALF]` × `[-MAP_HALF, MAP_HEIGHT - MAP_HALF]`. Modes follow chart 2 in `src/input`; pose math lives in `src/camera`.
-- Visual style: low-poly blocks, warm torchlight (hemisphere fill plus point lights over the heart, claimed floor and map), no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
+- Visual style: low-poly blocks, moody dungeon light (one heart point light plus dim hemisphere and ambient), darker per-kind materials, no external art assets in milestone 1 (geometry and colours from code, like tibo.dog's code-only art).
 
 ## Open questions
 
