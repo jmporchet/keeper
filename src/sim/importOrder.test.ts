@@ -17,6 +17,20 @@ describe("module import order", () => {
     expect(worldModule.liveCreatureCount(world.creatures)).toBe(1);
   });
 
+  it("hatches chickens when chickens is imported before world", async () => {
+    vi.resetModules();
+    const chickens = await import("./chickens");
+    expect(chickens.CHICKEN_CAPACITY).toBe(32);
+    const worldModule = await import("./world");
+    const ids = await import("./ids");
+    const commands: Command[] = [
+      { kind: "addGold", tick: ids.asTick(0), amount: 1000 },
+      { kind: "paintRoom", tick: ids.asTick(0), tile: ids.asTileIndex(32 * worldModule.MAP_WIDTH + 30), room: "hatchery" },
+    ];
+    const world = worldModule.run(1, worldModule.sortCommands(commands), chickens.HATCH_TICKS + 1);
+    expect(worldModule.liveChickenCount(world.chickens)).toBe(1);
+  });
+
   it("paths imps when jobs is imported before world", async () => {
     vi.resetModules();
     await import("./jobs");

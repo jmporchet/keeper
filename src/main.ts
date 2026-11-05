@@ -45,7 +45,9 @@ import {
   treasuryStockTotal,
   treasuryTileCount,
   lairTileCount,
+  hatcheryTileCount,
   liveCreatureCount,
+  liveChickenCount,
   workerOf,
   type Command,
   type CommandLog,
@@ -83,6 +85,8 @@ declare global {
       impCount: number;
       creatureCount: number;
       lairTileCount: number;
+      hatcheryTileCount: number;
+      chickenCount: number;
       carryingCount: number;
       hudText: string;
       drawCalls: number;
@@ -467,6 +471,12 @@ if (proof) {
     },
     get lairTileCount() {
       return lairTileCount(world);
+    },
+    get hatcheryTileCount() {
+      return hatcheryTileCount(world);
+    },
+    get chickenCount() {
+      return liveChickenCount(world.chickens);
     },
     get carryingCount() {
       return carryingCount(world.imps);

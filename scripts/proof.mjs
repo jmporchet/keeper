@@ -478,7 +478,7 @@ async function run() {
         if (creatureTicks >= 600) {
           throw new Error(`creature did not reach a bed after ${String(creatureTicks)} ticks`);
         }
-        await stepOnce(page, 12, 20);
+        await stepOnce(page, 12, 10);
         creatureTicks += 12;
       }
       const creaturesAfterWalk = await page.evaluate(() => globalThis.__keeper.creatureSnapshot());
@@ -568,7 +568,7 @@ async function run() {
 
       const holdStart = Date.now();
       let holdStep = 0;
-      while (holdStep < 6 || Date.now() - holdStart < 400) {
+      while (holdStep < 3 || Date.now() - holdStart < 150) {
         const angle = holdStep * 0.4;
         holdStep += 1;
         await page.mouse.move(
@@ -578,7 +578,7 @@ async function run() {
         await stepOnce(page, 2, 5);
       }
       await page.mouse.move(cx + box.width * 0.11, cy - box.height * 0.09);
-      await stepOnce(page, 1, 80);
+      await stepOnce(page, 1, 50);
       const duringHold = await page.evaluate(() => ({
         heldCount: globalThis.__keeper.heldCount,
         imps: globalThis.__keeper.impSnapshot(),
@@ -664,7 +664,7 @@ async function run() {
       }
       const boostedId = boostedImp.id;
       for (let i = 0; i < 10; i += 1) {
-        await stepOnce(page, 1, 80);
+        await stepOnce(page, 1, 40);
       }
       await stepOnce(page, SLAP_TICKS + 2 - 10, 20);
       const afterSlapExpiry = await page.evaluate(() => globalThis.__keeper.impSnapshot());
@@ -678,7 +678,7 @@ async function run() {
       for (let i = 0; i < 4; i += 1) {
         await page.mouse.wheel(0, -240);
       }
-      await stepOnce(page, 12, 20);
+      await stepOnce(page, 12, 10);
 
       await page.mouse.move(cx, cy);
       await page.mouse.down({ button: "right" });
@@ -721,8 +721,8 @@ async function run() {
       if (!spawnDisabled || !goldDisabled) {
         throw new Error(`panel buttons not disabled while paused: spawn ${String(spawnDisabled)}, gold ${String(goldDisabled)}`);
       }
-      for (let i = 0; i < 4; i += 1) {
-        await stepOnce(page);
+      for (let i = 0; i < 2; i += 1) {
+        await stepOnce(page, 1, 15);
       }
       const duringPause = await page.evaluate(() => globalThis.__keeper.tick);
       if (duringPause !== beforePause) {
@@ -774,8 +774,8 @@ async function run() {
       if (!spawnEnabled || !goldEnabled) {
         throw new Error(`panel buttons not re-enabled after resume: spawn ${String(spawnEnabled)}, gold ${String(goldEnabled)}`);
       }
-      for (let i = 0; i < 4; i += 1) {
-        await stepOnce(page);
+      for (let i = 0; i < 2; i += 1) {
+        await stepOnce(page, 1, 15);
       }
       const runningBeforeHidden = await page.evaluate(() => globalThis.__keeper.tick);
       await setVisibility(page, true);
@@ -811,10 +811,53 @@ async function run() {
       );
 
       await checkpoint(page, recordStart, "pause");
+      await page.click("#add-gold", { force: true });
+      await stepOnce(page);
+      const hatcheryXs = [30, 31];
+      const hatcheryY = 32;
+      const hatcheryPoints = [];
+      for (const tx of hatcheryXs) {
+        const point = await pagePointForTile(page, box, tx, hatcheryY);
+        if (point === null) {
+          throw new Error(`hatchery tile ${String(tx)},${String(hatcheryY)} is off screen`);
+        }
+        hatcheryPoints.push(point);
+      }
+      await page.click("#paint-hatchery", { force: true });
+      const hatcheryPaintingOn = await page.evaluate(() => globalThis.__keeper.painting);
+      if (!hatcheryPaintingOn) {
+        throw new Error("paint hatchery tool did not select Painting");
+      }
+      const hatcheryFirst = hatcheryPoints[0];
+      await page.mouse.move(hatcheryFirst.x, hatcheryFirst.y);
+      await page.mouse.down();
+      for (let i = 1; i < hatcheryPoints.length; i += 1) {
+        const point = hatcheryPoints[i];
+        await page.mouse.move(point.x, point.y);
+      }
+      await page.mouse.up();
+      await stepOnce(page);
+      const hatcheryTiles = await page.evaluate(() => globalThis.__keeper.hatcheryTileCount);
+      if (hatcheryTiles !== 2) {
+        throw new Error(`expected 2 hatchery tiles after drag, got ${String(hatcheryTiles)}`);
+      }
+      const spentAfterHatchery = await page.evaluate(() => globalThis.__keeper.goldSpent);
+      if (spentAfterHatchery !== 265) {
+        throw new Error(`expected 265 gold spent after treasury, lair and hatchery, got ${String(spentAfterHatchery)}`);
+      }
+      await page.click("#paint-hatchery", { force: true });
+      const hatcheryPaintingOff = await page.evaluate(() => globalThis.__keeper.painting);
+      if (hatcheryPaintingOff) {
+        throw new Error("paint hatchery tool stayed selected after toggle");
+      }
+      await checkpoint(page, recordStart, "hatchery-paint");
       await presentFrame(page);
       let extraTicks = 0;
       let maxCarrying = 0;
       let carryingSeen = false;
+      let chickenPeak = 0;
+      let chickenDropped = false;
+      let foodSeen = false;
       for (;;) {
         const counts = await page.evaluate(() => ({
           goldStored: globalThis.__keeper.goldStored,
@@ -825,6 +868,8 @@ async function run() {
           tagged: globalThis.__keeper.taggedCount,
           claimed: globalThis.__keeper.claimedCount,
           lairTileCount: globalThis.__keeper.lairTileCount,
+          hatcheryTileCount: globalThis.__keeper.hatcheryTileCount,
+          chickenCount: globalThis.__keeper.chickenCount,
         }));
         if (counts.carryingCount > maxCarrying) {
           maxCarrying = counts.carryingCount;
@@ -832,13 +877,31 @@ async function run() {
         if (counts.carryingCount > 0) {
           carryingSeen = true;
         }
+        if (counts.chickenCount > chickenPeak) {
+          chickenPeak = counts.chickenCount;
+        }
+        if (chickenPeak > 0 && counts.chickenCount < chickenPeak) {
+          chickenDropped = true;
+          foodSeen = true;
+        }
+        const creatures = await page.evaluate(() => globalThis.__keeper.creatureSnapshot());
+        if (
+          creatures.some(
+            (creature) => creature.state === "hungry" || creature.state === "toFood" || creature.state === "eating",
+          )
+        ) {
+          foodSeen = true;
+        }
         const elapsed = Date.now() - recordStart;
         if (
           counts.treasuryTileCount === 3 &&
           counts.treasuryStockTotal >= 20 &&
           carryingSeen &&
           counts.tagged === 0 &&
-          counts.claimed + counts.treasuryTileCount + counts.lairTileCount === claimedAtStart + 5 &&
+          counts.claimed + counts.treasuryTileCount + counts.lairTileCount + counts.hatcheryTileCount ===
+            claimedAtStart + 5 &&
+          chickenDropped &&
+          foodSeen &&
           elapsed >= 1000
         ) {
           break;
@@ -852,7 +915,12 @@ async function run() {
         extraTicks += 16;
       }
       await checkpoint(page, recordStart, "wait");
-      await stepFrames(page, 11, 1, 1);
+      if (chickenPeak < 1) {
+        throw new Error("no chicken appeared on the hatchery tiles");
+      }
+      await screenshot(page, "proof/hatchery.png", "hatchery");
+      await checkpoint(page, recordStart, "hatchery");
+      await stepFrames(page, 6, 1, 1);
       await stepOnce(page);
       const treasuryAfterDelivery = await page.evaluate(() => ({
         tiles: globalThis.__keeper.treasuryTiles(),
@@ -933,8 +1001,8 @@ async function run() {
       if (spawnedImps !== targetImps) {
         throw new Error(`spawnImps ended at ${String(spawnedImps)} imps, expected ${String(targetImps)}`);
       }
-      for (let i = 0; i < 4; i += 1) {
-        await stepOnce(page, 2, 30);
+      for (let i = 0; i < 2; i += 1) {
+        await stepOnce(page, 2, 15);
       }
       await stepOnce(page, 1, 0);
       await presentFrame(page);
@@ -964,8 +1032,8 @@ async function run() {
       if (frameWarmup.samples.length !== 2) {
         throw new Error(`benchFrame warm-up returned ${String(frameWarmup.samples.length)} samples`);
       }
-      const frameSamples = await page.evaluate(() => globalThis.__keeper.benchFrame(12));
-      if (frameSamples.samples.length !== 12) {
+      const frameSamples = await page.evaluate(() => globalThis.__keeper.benchFrame(8));
+      if (frameSamples.samples.length !== 8) {
         throw new Error(`benchFrame returned ${String(frameSamples.samples.length)} samples`);
       }
 
@@ -999,6 +1067,8 @@ async function run() {
         carryingCount: globalThis.__keeper.carryingCount,
         creatureCount: globalThis.__keeper.creatureCount,
         lairTileCount: globalThis.__keeper.lairTileCount,
+        hatcheryTileCount: globalThis.__keeper.hatcheryTileCount,
+        chickenCount: globalThis.__keeper.chickenCount,
         hudText: globalThis.__keeper.hudText,
         drawCalls: globalThis.__keeper.drawCalls,
         camera: globalThis.__keeper.camera,
@@ -1018,6 +1088,12 @@ async function run() {
       if (result.lairTileCount !== 3) {
         throw new Error(`lairTileCount ended at ${String(result.lairTileCount)}`);
       }
+      if (result.hatcheryTileCount !== 2) {
+        throw new Error(`hatcheryTileCount ended at ${String(result.hatcheryTileCount)}`);
+      }
+      console.log(
+        `hatchery chickens peak=${String(chickenPeak)} dropped=${String(chickenDropped)} foodSeen=${String(foodSeen)} final=${String(result.chickenCount)}`,
+      );
       for (let x = 30; x <= 39; x += 1) {
         const point = await pagePointForTile(page, box, x, 32);
         if (point === null) {

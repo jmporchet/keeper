@@ -5,7 +5,9 @@ import { syncPropInstances } from "./props.hot";
 export type PropMeshes = {
   mesh: THREE.InstancedMesh;
   dummy: THREE.Object3D;
-  syncedVersion: number;
+  color: THREE.Color;
+  syncedTreasuryVersion: number;
+  syncedChickensVersion: number;
 };
 
 const CAPACITY = MAP_WIDTH * MAP_HEIGHT;
@@ -20,18 +22,39 @@ export function createPropMeshes(scene: THREE.Scene): PropMeshes {
   const mesh = new THREE.InstancedMesh(geometry, material, CAPACITY);
   mesh.count = 0;
   mesh.frustumCulled = false;
+  const color = new THREE.Color(0xffffff);
+  for (let i = 0; i < CAPACITY; i += 1) {
+    mesh.setColorAt(i, color);
+  }
+  if (mesh.instanceColor !== null) {
+    mesh.instanceColor.needsUpdate = true;
+  }
   scene.add(mesh);
   return {
     mesh,
     dummy: new THREE.Object3D(),
-    syncedVersion: -1,
+    color,
+    syncedTreasuryVersion: -1,
+    syncedChickensVersion: -1,
   };
 }
 
 export function syncProps(world: World, visual: PropMeshes): void {
-  if (visual.syncedVersion === world.treasuryVersion) {
+  if (
+    visual.syncedTreasuryVersion === world.treasuryVersion &&
+    visual.syncedChickensVersion === world.chickensVersion
+  ) {
     return;
   }
-  visual.syncedVersion = world.treasuryVersion;
-  syncPropInstances(world.rooms, world.treasuryStock, world.width, visual.mesh, visual.dummy);
+  visual.syncedTreasuryVersion = world.treasuryVersion;
+  visual.syncedChickensVersion = world.chickensVersion;
+  syncPropInstances(
+    world.rooms,
+    world.treasuryStock,
+    world.width,
+    world.chickens.slots,
+    visual.mesh,
+    visual.dummy,
+    visual.color,
+  );
 }

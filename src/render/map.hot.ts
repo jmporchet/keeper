@@ -1,6 +1,14 @@
 import type { Color, InstancedMesh, Object3D } from "three";
 import { MAP_HALF, ROOM_KIND, TILE_KIND, type TileRead } from "../sim";
-import { PORTAL_COLOR, ROOM_FLOOR_COLOR, ROOM_LAIR_COLOR, ROOM_TREASURY_COLOR, TILE_COLOR, TILE_HEIGHT } from "./tileLookups";
+import {
+  PORTAL_COLOR,
+  ROOM_FLOOR_COLOR,
+  ROOM_HATCHERY_COLOR,
+  ROOM_LAIR_COLOR,
+  ROOM_TREASURY_COLOR,
+  TILE_COLOR,
+  TILE_HEIGHT,
+} from "./tileLookups";
 
 export function syncMapInstances(
   tiles: TileRead,
@@ -51,6 +59,8 @@ export function syncMapInstances(
         hex = ROOM_LAIR_COLOR;
       } else if (room === ROOM_KIND.treasury) {
         hex = ROOM_TREASURY_COLOR;
+      } else if (room === ROOM_KIND.hatchery) {
+        hex = ROOM_HATCHERY_COLOR;
       } else {
         hex = ROOM_FLOOR_COLOR;
       }
