@@ -42,6 +42,7 @@ export {
 export {
   ARRIVE_TICKS,
   BEETLE_HP,
+  WARLOCK_HP,
   beginEating,
   beginHungry,
   beginSleeping,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CREATURE_MAX_LEVEL,
+  WARLOCK_HP,
   freeBedTiles,
   liveCreatureCount,
   TRAIN_TICKS,
@@ -187,6 +188,40 @@ describe("training room", () => {
     expect(liveCreatureCount(world.creatures)).toBe(1);
     expect(world.rooms[bed]).toBe(ROOM_KIND.lair);
     expect(freeBedTiles(world)).not.toContain(bed);
+  });
+
+  it("trains a warlock and returns it to its bed", () => {
+    const world = createWorld(1);
+    const commands = sortCommands([addGold(0, 1000), paint(0, LAIR_A, "lair"), paint(0, TRAIN_A, "training")]);
+    let sawTraining = false;
+    let sawLevel = false;
+    let returned = false;
+    for (let t = 0; t < 800; t += 1) {
+      step(world, commands);
+      for (const creature of creatures(world)) {
+        if (creature.kind !== "warlock") {
+          creature.kind = "warlock";
+          creature.hp = WARLOCK_HP;
+          creature.maxHp = WARLOCK_HP;
+        }
+        if (creature.state.kind === "training") {
+          sawTraining = true;
+        }
+        if (creature.level >= CREATURE_MAX_LEVEL) {
+          sawLevel = true;
+          if (creature.state.kind === "toBed" || creature.state.kind === "sleeping") {
+            returned = true;
+          }
+        }
+      }
+      if (returned) {
+        break;
+      }
+    }
+    expect(sawTraining).toBe(true);
+    expect(sawLevel).toBe(true);
+    expect(returned).toBe(true);
+    expect(liveCreatureCount(world.creatures)).toBe(1);
   });
 
   it("finishes training after TRAIN_TICKS and returns the creature to its bed", () => {

@@ -4,10 +4,12 @@ import {
   CREATURE_KIND_BEETLE,
   CREATURE_KIND_FLY,
   CREATURE_KIND_HERO,
+  CREATURE_KIND_WARLOCK,
   createBeetleGeometry,
   createCreatureGeometry,
   createFlyGeometry,
   createHeroGeometry,
+  createWarlockGeometry,
 } from "./creatureGeometry";
 
 function boundsOf(geometry: ReturnType<typeof createFlyGeometry>) {
@@ -68,6 +70,28 @@ describe("creature silhouettes", () => {
     }
   });
 
+  it("builds a tall thin hooded warlock silhouette", () => {
+    const geometry = createWarlockGeometry();
+    const position = geometry.getAttribute("position");
+    expect(position.count).toBeGreaterThan(0);
+    expect(position.count).toBeLessThanOrEqual(600);
+    expect(geometry.groups.length).toBe(0);
+    const bounds = boundsOf(geometry);
+    expect(bounds.minY).toBeCloseTo(CREATURE_GEOMETRY_BASE_Y, 5);
+    expect(bounds.height).toBeGreaterThanOrEqual(0.9);
+    expect(bounds.height).toBeLessThanOrEqual(1);
+    expect(bounds.width).toBeGreaterThanOrEqual(0.4);
+    expect(bounds.width).toBeLessThanOrEqual(0.55);
+    expect(bounds.depth).toBeGreaterThanOrEqual(0.35);
+    expect(bounds.depth).toBeLessThanOrEqual(0.45);
+    expect(bounds.height / bounds.width).toBeGreaterThanOrEqual(1.8);
+    const kinds = geometry.getAttribute("aKind");
+    expect(kinds.count).toBe(position.count);
+    for (let i = 0; i < kinds.count; i += 1) {
+      expect(kinds.getX(i)).toBe(CREATURE_KIND_WARLOCK);
+    }
+  });
+
   it("builds a humanoid hero silhouette with shield and sword", () => {
     const geometry = createHeroGeometry();
     const position = geometry.getAttribute("position");
@@ -89,11 +113,11 @@ describe("creature silhouettes", () => {
     }
   });
 
-  it("merges the three tagged kinds into one bounded geometry", () => {
+  it("merges the four tagged kinds into one bounded geometry", () => {
     const geometry = createCreatureGeometry();
     const position = geometry.getAttribute("position");
     expect(position.count).toBeGreaterThan(0);
-    expect(position.count).toBeLessThanOrEqual(1600);
+    expect(position.count).toBeLessThanOrEqual(2200);
     expect(geometry.groups.length).toBe(0);
     const kinds = geometry.getAttribute("aKind");
     expect(kinds.count).toBe(position.count);
@@ -101,6 +125,11 @@ describe("creature silhouettes", () => {
     for (let i = 0; i < kinds.count; i += 1) {
       seen.add(kinds.getX(i));
     }
-    expect([...seen].sort((a, b) => a - b)).toEqual([CREATURE_KIND_FLY, CREATURE_KIND_BEETLE, CREATURE_KIND_HERO]);
+    expect([...seen].sort((a, b) => a - b)).toEqual([
+      CREATURE_KIND_FLY,
+      CREATURE_KIND_BEETLE,
+      CREATURE_KIND_WARLOCK,
+      CREATURE_KIND_HERO,
+    ]);
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ARRIVE_TICKS,
   BEETLE_HP,
+  WARLOCK_HP,
   beginWander,
   CREATURE_CAPACITY,
   createCreature,
@@ -143,6 +144,18 @@ describe("creature portal", () => {
     expect(beetle.hp).toBeGreaterThan(fly.hp);
   });
 
+  it("gives a warlock hp between a fly and a beetle", () => {
+    const bed = asTileIndex(30 * MAP_WIDTH + 30);
+    const fly = createCreature(0, PORTAL_X, PORTAL_Y, bed, "fly");
+    const warlock = createCreature(1, PORTAL_X, PORTAL_Y, bed, "warlock");
+    const beetle = createCreature(2, PORTAL_X, PORTAL_Y, bed, "beetle");
+    expect(warlock.kind).toBe("warlock");
+    expect(warlock.hp).toBe(WARLOCK_HP);
+    expect(warlock.maxHp).toBe(WARLOCK_HP);
+    expect(warlock.hp).toBeGreaterThan(fly.hp);
+    expect(warlock.hp).toBeLessThan(beetle.hp);
+  });
+
   it("hashes creature kind", () => {
     const bed = asTileIndex(30 * MAP_WIDTH + 30);
     const fly = createCreature(0, PORTAL_X, PORTAL_Y, bed, "fly");
@@ -151,9 +164,15 @@ describe("creature portal", () => {
     beetle.maxHp = fly.maxHp;
     const flyBoard = createCreatureBoard();
     const beetleBoard = createCreatureBoard();
+    const warlock = createCreature(0, PORTAL_X, PORTAL_Y, bed, "warlock");
+    warlock.hp = fly.hp;
+    warlock.maxHp = fly.maxHp;
+    const warlockBoard = createCreatureBoard();
     flyBoard.slots[0] = { kind: "live", creature: fly };
     beetleBoard.slots[0] = { kind: "live", creature: beetle };
+    warlockBoard.slots[0] = { kind: "live", creature: warlock };
     expect(hashCreatures(flyBoard)).not.toBe(hashCreatures(beetleBoard));
+    expect(hashCreatures(flyBoard)).not.toBe(hashCreatures(warlockBoard));
   });
 
   it("includes creature kind in the world hash", () => {
@@ -162,6 +181,90 @@ describe("creature portal", () => {
     const before = hashWorld(world);
     creature.kind = creature.kind === "fly" ? "beetle" : "fly";
     expect(hashWorld(world)).not.toBe(before);
+  });
+
+  it("never arrives as a warlock before library research", () => {
+    const world = createWorld(1);
+    const commands = sortCommands(lairSetup(CREATURE_CAPACITY));
+    for (let t = 0; t < ARRIVE_TICKS * 6; t += 1) {
+      step(world, commands);
+      for (const creature of creatures(world)) {
+        expect(creature.kind).not.toBe("warlock");
+      }
+    }
+    expect(world.researchDone).toBe(false);
+    expect(liveCreatureCount(world.creatures)).toBeGreaterThan(0);
+  });
+
+  it("sets researchDone after library-boosted training and hashes it", () => {
+    const bed = asTileIndex(30 * MAP_WIDTH + 30);
+    const training = asTileIndex(33 * MAP_WIDTH + 30);
+    const library = asTileIndex(32 * MAP_WIDTH + 30);
+    const world = createWorld(1);
+    const commands = sortCommands([
+      addGold(0, 1000),
+      paintLair(0, bed),
+      { kind: "paintRoom", tick: asTick(0), tile: training, room: "training" },
+      { kind: "paintRoom", tick: asTick(0), tile: library, room: "library" },
+    ]);
+    let finished = false;
+    for (let t = 0; t < 900; t += 1) {
+      step(world, commands);
+      const creature = creatures(world)[0];
+      if (creature !== undefined && creature.level >= 1) {
+        finished = true;
+        break;
+      }
+    }
+    expect(finished).toBe(true);
+    expect(world.researchDone).toBe(true);
+    const before = hashWorld(world);
+    world.researchDone = false;
+    expect(hashWorld(world)).not.toBe(before);
+  });
+
+  it("picks a warlock with the seeded roll after research and hashes the kind", () => {
+    const world = createWorld(1);
+    const commands = sortCommands(lairSetup(1));
+    for (let t = 0; t < ARRIVE_TICKS; t += 1) {
+      step(world, commands);
+    }
+    world.researchDone = true;
+    world.rng = 2;
+    step(world, commands);
+    const creature = liveCreature(world, 0);
+    expect(creature.kind).toBe("warlock");
+    expect(creature.hp).toBe(WARLOCK_HP);
+    expect(creature.maxHp).toBe(WARLOCK_HP);
+    const before = hashWorld(world);
+    creature.kind = "beetle";
+    expect(hashWorld(world)).not.toBe(before);
+  });
+
+  it("trains a warlock through the same lifecycle as a beetle", () => {
+    const bed = asTileIndex(30 * MAP_WIDTH + 30);
+    const training = asTileIndex(33 * MAP_WIDTH + 30);
+    const kinds: CreatureKind[] = ["beetle", "warlock"];
+    const results: { level: number; bed: TileIndex; hp: number }[] = [];
+    for (const kind of kinds) {
+      const world = createWorld(1);
+      const commands = sortCommands([
+        addGold(0, 1000),
+        paintLair(0, bed),
+        { kind: "paintRoom", tick: asTick(0), tile: training, room: "training" },
+      ]);
+      const creature = createCreature(0, 30, 30, bed, kind);
+      world.creatures.slots[0] = { kind: "live", creature };
+      for (let t = 0; t < 400 && creature.level < 1; t += 1) {
+        step(world, commands);
+      }
+      results.push({ level: creature.level, bed: creature.bedTile, hp: creature.hp });
+    }
+    expect(results[0]?.level).toBe(1);
+    expect(results[1]?.level).toBe(1);
+    expect(results[0]?.bed).toBe(bed);
+    expect(results[1]?.bed).toBe(bed);
+    expect(results[1]?.hp).toBe(WARLOCK_HP + 1);
   });
 
   it("walks to its bed and sleeps there", () => {
