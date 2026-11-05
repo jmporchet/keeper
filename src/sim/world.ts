@@ -39,6 +39,7 @@ import {
   TILE_KIND,
   TRAINING_COST,
   TREASURY_COST,
+  WORKSHOP_COST,
   tileKindAt,
   type RoomTool,
 } from "./map";
@@ -75,6 +76,7 @@ export {
   TRAINING_COST,
   TREASURY_CAPACITY,
   TREASURY_COST,
+  WORKSHOP_COST,
   tileKindAt,
   type RoomKind,
   type RoomKindCode,
@@ -216,6 +218,7 @@ export function createWorld(seed: number): World {
   const lairCache = new Int32Array(width * height);
   const hatcheryCache = new Int32Array(width * height);
   const trainingCache = new Int32Array(width * height);
+  const workshopCache = new Int32Array(width * height);
   const chickenTileCount = new Uint16Array(width * height);
   let walkableTileCount = 0;
   for (let i = 0; i < tiles.length; i += 1) {
@@ -253,6 +256,9 @@ export function createWorld(seed: number): World {
     trainingCache,
     trainingCacheCount: 0,
     trainingCacheVersion: -1,
+    workshopCache,
+    workshopCacheCount: 0,
+    workshopCacheVersion: -1,
     chickenTileCount,
     chickens: createChickenBoard(),
     chickensVersion: 0,
@@ -441,6 +447,17 @@ function applyPaintRoom(world: World, tile: TileIndex, room: RoomTool): void {
       world.roomsVersion += 1;
       return;
     }
+    case "workshop": {
+      if (world.goldStored < WORKSHOP_COST) {
+        return;
+      }
+      world.goldStored -= WORKSHOP_COST;
+      world.goldSpent += WORKSHOP_COST;
+      setTile(world, tile, TILE_KIND.room);
+      world.rooms[tile] = ROOM_KIND.workshop;
+      world.roomsVersion += 1;
+      return;
+    }
     default: {
       const never: never = room;
       return never;
@@ -487,6 +504,17 @@ export function trainingTileCount(world: World): number {
   for (let i = 0; i < world.rooms.length; i += 1) {
     const room = world.rooms[i];
     if (room === ROOM_KIND.training) {
+      total += 1;
+    }
+  }
+  return total;
+}
+
+export function workshopTileCount(world: World): number {
+  let total = 0;
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room === ROOM_KIND.workshop) {
       total += 1;
     }
   }

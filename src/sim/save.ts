@@ -101,7 +101,13 @@ function parseCommand(value: unknown): CommandResult {
         return { ok: false, reason: "invalidTile" };
       }
       const room = value.room;
-      if (room !== "treasury" && room !== "lair" && room !== "hatchery" && room !== "training") {
+      if (
+        room !== "treasury" &&
+        room !== "lair" &&
+        room !== "hatchery" &&
+        room !== "training" &&
+        room !== "workshop"
+      ) {
         return { ok: false, reason: "invalidRoom" };
       }
       return { ok: true, command: { kind: "paintRoom", tick, tile: asTileIndex(value.tile), room } };

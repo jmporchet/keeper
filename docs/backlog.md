@@ -30,3 +30,4 @@ One feature per PR, in this order. Each item names its acceptance check. "Proof"
 | 23 | ~~**First hero invasion.** A hero party enters from the portal on a timer; sandbox skirmish, no defeat screen.~~ | Proof: heroes appear and path; at least one fight resolution. |
 | 24 | ~~**Fly wander.** A sleeping fly may wander to a seeded reachable tile between sleep and hunger, keeping its bed and hunger timer.~~ | Proof: a fly sleeps, wanders and keeps its bed; tests cover the continued hunger timer and the hungry transition. |
 | 25 | ~~**Possession.** Enter a live creature; WASD moves it; Esc exits.~~ | Proof: possess a fly, move one tile, exit; camera follows. |
+| 27 | ~~**Workshop room.** Paint a workshop on claimed floor; dig and claim jobs adjacent to it finish faster.~~ | Proof: paint a workshop and an adjacent dig completes within the workshop timer; tests cover refusals, cost, and boosted versus full job times. |

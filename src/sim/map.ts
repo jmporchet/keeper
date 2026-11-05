@@ -42,7 +42,7 @@ export const TILE_KIND_COUNT = TILE_KINDS.length;
 
 export type TileKindCode = (typeof TILE_KIND)[TileKind];
 
-export const ROOM_KINDS = ["none", "treasury", "lair", "hatchery", "training"] as const;
+export const ROOM_KINDS = ["none", "treasury", "lair", "hatchery", "training", "workshop"] as const;
 
 export type RoomKind = (typeof ROOM_KINDS)[number];
 
@@ -60,6 +60,7 @@ export const ROOM_KIND = {
   lair: roomCode("lair"),
   hatchery: roomCode("hatchery"),
   training: roomCode("training"),
+  workshop: roomCode("workshop"),
 } as const;
 
 export const ROOM_KIND_COUNT = ROOM_KINDS.length;
@@ -71,11 +72,12 @@ export const TREASURY_COST = 25;
 export const LAIR_COST = 30;
 export const HATCHERY_COST = 50;
 export const TRAINING_COST = 40;
+export const WORKSHOP_COST = 45;
 
 export const PORTAL_X = 32;
 export const PORTAL_Y = 35;
 
-export type RoomTool = "treasury" | "lair" | "hatchery" | "training";
+export type RoomTool = "treasury" | "lair" | "hatchery" | "training" | "workshop";
 
 export type TileRead = {
   readonly length: number;

@@ -21,6 +21,8 @@ export const IMP_CAPACITY = 200;
 export const STARTING_IMP_COUNT = 4;
 export const DIG_TICKS = 40;
 export const CLAIM_TICKS = 30;
+export const WORKSHOP_DIG_TICKS = 20;
+export const WORKSHOP_CLAIM_TICKS = 15;
 export const MINE_TICKS = 30;
 export const MINE_CHUNK = 20;
 export const SLAP_TICKS = 60;
@@ -515,14 +517,15 @@ export function beginWorking(world: ImpWorld, imp: Imp, tile: TileIndex): void {
     goIdle(imp);
     return;
   }
+  const boosted = jobBoostedByWorkshop(world, job.tile);
   switch (job.jobKind) {
     case "dig":
       imp.working.work = "dig";
-      imp.working.remaining = DIG_TICKS;
+      imp.working.remaining = boosted ? WORKSHOP_DIG_TICKS : DIG_TICKS;
       break;
     case "claim":
       imp.working.work = "claim";
-      imp.working.remaining = CLAIM_TICKS;
+      imp.working.remaining = boosted ? WORKSHOP_CLAIM_TICKS : CLAIM_TICKS;
       break;
     case "mineGold":
       imp.working.work = "mine";
@@ -570,6 +573,44 @@ export function finishClaim(world: ImpWorld, imp: Imp, tile: TileIndex): void {
   completeJob(world.jobs, workerOf(imp));
   openClaimJobsAround(world, tile);
   goIdle(imp);
+}
+
+function refreshWorkshopCache(world: ImpWorld): void {
+  if (world.workshopCacheVersion === world.roomsVersion) {
+    return;
+  }
+  world.workshopCacheVersion = world.roomsVersion;
+  let count = 0;
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room !== ROOM_KIND.workshop) {
+      continue;
+    }
+    world.workshopCache[count] = i;
+    count += 1;
+  }
+  world.workshopCacheCount = count;
+}
+
+export function jobBoostedByWorkshop(world: ImpWorld, jobTile: TileIndex): boolean {
+  refreshWorkshopCache(world);
+  if (world.workshopCacheCount === 0) {
+    return false;
+  }
+  const jobY = (jobTile / world.width) | 0;
+  const jobX = jobTile - jobY * world.width;
+  for (let i = 0; i < world.workshopCacheCount; i += 1) {
+    const tile = world.workshopCache[i];
+    if (tile === undefined) {
+      continue;
+    }
+    const tileY = (tile / world.width) | 0;
+    const tileX = tile - tileY * world.width;
+    if (Math.max(Math.abs(jobX - tileX), Math.abs(jobY - tileY)) <= 1) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function refreshTreasuryCache(world: ImpWorld): void {
