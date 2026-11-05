@@ -1,15 +1,21 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { createActor } from "xstate";
 import { appMachine, isPaused, isSimStepping } from "./app/appMachine";
-import { orbitPosition } from "./orbit";
+import { createCameraPose, eyeFromPose } from "./camera/pose";
+import { bindCameraInput } from "./input/bindCamera";
 import { addTorchLighting } from "./render/lights";
 import { createMapMeshes, syncMap } from "./render/map";
 import { createWorld, hashWorld, MAX_FRAME_DELTA, MAX_STEPS_PER_FRAME, step, TICK_DT } from "./sim";
 
 declare global {
   interface Window {
-    __keeper: { tick: number; hash: number; drawCalls: number; step(n: number): void };
+    __keeper: {
+      tick: number;
+      hash: number;
+      drawCalls: number;
+      camera: { targetX: number; targetZ: number; yaw: number; pitch: number; distance: number };
+      step(n: number): void;
+    };
   }
 }
 
@@ -32,7 +38,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1c1612);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
-const lookAt = new THREE.Vector3(0, 0, 0);
+const pose = createCameraPose();
 
 const world = createWorld(1);
 const map = createMapMeshes(scene);
@@ -61,11 +67,18 @@ syncHud();
 
 const proof = new URLSearchParams(window.location.search).has("proof");
 
-function placeCamera(tick: number): void {
-  const pos = orbitPosition(tick);
-  camera.position.set(pos.x, pos.y, pos.z);
-  camera.lookAt(lookAt);
+function placeCamera(): void {
+  const eye = eyeFromPose(pose);
+  camera.position.set(eye.x, eye.y, eye.z);
+  camera.lookAt(pose.targetX, 0, pose.targetZ);
 }
+
+const cameraInput = bindCameraInput(canvas, pose, () => {
+  placeCamera();
+  if (proof) {
+    render();
+  }
+});
 
 function render(): void {
   if (actor.getSnapshot().matches("ContextLost")) {
@@ -117,8 +130,24 @@ window.addEventListener("resize", () => {
   }
 });
 
+function cameraSnapshot(): {
+  targetX: number;
+  targetZ: number;
+  yaw: number;
+  pitch: number;
+  distance: number;
+} {
+  return {
+    targetX: pose.targetX,
+    targetZ: pose.targetZ,
+    yaw: pose.yaw,
+    pitch: pose.pitch,
+    distance: pose.distance,
+  };
+}
+
 if (proof) {
-  placeCamera(world.tick);
+  placeCamera();
   render();
   window.__keeper = {
     get tick() {
@@ -130,6 +159,9 @@ if (proof) {
     get drawCalls() {
       return renderer.info.render.calls;
     },
+    get camera() {
+      return cameraSnapshot();
+    },
     step(n: number) {
       if (!isSimStepping(actor.getSnapshot())) {
         syncHud();
@@ -137,18 +169,16 @@ if (proof) {
       }
       for (let i = 0; i < n; i += 1) {
         step(world, []);
+        cameraInput.tickHeldKeys();
       }
       syncMap(world.tiles, world.width, map);
-      placeCamera(world.tick);
+      placeCamera();
       syncHud();
       render();
     },
   };
 } else {
-  placeCamera(0);
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.copy(lookAt);
-  controls.update();
+  placeCamera();
   let last = performance.now();
   let accumulator = 0;
   const loop = (now: number) => {
@@ -171,8 +201,9 @@ if (proof) {
     if (!isSimStepping(actor.getSnapshot())) {
       accumulator = 0;
     }
+    cameraInput.tickHeldKeys();
     syncMap(world.tiles, world.width, map);
-    controls.update();
+    placeCamera();
     syncHud();
     render();
   };

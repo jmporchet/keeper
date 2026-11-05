@@ -65,6 +65,13 @@ function startPreview() {
   });
 }
 
+async function stepOnce(page) {
+  await page.evaluate(() => {
+    globalThis.__keeper.step(1);
+  });
+  await delay(20);
+}
+
 async function run() {
   const preview = await startPreview();
   try {
@@ -81,22 +88,62 @@ async function run() {
       const page = await context.newPage();
       await page.goto(`${ORIGIN}/?proof=1`);
       await page.waitForFunction(() => globalThis.__keeper !== undefined);
-      const runUntil = Date.now() + 5000;
-      while (Date.now() < runUntil) {
-        await page.evaluate(() => {
-          globalThis.__keeper.step(1);
-        });
-        await delay(50);
+      const canvas = page.locator("canvas");
+      await canvas.waitFor();
+      const box = await canvas.boundingBox();
+      if (box === null) {
+        throw new Error("canvas has no bounding box");
       }
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await page.mouse.move(cx, cy);
+
+      await page.mouse.down({ button: "right" });
+      for (let i = 0; i < 18; i += 1) {
+        await page.mouse.move(cx + i * 12, cy + Math.sin(i / 5) * 45);
+        await stepOnce(page);
+      }
+      await page.mouse.up({ button: "right" });
+
+      await page.keyboard.down("KeyW");
+      for (let i = 0; i < 12; i += 1) {
+        await stepOnce(page);
+      }
+      await page.keyboard.down("KeyD");
+      for (let i = 0; i < 8; i += 1) {
+        await stepOnce(page);
+      }
+      await page.keyboard.up("KeyW");
+      await page.keyboard.up("KeyD");
+      await page.keyboard.down("KeyA");
+      for (let i = 0; i < 8; i += 1) {
+        await stepOnce(page);
+      }
+      await page.keyboard.up("KeyA");
+
+      await page.mouse.move(cx, cy);
+      for (let i = 0; i < 6; i += 1) {
+        await page.mouse.wheel(0, -140);
+        await stepOnce(page);
+      }
+      for (let i = 0; i < 6; i += 1) {
+        await page.mouse.wheel(0, 180);
+        await stepOnce(page);
+      }
+
+      await page.mouse.move(cx, cy);
+      await page.mouse.down({ button: "middle" });
+      for (let i = 0; i < 12; i += 1) {
+        await page.mouse.move(cx - i * 14, cy + i * 7);
+        await stepOnce(page);
+      }
+      await page.mouse.up({ button: "middle" });
+
       const beforePause = await page.evaluate(() => globalThis.__keeper.tick);
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible");
-      const pausedUntil = Date.now() + 5000;
-      while (Date.now() < pausedUntil) {
-        await page.evaluate(() => {
-          globalThis.__keeper.step(1);
-        });
-        await delay(50);
+      for (let i = 0; i < 20; i += 1) {
+        await stepOnce(page);
       }
       const duringPause = await page.evaluate(() => globalThis.__keeper.tick);
       if (duringPause !== beforePause) {
@@ -104,17 +151,15 @@ async function run() {
       }
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible", { state: "hidden" });
-      const resumeUntil = Date.now() + 5000;
-      while (Date.now() < resumeUntil) {
-        await page.evaluate(() => {
-          globalThis.__keeper.step(1);
-        });
-        await delay(50);
+      for (let i = 0; i < 10; i += 1) {
+        await stepOnce(page);
       }
+
       const result = await page.evaluate(() => ({
         tick: globalThis.__keeper.tick,
         hash: globalThis.__keeper.hash,
         drawCalls: globalThis.__keeper.drawCalls,
+        camera: globalThis.__keeper.camera,
       }));
       if (result.tick <= duringPause) {
         throw new Error(`tick did not advance after resume: ${String(duringPause)} -> ${String(result.tick)}`);
@@ -122,7 +167,7 @@ async function run() {
       if (result.drawCalls > 8) {
         throw new Error(`tile draw calls ${String(result.drawCalls)} exceed 8`);
       }
-      console.log(beforePause, duringPause, result.tick, result.hash, result.drawCalls);
+      console.log(beforePause, duringPause, result.tick, result.hash, result.drawCalls, result.camera.targetX, result.camera.targetZ, result.camera.distance);
       await page.screenshot({ path: "proof/shot.png" });
       await context.close();
       const files = await readdir("proof/tmp");
