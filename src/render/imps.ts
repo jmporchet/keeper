@@ -33,6 +33,7 @@ export function syncImps(
   alpha: number,
   cursorTile: TileIndex | undefined,
   visual: ImpMeshes,
+  time: number,
 ): void {
-  syncImpInstances(board.slots, hand, alpha, visual.mesh, visual.dummy, visual.color, cursorTile);
+  syncImpInstances(board.slots, hand, alpha, visual.mesh, visual.dummy, visual.color, cursorTile, time);
 }

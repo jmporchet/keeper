@@ -1,6 +1,10 @@
 import {
+  addOccupancy,
   beginIdle,
+  beginWander,
   beginWorking,
+  BLOCK_TICKS,
+  canEnterNextTile,
   captureCurr,
   capturePrev,
   finishClaim,
@@ -8,14 +12,18 @@ import {
   finishDig,
   finishMine,
   goIdle,
+  impTileIndex,
   jobHeldOnTile,
+  removeOccupancy,
   setHeading,
   STEPS_PER_TILE,
   type Imp,
   type ImpWorld,
+  type MovingImpState,
 } from "./imps";
 
 export function stepImps(world: ImpWorld): void {
+  world.walkableSaturated = world.imps.liveCount - world.imps.heldCount >= world.walkableTileCount;
   const slots = world.imps.slots;
   for (let i = 0; i < slots.length; i += 1) {
     const slot = slots[i];
@@ -50,7 +58,7 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
       beginIdle(world, imp);
       break;
     case "wandering":
-      if (advanceAlongPath(imp, state, world.width, speed)) {
+      if (advanceAlongPath(world, imp, state, world.width, speed)) {
         beginIdle(world, imp);
       }
       break;
@@ -59,7 +67,7 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
         goIdle(imp);
         break;
       }
-      if (advanceAlongPath(imp, state, world.width, speed)) {
+      if (advanceAlongPath(world, imp, state, world.width, speed)) {
         beginWorking(world, imp, state.tile);
       }
       break;
@@ -88,7 +96,7 @@ function stepLiveImp(world: ImpWorld, imp: Imp): void {
       }
       break;
     case "delivering":
-      if (advanceAlongPath(imp, state, world.width, speed)) {
+      if (advanceAlongPath(world, imp, state, world.width, speed)) {
         finishDelivery(world, imp);
       }
       break;
@@ -122,8 +130,9 @@ function tickBoost(imp: Imp): void {
 }
 
 function advanceAlongPath(
+  world: ImpWorld,
   imp: Imp,
-  state: { pathStep: number; pathLength: number; progress: number },
+  state: MovingImpState,
   width: number,
   steps: number,
 ): boolean {
@@ -131,21 +140,38 @@ function advanceAlongPath(
     return true;
   }
   for (let step = 0; step < steps; step += 1) {
-    state.progress += 1;
     if (state.progress < STEPS_PER_TILE) {
-      continue;
+      state.progress += 1;
+      if (state.progress < STEPS_PER_TILE) {
+        continue;
+      }
     }
-    state.progress = 0;
     const nextIndex = state.pathStep + 1;
+    if (nextIndex >= state.pathLength) {
+      return true;
+    }
+    if (!canEnterNextTile(world, imp, state, nextIndex)) {
+      state.progress = STEPS_PER_TILE;
+      state.blockedTicks += 1;
+      if (state.kind === "wandering" && state.blockedTicks > BLOCK_TICKS) {
+        beginWander(world, imp);
+      }
+      return false;
+    }
     const nextTile = imp.path[nextIndex];
     if (nextTile === undefined) {
       return true;
     }
     const ny = (nextTile / width) | 0;
     const nx = nextTile - ny * width;
+    const current = impTileIndex(imp, width);
+    removeOccupancy(world.imps, current);
     imp.tileX = nx;
     imp.tileY = ny;
+    addOccupancy(world.imps, nextTile);
     state.pathStep = nextIndex;
+    state.progress = 0;
+    state.blockedTicks = 0;
     if (state.pathStep + 1 >= state.pathLength) {
       return true;
     }

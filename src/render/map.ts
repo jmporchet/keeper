@@ -7,11 +7,16 @@ export const TILE_GROUP_COUNT = 5;
 
 export type MapMeshes = {
   meshes: THREE.InstancedMesh[];
+  materials: THREE.MeshLambertMaterial[];
   dummy: THREE.Object3D;
   color: THREE.Color;
   counts: Uint32Array;
   groupCounts: Uint32Array;
   kindToGroup: Uint8Array;
+  taggedGroups: Uint8Array;
+  taggedSlots: Int32Array;
+  taggedKinds: Uint8Array;
+  taggedCount: number;
   syncedVersion: number;
   syncedRoomsVersion: number;
 };
@@ -44,6 +49,7 @@ function groupForKind(kind: TileKind): number {
 export function createMapMeshes(scene: THREE.Scene): MapMeshes {
   const geometry = new THREE.BoxGeometry(1, 1, 1);
   const meshes: THREE.InstancedMesh[] = [];
+  const materials: THREE.MeshLambertMaterial[] = [];
   const color = new THREE.Color(0xffffff);
   for (let g = 0; g < TILE_GROUP_COUNT; g += 1) {
     const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -58,6 +64,7 @@ export function createMapMeshes(scene: THREE.Scene): MapMeshes {
     }
     scene.add(mesh);
     meshes.push(mesh);
+    materials.push(material);
   }
   const kindToGroup = new Uint8Array(TILE_KIND_COUNT);
   for (const kind of TILE_KINDS) {
@@ -66,23 +73,56 @@ export function createMapMeshes(scene: THREE.Scene): MapMeshes {
   }
   return {
     meshes,
+    materials,
     dummy: new THREE.Object3D(),
     color,
     counts: new Uint32Array(TILE_KIND_COUNT),
     groupCounts: new Uint32Array(TILE_GROUP_COUNT),
     kindToGroup,
+    taggedGroups: new Uint8Array(CAPACITY),
+    taggedSlots: new Int32Array(CAPACITY),
+    taggedKinds: new Uint8Array(CAPACITY),
+    taggedCount: 0,
     syncedVersion: -1,
     syncedRoomsVersion: -1,
   };
 }
 
-export function syncMap(world: World, map: MapMeshes): void {
+export function updateTaggedPulse(map: MapMeshes, time: number): void {
+  const earthPulse = 0.65 + 0.35 * Math.sin(time * 0.3);
+  const goldPulse = earthPulse + 0.15;
+  for (let i = 0; i < map.taggedCount; i += 1) {
+    const group = map.taggedGroups[i];
+    const slot = map.taggedSlots[i];
+    const code = map.taggedKinds[i];
+    if (group === undefined || slot === undefined || code === undefined) {
+      continue;
+    }
+    const mesh = map.meshes[group];
+    if (mesh === undefined) {
+      continue;
+    }
+    const hex = TILE_COLOR[code];
+    if (hex === undefined) {
+      continue;
+    }
+    const pulse = code === TILE_KIND.taggedGold ? goldPulse : earthPulse;
+    map.color.setHex(hex).multiplyScalar(0.8 + 0.4 * pulse);
+    mesh.setColorAt(slot, map.color);
+    if (mesh.instanceColor !== null) {
+      mesh.instanceColor.needsUpdate = true;
+    }
+  }
+}
+
+export function syncMap(world: World, map: MapMeshes, time: number): void {
+  updateTaggedPulse(map, time);
   if (map.syncedVersion === world.tilesVersion && map.syncedRoomsVersion === world.roomsVersion) {
     return;
   }
   map.syncedVersion = world.tilesVersion;
   map.syncedRoomsVersion = world.roomsVersion;
-  syncMapInstances(
+  map.taggedCount = syncMapInstances(
     world.tiles,
     world.rooms,
     world.width,
@@ -92,6 +132,9 @@ export function syncMap(world: World, map: MapMeshes): void {
     map.counts,
     map.groupCounts,
     map.kindToGroup,
+    map.taggedGroups,
+    map.taggedSlots,
+    map.taggedKinds,
   );
 }
 

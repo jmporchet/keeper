@@ -12,9 +12,13 @@ export function syncMapInstances(
   counts: Uint32Array,
   groupCounts: Uint32Array,
   kindToGroup: Uint8Array,
-): void {
+  taggedGroups: Uint8Array,
+  taggedSlots: Int32Array,
+  taggedKinds: Uint8Array,
+): number {
   counts.fill(0);
   groupCounts.fill(0);
+  let taggedCount = 0;
   const n = tiles.length;
   for (let i = 0; i < n; i += 1) {
     const code = tiles[i];
@@ -62,6 +66,12 @@ export function syncMapInstances(
     mesh.setMatrixAt(slot, dummy.matrix);
     color.setHex(hex);
     mesh.setColorAt(slot, color);
+    if (code === TILE_KIND.taggedEarth || code === TILE_KIND.taggedGold) {
+      taggedGroups[taggedCount] = group;
+      taggedSlots[taggedCount] = slot;
+      taggedKinds[taggedCount] = code;
+      taggedCount += 1;
+    }
     groupCounts[group] = slot + 1;
     const kindCount = counts[code];
     if (kindCount !== undefined) {
@@ -80,4 +90,5 @@ export function syncMapInstances(
       mesh.instanceColor.needsUpdate = true;
     }
   }
+  return taggedCount;
 }

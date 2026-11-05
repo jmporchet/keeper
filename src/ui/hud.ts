@@ -2,6 +2,10 @@ export type HudElement = {
   textContent: string | null;
 };
 
+export function hudGold(goldStored: number, treasuryStock: number): number {
+  return goldStored + treasuryStock;
+}
+
 export function formatHud(gold: number, imps: number, tick: number): string {
   return `gold ${String(gold)} · imps ${String(imps)} · tick ${String(tick)}`;
 }

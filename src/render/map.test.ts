@@ -40,7 +40,7 @@ describe("map instances", () => {
     const world = createWorld(1);
     const scene = new THREE.Scene();
     const map = createMapMeshes(scene);
-    syncMap(world, map);
+    syncMap(world, map, 0);
     const expected = countTilesByKind(world.tiles);
     for (let k = 0; k < expected.length; k += 1) {
       expect(map.counts[k]).toBe(expected[k]);
@@ -63,7 +63,7 @@ describe("map instances", () => {
     expect(map.counts[TILE_KIND.taggedGold]).toBe(0);
     expect(map.counts[TILE_KIND.portal]).toBe(1);
     setTile(world, 0, TILE_KIND.dirt);
-    syncMap(world, map);
+    syncMap(world, map, 0);
     const after = countTilesByKind(world.tiles);
     for (let k = 0; k < after.length; k += 1) {
       expect(map.counts[k]).toBe(after[k]);
@@ -82,7 +82,7 @@ describe("map instances", () => {
     const world = createWorld(1);
     const scene = new THREE.Scene();
     const map = createMapMeshes(scene);
-    syncMap(world, map);
+    syncMap(world, map, 0);
     const group = map.kindToGroup[TILE_KIND.earth];
     if (group === undefined) {
       throw new Error("missing earth group");
@@ -93,11 +93,11 @@ describe("map instances", () => {
     }
     const spy = vi.spyOn(mesh, "setMatrixAt");
     const version = world.tilesVersion;
-    syncMap(world, map);
+    syncMap(world, map, 0);
     expect(map.syncedVersion).toBe(version);
     expect(spy).not.toHaveBeenCalled();
     setTile(world, 0, TILE_KIND.dirt);
-    syncMap(world, map);
+    syncMap(world, map, 0);
     expect(map.syncedVersion).toBe(world.tilesVersion);
     expect(spy).toHaveBeenCalled();
   });
@@ -106,7 +106,7 @@ describe("map instances", () => {
     const world = createWorld(1);
     const scene = new THREE.Scene();
     const visual = createImpMeshes(scene);
-    syncImps(world.imps, world.hand, 1, undefined, visual);
+    syncImps(world.imps, world.hand, 1, undefined, visual, 0);
     expect(visual.mesh.count).toBe(STARTING_IMP_COUNT);
     expect(liveImpCount(world.imps)).toBe(STARTING_IMP_COUNT);
   });
@@ -116,9 +116,9 @@ describe("map instances", () => {
     step(world, asCommandLog([{ kind: "pickUp", tick: asTick(0), impId: asImpId(0) }]));
     const scene = new THREE.Scene();
     const visual = createImpMeshes(scene);
-    syncImps(world.imps, world.hand, 1, undefined, visual);
+    syncImps(world.imps, world.hand, 1, undefined, visual, 0);
     expect(visual.mesh.count).toBe(STARTING_IMP_COUNT - 1);
-    syncImps(world.imps, world.hand, 1, asTileIndex(33 * MAP_WIDTH + 33), visual);
+    syncImps(world.imps, world.hand, 1, asTileIndex(33 * MAP_WIDTH + 33), visual, 0);
     expect(visual.mesh.count).toBe(STARTING_IMP_COUNT);
   });
 });

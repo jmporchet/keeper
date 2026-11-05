@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { asTick, asTileIndex, type TileIndex } from "./ids";
-import type { Imp } from "./imps";
+import { addOccupancy, occupancyAt, removeOccupancy, STEPS_PER_TILE, type Imp } from "./imps";
 import {
   asCommandLog,
   createWorld,
@@ -188,6 +188,50 @@ describe("treasury room", () => {
       expect(totalGold(world)).toBe(initial);
     }
     expect(world.goldStored).toBeGreaterThan(storedBefore);
+  });
+
+  it("allows two carriers to overlap on a treasury delivery target", () => {
+    const target = TREASURY_B;
+    const adjacent = asTileIndex(30 * MAP_WIDTH + 31);
+    const world = run(1, asCommandLog([addGold(0, 100), paint(0, target)]), 1);
+    const firstSlot = world.imps.slots[0];
+    const secondSlot = world.imps.slots[1];
+    if (firstSlot === undefined || secondSlot === undefined || firstSlot.kind !== "live" || secondSlot.kind !== "live") {
+      throw new Error("missing starting imps");
+    }
+    const first = firstSlot.imp;
+    const second = secondSlot.imp;
+    removeOccupancy(world.imps, first.tileY * MAP_WIDTH + first.tileX);
+    first.tileX = 32;
+    first.tileY = 30;
+    addOccupancy(world.imps, target);
+    removeOccupancy(world.imps, second.tileY * MAP_WIDTH + second.tileX);
+    second.tileX = 31;
+    second.tileY = 30;
+    addOccupancy(world.imps, adjacent);
+    first.carryGold.amount = 20;
+    first.carry = first.carryGold;
+    first.delivering.tile = target;
+    first.delivering.pathStep = 0;
+    first.delivering.pathLength = 1;
+    first.delivering.progress = 0;
+    first.delivering.blockedTicks = 0;
+    first.state = first.delivering;
+    second.carryGold.amount = 20;
+    second.carry = second.carryGold;
+    second.delivering.tile = target;
+    second.delivering.pathStep = 0;
+    second.delivering.pathLength = 2;
+    second.delivering.progress = STEPS_PER_TILE - 1;
+    second.delivering.blockedTicks = 0;
+    second.path[0] = adjacent;
+    second.path[1] = target;
+    second.state = second.delivering;
+    expect(occupancyAt(world.imps, target)).toBe(1);
+    step(world, asCommandLog([]));
+    expect(occupancyAt(world.imps, target)).toBe(2);
+    expect(world.treasuryStock[target]).toBe(40);
+    expect(treasuryStockTotal(world)).toBe(40);
   });
 
   it("conserves gold exactly every tick with a treasury", () => {

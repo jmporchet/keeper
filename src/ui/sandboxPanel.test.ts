@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { asTick } from "../sim";
-import { createHud, formatHud, type HudElement } from "./hud";
+import { createHud, formatHud, hudGold, type HudElement } from "./hud";
 import { sandboxCommand } from "./sandboxPanel";
 
 describe("sandbox panel commands", () => {
@@ -16,6 +16,10 @@ describe("sandbox panel commands", () => {
 describe("hud", () => {
   it("formats gold, imp count and tick", () => {
     expect(formatHud(140, 6, 512)).toBe("gold 140 · imps 6 · tick 512");
+  });
+
+  it("counts stored gold and treasury stock as owned gold", () => {
+    expect(hudGold(140, 60)).toBe(200);
   });
 
   it("writes the DOM only when a value changes", () => {

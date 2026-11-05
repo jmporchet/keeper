@@ -10,6 +10,7 @@ export function syncImpInstances(
   dummy: Object3D,
   color: Color,
   cursorTile: TileIndex | undefined,
+  time: number,
 ): void {
   let drawn = 0;
   for (let i = 0; i < slots.length; i += 1) {
@@ -28,18 +29,30 @@ export function syncImpInstances(
         const t = alpha;
         const x = imp.prevX + (imp.currX - imp.prevX) * t;
         const z = imp.prevZ + (imp.currZ - imp.prevZ) * t;
-        const freshBoost = imp.boost.kind === "boosted" && imp.boost.remaining > SLAP_TICKS - 4;
-        dummy.position.set(x - MAP_HALF, freshBoost ? 0.48 : 0.56, z - MAP_HALF);
+        const freshBoost = imp.boost.kind === "boosted" && imp.boost.remaining > SLAP_TICKS - 10;
+        const state = imp.state;
+        let bob = 0;
+        let tiltX = 0;
+        let tiltZ = 0;
+        if (state.kind === "working") {
+          bob = Math.sin(time * 0.4 + imp.id) * 0.08;
+          const workTile = state.tile;
+          const workY = (workTile / MAP_WIDTH) | 0;
+          const workX = workTile - workY * MAP_WIDTH;
+          tiltX = (workY - imp.tileY) * 0.35;
+          tiltZ = -(workX - imp.tileX) * 0.35;
+        }
+        dummy.position.set(x - MAP_HALF, (freshBoost ? 0.64 : 0.56) + bob, z - MAP_HALF);
         if (freshBoost) {
-          dummy.scale.set(1.3, 0.7, 1.3);
-          dummy.rotation.set(0, 0, 0.25);
+          dummy.scale.set(1.4, 0.6, 1.4);
+          dummy.rotation.set(tiltX, 0, tiltZ + 0.3);
         } else {
           dummy.scale.set(1, 1, 1);
-          dummy.rotation.set(0, 0, 0);
+          dummy.rotation.set(tiltX, 0, tiltZ);
         }
         dummy.updateMatrix();
         mesh.setMatrixAt(drawn, dummy.matrix);
-        color.setHex(freshBoost ? 0xffb347 : 0xe03030);
+        color.setHex(freshBoost ? 0xffe066 : 0xe03030);
         mesh.setColorAt(drawn, color);
         drawn += 1;
         if (imp.carry.kind === "gold") {
