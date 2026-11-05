@@ -10,7 +10,7 @@ import { createActor } from "xstate";
 import { appMachine, appStateName, isPaused, isReplaying, isSimStepping } from "./app/appMachine";
 import { createCameraPose, eyeFromPose } from "./camera/pose";
 import { bindCameraInput } from "./input/bindCamera";
-import { isPainting, isPossessed } from "./input/inputCameraMachine";
+import { isPainting, isPossessed, paintToolEvent } from "./input/inputCameraMachine";
 import { createCreatureMeshes, syncCreatures } from "./render/creatures";
 import { createPropMeshes, syncProps } from "./render/props";
 import { createImpMeshes, syncImps } from "./render/imps";
@@ -303,11 +303,7 @@ function possessFirstCreature(): void {
 
 function togglePaint(tool: PaintTool): void {
   const snapshot = cameraInput.actor.getSnapshot();
-  if (isPainting(snapshot)) {
-    cameraInput.actor.send({ type: "CLEAR_TOOL" });
-    return;
-  }
-  cameraInput.actor.send({ type: "SELECT_PAINT_TOOL", tool });
+  cameraInput.actor.send(paintToolEvent(isPainting(snapshot), snapshot.context.tool, tool));
 }
 
 function loadSave(save: Save): void {

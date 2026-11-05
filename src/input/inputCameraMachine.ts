@@ -102,6 +102,7 @@ export const inputCameraMachine = setup({
       on: {
         ESCAPE: "Idle",
         CLEAR_TOOL: "Idle",
+        SELECT_PAINT_TOOL: { target: "Painting", actions: "selectTool" },
       },
     },
     Holding: {
@@ -145,6 +146,13 @@ export function isHolding(snapshot: InputCameraSnapshot): boolean {
 
 export function isPainting(snapshot: InputCameraSnapshot): boolean {
   return snapshot.matches("Painting");
+}
+
+export function paintToolEvent(painting: boolean, activeTool: PaintTool, clickedTool: PaintTool): InputCameraEvent {
+  if (painting && activeTool === clickedTool) {
+    return { type: "CLEAR_TOOL" };
+  }
+  return { type: "SELECT_PAINT_TOOL", tool: clickedTool };
 }
 
 export function isPossessed(snapshot: InputCameraSnapshot): boolean {

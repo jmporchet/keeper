@@ -8,6 +8,7 @@ import {
   isPanning,
   isPossessed,
   isTagging,
+  paintToolEvent,
 } from "./inputCameraMachine";
 
 function startInput() {
@@ -103,6 +104,24 @@ describe("input and camera chart", () => {
     expect(actor.getSnapshot().value).toBe("Painting");
     expect(actor.getSnapshot().context.tool).toBe("library");
     actor.send({ type: "CLEAR_TOOL" });
+    expect(actor.getSnapshot().value).toBe("Idle");
+  });
+
+  it("switches paint tools without clearing when a different tool is clicked", () => {
+    const actor = startInput();
+    actor.send(paintToolEvent(false, "treasury", "treasury"));
+    expect(actor.getSnapshot().value).toBe("Painting");
+    expect(actor.getSnapshot().context.tool).toBe("treasury");
+    actor.send(paintToolEvent(true, "treasury", "lair"));
+    expect(actor.getSnapshot().value).toBe("Painting");
+    expect(actor.getSnapshot().context.tool).toBe("lair");
+  });
+
+  it("clears painting when the active tool is clicked again", () => {
+    const actor = startInput();
+    actor.send(paintToolEvent(false, "treasury", "treasury"));
+    expect(actor.getSnapshot().value).toBe("Painting");
+    actor.send(paintToolEvent(true, "treasury", "treasury"));
     expect(actor.getSnapshot().value).toBe("Idle");
   });
 
