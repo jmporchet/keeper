@@ -11,6 +11,19 @@ export {
   type WorkerId,
 } from "./ids";
 export {
+  findPath,
+  hashImps,
+  IMP_CAPACITY,
+  liveImpCount,
+  occupyWalkable,
+  STARTING_IMP_COUNT,
+  STEPS_PER_TILE,
+  type Imp,
+  type ImpBoard,
+  type ImpSlot,
+  type ImpState,
+} from "./imps";
+export {
   assertJobInvariants,
   cancelJobAtTile,
   completeJob,
@@ -27,6 +40,7 @@ export {
   reserveOpenJob,
 } from "./jobs";
 export type { Job, JobBoard, JobKind, JobLifecycle } from "./jobs";
+export { createPathScratch, isWalkableCode } from "./path";
 export {
   countTagged,
   createWorld,

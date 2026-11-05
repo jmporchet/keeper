@@ -10,6 +10,7 @@ import { createActor } from "xstate";
 import { appMachine, isPaused, isSimStepping } from "./app/appMachine";
 import { createCameraPose, eyeFromPose } from "./camera/pose";
 import { bindCameraInput } from "./input/bindCamera";
+import { createImpMeshes, syncImps } from "./render/imps";
 import { addTorchLighting, DUNGEON_EXPOSURE } from "./render/lights";
 import { createMapMeshes, syncMap } from "./render/map";
 import {
@@ -63,7 +64,9 @@ const pose = createCameraPose();
 const world = createWorld(1);
 const commands: Command[] = [];
 const map = createMapMeshes(scene);
+const impsVisual = createImpMeshes(scene);
 syncMap(world.tiles, world.width, world.tilesVersion, map);
+syncImps(world.imps, 1, impsVisual);
 addTorchLighting(scene);
 const screenPoint = new Vector3();
 
@@ -221,6 +224,7 @@ if (proof) {
         cameraInput.tickHeldKeys();
       }
       syncMap(world.tiles, world.width, world.tilesVersion, map);
+      syncImps(world.imps, 1, impsVisual);
       placeCamera();
       syncHud();
       render();
@@ -252,6 +256,7 @@ if (proof) {
     }
     cameraInput.tickHeldKeys();
     syncMap(world.tiles, world.width, world.tilesVersion, map);
+    syncImps(world.imps, accumulator / TICK_DT, impsVisual);
     placeCamera();
     syncHud();
     render();
