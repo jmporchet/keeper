@@ -16,6 +16,10 @@ function formatLightning(lightningCooldown: number): string {
   return lightningCooldown === 0 ? "ready" : String(lightningCooldown);
 }
 
+function formatHeal(healCooldown: number): string {
+  return healCooldown === 0 ? "ready" : String(healCooldown);
+}
+
 function formatHeart(
   heartHp: number,
   heartBreached: boolean,
@@ -47,8 +51,9 @@ export function formatHud(
   victorious: boolean,
   repairsDone: number,
   lightningCooldown: number,
+  healCooldown: number,
 ): string {
-  return `gold ${String(gold)} · imps ${String(imps)} · tick ${String(tick)} · ${formatPay(ticksUntilPayday)} · ${formatHeart(heartHp, heartBreached, breachTicks, defeated, victorious)} · lightning ${formatLightning(lightningCooldown)} · wave ${String(repairsDone + 1)}`;
+  return `gold ${String(gold)} · imps ${String(imps)} · tick ${String(tick)} · ${formatPay(ticksUntilPayday)} · ${formatHeart(heartHp, heartBreached, breachTicks, defeated, victorious)} · lightning ${formatLightning(lightningCooldown)} · heal ${formatHeal(healCooldown)} · wave ${String(repairsDone + 1)}`;
 }
 
 export function createHud(element: HudElement | null): {
@@ -64,6 +69,7 @@ export function createHud(element: HudElement | null): {
     victorious: boolean,
     repairsDone: number,
     lightningCooldown: number,
+    healCooldown: number,
   ): void;
 } {
   let prevGold: number | undefined;
@@ -77,6 +83,7 @@ export function createHud(element: HudElement | null): {
   let prevVictorious: boolean | undefined;
   let prevRepairsDone: number | undefined;
   let prevLightningCooldown: number | undefined;
+  let prevHealCooldown: number | undefined;
   return {
     update(
       gold: number,
@@ -90,6 +97,7 @@ export function createHud(element: HudElement | null): {
       victorious: boolean,
       repairsDone: number,
       lightningCooldown: number,
+      healCooldown: number,
     ): void {
       if (
         prevGold === gold &&
@@ -102,7 +110,8 @@ export function createHud(element: HudElement | null): {
         prevDefeated === defeated &&
         prevVictorious === victorious &&
         prevRepairsDone === repairsDone &&
-        prevLightningCooldown === lightningCooldown
+        prevLightningCooldown === lightningCooldown &&
+        prevHealCooldown === healCooldown
       ) {
         return;
       }
@@ -117,6 +126,7 @@ export function createHud(element: HudElement | null): {
       prevVictorious = victorious;
       prevRepairsDone = repairsDone;
       prevLightningCooldown = lightningCooldown;
+      prevHealCooldown = healCooldown;
       if (element !== null) {
         element.textContent = formatHud(
           gold,
@@ -130,6 +140,7 @@ export function createHud(element: HudElement | null): {
           victorious,
           repairsDone,
           lightningCooldown,
+          healCooldown,
         );
       }
     },

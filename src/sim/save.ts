@@ -141,6 +141,12 @@ function parseCommand(value: unknown): CommandResult {
       }
       return { ok: true, command: { kind: "castLightning", tick, heroId: asHeroId(value.heroId) } };
     }
+    case "castHeal": {
+      if (!isIntegerInRange(value.creatureId, 0, CREATURE_CAPACITY - 1)) {
+        return { ok: false, reason: "invalidCreatureId" };
+      }
+      return { ok: true, command: { kind: "castHeal", tick, creatureId: asCreatureId(value.creatureId) } };
+    }
     case "possessMove": {
       if (!isIntegerInRange(value.creatureId, 0, CREATURE_CAPACITY - 1)) {
         return { ok: false, reason: "invalidCreatureId" };

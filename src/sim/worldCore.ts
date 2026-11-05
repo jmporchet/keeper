@@ -61,6 +61,7 @@ export type World = {
   waveActive: boolean;
   repairsDone: number;
   lightningCooldown: number;
+  healCooldown: number;
   commandCursor: number;
   jobs: JobBoard;
   imps: ImpBoard;

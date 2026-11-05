@@ -228,6 +228,13 @@ export {
   LIGHTNING_DAMAGE,
   stepLightningCooldown,
 } from "./lightning";
+export {
+  applyCastHeal,
+  HEAL_AMOUNT,
+  HEAL_COOLDOWN_TICKS,
+  HEAL_COST,
+  stepHealCooldown,
+} from "./heal";
 export { CREATURE_WAGE, PAY_TICKS, ticksUntilPayday } from "./wages";
 export {
   applyPossess,
