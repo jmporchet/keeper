@@ -192,6 +192,22 @@ function findFreeBed(world: World): TileIndex | undefined {
   return undefined;
 }
 
+export function freeBedTiles(world: World): TileIndex[] {
+  refreshLairCache(world);
+  const free: TileIndex[] = [];
+  for (let i = 0; i < world.lairCacheCount; i += 1) {
+    const tile = world.lairCache[i];
+    if (tile === undefined) {
+      continue;
+    }
+    const bed = asTileIndex(tile);
+    if (!bedClaimed(world, bed)) {
+      free.push(bed);
+    }
+  }
+  return free;
+}
+
 function spawnCreature(world: World, bedTile: TileIndex): boolean {
   for (let i = 0; i < world.creatures.slots.length; i += 1) {
     const slot = world.creatures.slots[i];

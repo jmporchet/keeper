@@ -14,8 +14,12 @@ describe("sandbox panel commands", () => {
 });
 
 describe("hud", () => {
-  it("formats gold, imp count and tick", () => {
-    expect(formatHud(140, 6, 512)).toBe("gold 140 · imps 6 · tick 512");
+  it("formats gold, imp count, tick and payday countdown", () => {
+    expect(formatHud(140, 6, 512, 38)).toBe("gold 140 · imps 6 · tick 512 · pay 38");
+  });
+
+  it("shows pay now when a payday is due", () => {
+    expect(formatHud(140, 6, 450, 0)).toBe("gold 140 · imps 6 · tick 450 · pay now");
   });
 
   it("counts stored gold and treasury stock as owned gold", () => {
@@ -25,16 +29,18 @@ describe("hud", () => {
   it("writes the DOM only when a value changes", () => {
     const element: HudElement = { textContent: "" };
     const hud = createHud(element);
-    hud.update(0, 4, 0);
-    expect(element.textContent).toBe("gold 0 · imps 4 · tick 0");
+    hud.update(0, 4, 0, 450);
+    expect(element.textContent).toBe("gold 0 · imps 4 · tick 0 · pay 450");
     element.textContent = "unchanged";
-    hud.update(0, 4, 0);
+    hud.update(0, 4, 0, 450);
     expect(element.textContent).toBe("unchanged");
-    hud.update(100, 4, 0);
-    expect(element.textContent).toBe("gold 100 · imps 4 · tick 0");
-    hud.update(100, 6, 0);
-    expect(element.textContent).toBe("gold 100 · imps 6 · tick 0");
-    hud.update(100, 6, 1);
-    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1");
+    hud.update(100, 4, 0, 450);
+    expect(element.textContent).toBe("gold 100 · imps 4 · tick 0 · pay 450");
+    hud.update(100, 6, 0, 450);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 0 · pay 450");
+    hud.update(100, 6, 1, 449);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay 449");
+    hud.update(100, 6, 1, 0);
+    expect(element.textContent).toBe("gold 100 · imps 6 · tick 1 · pay now");
   });
 });

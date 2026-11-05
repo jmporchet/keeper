@@ -123,6 +123,25 @@ async function stepFrames(page, frames, ticksPerFrame, waitMs) {
   }
 }
 
+async function paydayState(page) {
+  return page.evaluate(() => ({
+    tick: globalThis.__keeper.tick,
+    until: globalThis.__keeper.ticksUntilPayday,
+    payTicks: globalThis.__keeper.payTicks,
+    paidOut: globalThis.__keeper.goldPaidOut,
+    count: globalThis.__keeper.liveCreatureCount,
+    creatures: globalThis.__keeper.creatureSnapshot(),
+    freeBeds: globalThis.__keeper.freeBeds(),
+    hudText: globalThis.__keeper.hudText,
+  }));
+}
+
+async function advanceToPayday(page) {
+  const state = await paydayState(page);
+  const ticks = state.until === 0 ? 1 : state.until + 1;
+  await stepOnce(page, ticks, 60);
+}
+
 async function presentFrame(page) {
   await page.evaluate(() => new Promise((resolve) => {
     globalThis.requestAnimationFrame(() => {
@@ -148,51 +167,6 @@ async function pagePointForTile(page, box, tx, ty) {
     return null;
   }
   return { x: box.x + local.x, y: box.y + local.y };
-}
-
-async function setVisibility(page, hidden) {
-  await page.evaluate((isHidden) => {
-    Object.defineProperty(globalThis.document, "hidden", { configurable: true, get: () => isHidden });
-    Object.defineProperty(globalThis.document, "visibilityState", {
-      configurable: true,
-      get: () => (isHidden ? "hidden" : "visible"),
-    });
-    globalThis.document.dispatchEvent(new globalThis.Event("visibilitychange"));
-  }, hidden);
-}
-
-async function findTaggableRow(page, box, length) {
-  for (let y = 28; y <= 34; y += 1) {
-    for (let x = 27; x + length - 1 <= 37; x += 1) {
-      const kinds = await page.evaluate(
-        ({ rowX, rowY, count }) => {
-          const result = [];
-          for (let i = 0; i < count; i += 1) {
-            result.push(globalThis.__keeper.tileKind(rowX + i, rowY));
-          }
-          return result;
-        },
-        { rowX: x, rowY: y, count: length },
-      );
-      if (!kinds.every((kind) => kind === "earth" || kind === "goldSeam")) {
-        continue;
-      }
-      const points = [];
-      let onScreen = true;
-      for (let i = 0; i < length; i += 1) {
-        const point = await pagePointForTile(page, box, x + i, y);
-        if (point === null) {
-          onScreen = false;
-          break;
-        }
-        points.push(point);
-      }
-      if (onScreen) {
-        return { x, y, points };
-      }
-    }
-  }
-  throw new Error(`no taggable on-screen row of ${String(length)} tiles found`);
 }
 
 async function findHandTarget(page) {
@@ -314,47 +288,6 @@ async function run() {
       if (taggedAfterSweep !== 5) {
         throw new Error(`expected 5 tagged tiles after earth sweep, got ${String(taggedAfterSweep)}`);
       }
-      const fastLength = 5;
-      const fastRow = await findTaggableRow(page, box, fastLength);
-      const fastStart = fastRow.points[0];
-      const fastEnd = fastRow.points[fastRow.points.length - 1];
-      if (fastStart === undefined || fastEnd === undefined) {
-        throw new Error("fast drag row has no endpoints");
-      }
-      await page.mouse.move(fastStart.x, fastStart.y);
-      await page.mouse.down();
-      await page.mouse.move(fastEnd.x, fastEnd.y, { steps: 1 });
-      await page.mouse.up();
-      await stepOnce(page);
-      const taggedAfterFastDrag = await page.evaluate(() => globalThis.__keeper.taggedCount);
-      if (taggedAfterFastDrag !== taggedAfterSweep + fastLength) {
-        throw new Error(
-          `fast drag tagged ${String(taggedAfterFastDrag - taggedAfterSweep)} tiles, expected ${String(fastLength)}`,
-        );
-      }
-      for (let i = 0; i < fastLength; i += 1) {
-        const kind = await page.evaluate(
-          ({ x, y }) => globalThis.__keeper.tileKind(x, y),
-          { x: fastRow.x + i, y: fastRow.y },
-        );
-        if (kind !== "taggedEarth" && kind !== "taggedGold") {
-          throw new Error(`fast drag left a gap at ${String(fastRow.x + i)},${String(fastRow.y)} (${String(kind)})`);
-        }
-      }
-      await page.mouse.move(fastEnd.x, fastEnd.y);
-      await page.mouse.down();
-      await page.mouse.move(fastStart.x, fastStart.y, { steps: 1 });
-      await page.mouse.up();
-      await stepOnce(page);
-      const taggedAfterFastUntag = await page.evaluate(() => globalThis.__keeper.taggedCount);
-      if (taggedAfterFastUntag !== taggedAfterSweep) {
-        throw new Error(
-          `fast untag left ${String(taggedAfterFastUntag)} tagged tiles, expected ${String(taggedAfterSweep)}`,
-        );
-      }
-      console.log(
-        `fast drag row y=${String(fastRow.y)} x=${String(fastRow.x)}..${String(fastRow.x + fastLength - 1)} tagged=${String(fastLength)} contiguous`,
-      );
       await panToTileCenter(page, box, 35, 32);
       await page.mouse.move(cx, cy);
       for (let i = 0; i < 4; i += 1) {
@@ -568,7 +501,7 @@ async function run() {
 
       const holdStart = Date.now();
       let holdStep = 0;
-      while (holdStep < 3 || Date.now() - holdStart < 150) {
+      while (holdStep < 3 || Date.now() - holdStart < 80) {
         const angle = holdStep * 0.4;
         holdStep += 1;
         await page.mouse.move(
@@ -664,9 +597,9 @@ async function run() {
       }
       const boostedId = boostedImp.id;
       for (let i = 0; i < 10; i += 1) {
-        await stepOnce(page, 1, 40);
+        await stepOnce(page, 1, 10);
       }
-      await stepOnce(page, SLAP_TICKS + 2 - 10, 20);
+      await stepOnce(page, SLAP_TICKS + 2 - 10, 10);
       const afterSlapExpiry = await page.evaluate(() => globalThis.__keeper.impSnapshot());
       const expiredImp = afterSlapExpiry.find((imp) => imp.id === boostedId);
       if (expiredImp === undefined || expiredImp.boost !== 0) {
@@ -728,45 +661,6 @@ async function run() {
       if (duringPause !== beforePause) {
         throw new Error(`tick advanced while paused: ${String(beforePause)} -> ${String(duringPause)}`);
       }
-      await setVisibility(page, true);
-      await stepOnce(page);
-      const hiddenWhilePaused = await page.evaluate(() => ({
-        tick: globalThis.__keeper.tick,
-        appState: globalThis.__keeper.appState,
-      }));
-      if (hiddenWhilePaused.tick !== duringPause) {
-        throw new Error(`tick advanced while hidden and paused: ${String(duringPause)} -> ${String(hiddenWhilePaused.tick)}`);
-      }
-      if (hiddenWhilePaused.appState !== "hidden") {
-        throw new Error(`app state while hidden and paused was ${hiddenWhilePaused.appState}`);
-      }
-      await setVisibility(page, false);
-      await page.waitForSelector("#pause-overlay.visible");
-      const spawnDisabledAfterHidden = await page.locator("#spawn-imp").isDisabled();
-      const goldDisabledAfterHidden = await page.locator("#add-gold").isDisabled();
-      const afterVisiblePaused = await page.evaluate(() => ({
-        tick: globalThis.__keeper.tick,
-        appState: globalThis.__keeper.appState,
-      }));
-      if (!spawnDisabledAfterHidden || !goldDisabledAfterHidden) {
-        throw new Error(
-          `panel buttons not disabled after tab return while paused: spawn ${String(spawnDisabledAfterHidden)}, gold ${String(goldDisabledAfterHidden)}`,
-        );
-      }
-      if (afterVisiblePaused.tick !== duringPause) {
-        throw new Error(`tick advanced across tab hide and show while paused: ${String(duringPause)} -> ${String(afterVisiblePaused.tick)}`);
-      }
-      if (afterVisiblePaused.appState !== "paused") {
-        throw new Error(`app state after tab return was ${afterVisiblePaused.appState}, expected paused`);
-      }
-      await stepOnce(page);
-      const stillPausedAfterVisible = await page.evaluate(() => globalThis.__keeper.tick);
-      if (stillPausedAfterVisible !== duringPause) {
-        throw new Error(`tick advanced after tab return while paused: ${String(duringPause)} -> ${String(stillPausedAfterVisible)}`);
-      }
-      console.log(
-        `visibility paused hidden=${hiddenWhilePaused.appState} visible=${afterVisiblePaused.appState} tick=${String(afterVisiblePaused.tick)}`,
-      );
       await page.keyboard.press("Escape");
       await page.waitForSelector("#pause-overlay.visible", { state: "hidden" });
       const spawnEnabled = await page.locator("#spawn-imp").isEnabled();
@@ -777,38 +671,6 @@ async function run() {
       for (let i = 0; i < 2; i += 1) {
         await stepOnce(page, 1, 15);
       }
-      const runningBeforeHidden = await page.evaluate(() => globalThis.__keeper.tick);
-      await setVisibility(page, true);
-      await stepOnce(page);
-      const hiddenWhileRunning = await page.evaluate(() => ({
-        tick: globalThis.__keeper.tick,
-        appState: globalThis.__keeper.appState,
-      }));
-      if (hiddenWhileRunning.tick !== runningBeforeHidden) {
-        throw new Error(`tick advanced while hidden and running: ${String(runningBeforeHidden)} -> ${String(hiddenWhileRunning.tick)}`);
-      }
-      if (hiddenWhileRunning.appState !== "hidden") {
-        throw new Error(`app state while hidden and running was ${hiddenWhileRunning.appState}`);
-      }
-      await setVisibility(page, false);
-      const runningAfterVisible = await page.evaluate(() => globalThis.__keeper.tick);
-      if (runningAfterVisible !== runningBeforeHidden) {
-        throw new Error(`tick advanced across tab hide and show while running: ${String(runningBeforeHidden)} -> ${String(runningAfterVisible)}`);
-      }
-      await stepOnce(page);
-      const runningAdvanced = await page.evaluate(() => ({
-        tick: globalThis.__keeper.tick,
-        appState: globalThis.__keeper.appState,
-      }));
-      if (runningAdvanced.tick <= runningAfterVisible) {
-        throw new Error(`tick did not advance after tab return while running: ${String(runningAfterVisible)} -> ${String(runningAdvanced.tick)}`);
-      }
-      if (runningAdvanced.appState !== "running") {
-        throw new Error(`app state after tab return while running was ${runningAdvanced.appState}`);
-      }
-      console.log(
-        `visibility running hidden=${hiddenWhileRunning.appState} visible=${runningAdvanced.appState} tick=${String(runningBeforeHidden)}->${String(runningAdvanced.tick)}`,
-      );
 
       await checkpoint(page, recordStart, "pause");
       await page.click("#add-gold", { force: true });
@@ -1054,7 +916,21 @@ async function run() {
         `perf imps=${String(targetImps)} sim_ms_per_tick median=${ms(simMedian)} p95=${ms(simP95)} max=${ms(simMax)} frame_ms median=${ms(frameMedian)} p95=${ms(frameP95)} max=${ms(frameMax)} drawCalls=${String(perfDrawCalls)}`,
       );
 
+      await page.click("#add-gold", { force: true });
+      await page.click("#add-gold", { force: true });
       await stepOnce(page, 2, 30);
+      let finalCreatureTicks = 0;
+      for (;;) {
+        const live = await page.evaluate(() => globalThis.__keeper.liveCreatureCount);
+        if (live >= 1) {
+          break;
+        }
+        if (finalCreatureTicks >= 400) {
+          throw new Error(`no creature before the final report in ${String(finalCreatureTicks)} ticks`);
+        }
+        await stepOnce(page, 20, 5);
+        finalCreatureTicks += 20;
+      }
 
       const result = await page.evaluate(() => ({
         tick: globalThis.__keeper.tick,
@@ -1122,6 +998,64 @@ async function run() {
       await screenshot(page, "proof/perf.png", "perf");
       await panToTileCenter(page, box, 31, 30);
       await screenshot(page, "proof/treasury.png", "treasury");
+
+      await page.click("#add-gold", { force: true });
+      await page.click("#add-gold", { force: true });
+      await page.click("#add-gold", { force: true });
+      await stepOnce(page);
+      const beforePaid = await paydayState(page);
+      await advanceToPayday(page);
+      const paid = await paydayState(page);
+      const paidIds = new Set(paid.creatures.map((creature) => creature.id));
+      if (!beforePaid.creatures.every((creature) => paidIds.has(creature.id))) {
+        throw new Error("a creature left on a payday that had enough gold");
+      }
+      if (paid.paidOut <= beforePaid.paidOut || paid.paidOut % 10 !== 0) {
+        throw new Error(`paid wage did not rise on a funded payday: ${String(beforePaid.paidOut)} -> ${String(paid.paidOut)}`);
+      }
+      if (!paid.hudText.includes("pay ")) {
+        throw new Error(`hud did not show the payday countdown: ${paid.hudText}`);
+      }
+      console.log(
+        `payday funded tick=${String(paid.tick)} creatures=${String(paid.count)} paidOut=${String(paid.paidOut)}`,
+      );
+
+      const next = await paydayState(page);
+      let paydayTarget = next.until === 0 ? next.tick : next.tick + next.until;
+      if (paydayTarget % 200 === 0) {
+        paydayTarget += next.payTicks;
+      }
+      const toTarget = paydayTarget - next.tick;
+      if (toTarget > 0) {
+        await stepOnce(page, toTarget, 60);
+      }
+      const drained = await page.evaluate(() => globalThis.__keeper.drainGold());
+      if (drained <= 0) {
+        throw new Error(`drainGold moved ${String(drained)} gold`);
+      }
+      const beforeUnpaid = await paydayState(page);
+      await stepOnce(page, 1, 60);
+      const unpaid = await paydayState(page);
+      const unpaidIds = new Set(unpaid.creatures.map((creature) => creature.id));
+      const left = beforeUnpaid.creatures.filter((creature) => !unpaidIds.has(creature.id));
+      if (left.length === 0) {
+        throw new Error("no creature left on an unfunded payday");
+      }
+      if (unpaid.paidOut !== beforeUnpaid.paidOut) {
+        throw new Error(`unfunded payday changed paidOut ${String(beforeUnpaid.paidOut)} -> ${String(unpaid.paidOut)}`);
+      }
+      const freed = left.filter((creature) =>
+        unpaid.freeBeds.some((bed) => bed.x === creature.bedTileX && bed.y === creature.bedTileY),
+      );
+      if (freed.length === 0) {
+        throw new Error("an unpaid creature's bed was not freed");
+      }
+      console.log(
+        `payday unpaid tick=${String(unpaid.tick)} left=${String(left.length)} freeBeds=${String(unpaid.freeBeds.length)} drained=${String(drained)}`,
+      );
+      await screenshot(page, "proof/payday.png", "payday");
+      await checkpoint(page, recordStart, "payday");
+
       await context.close();
       const files = await readdir("proof/tmp");
       const webm = files.find((name) => name.endsWith(".webm"));

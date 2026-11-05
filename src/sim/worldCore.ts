@@ -33,6 +33,7 @@ export type World = {
   treasuryVersion: number;
   goldStored: number;
   goldSpent: number;
+  goldPaidOut: number;
   goldStock: Uint32Array;
   commandCursor: number;
   jobs: JobBoard;
