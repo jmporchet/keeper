@@ -19,6 +19,7 @@ import {
   createWorld,
   hashWorld,
   liveImpCount,
+  isWalkableCode,
   MAP_HALF,
   MAP_WIDTH,
   MAX_FRAME_DELTA,
@@ -26,10 +27,18 @@ import {
   step,
   TICK_DT,
   tileKindAt,
+  asTileIndex,
+  jobAtTile,
+  jobHeldBy,
+  workerOf,
   type Command,
+  type Job,
 } from "./sim";
 import { createHud } from "./ui/hud";
 import { createSandboxPanel } from "./ui/sandboxPanel";
+
+type JobDebug = { tileX: number; tileY: number; kind: string; state: string };
+type ImpDebug = { id: number; tileX: number; tileY: number; state: string; job: JobDebug | null };
 
 declare global {
   interface Window {
@@ -44,8 +53,13 @@ declare global {
       carryingCount: number;
       hudText: string;
       drawCalls: number;
+      heldCount: number;
       camera: { targetX: number; targetZ: number; yaw: number; pitch: number; distance: number };
       canvasPointForTile(tx: number, ty: number): { x: number; y: number } | null;
+      tileKind(tx: number, ty: number): string | null;
+      jobSnapshot(tx: number, ty: number): JobDebug | null;
+      impSnapshot(): ImpDebug[];
+      dropTiles(fromX: number, fromY: number): { x: number; y: number }[];
       step(n: number): void;
     };
   }
@@ -86,7 +100,7 @@ const sandboxPanel = createSandboxPanel(
 const map = createMapMeshes(scene);
 const impsVisual = createImpMeshes(scene);
 syncMap(world.tiles, world.width, world.tilesVersion, map);
-syncImps(world.imps, 1, impsVisual);
+syncImps(world.imps, world.hand, 1, undefined, impsVisual);
 addTorchLighting(scene);
 const screenPoint = new Vector3();
 
@@ -217,6 +231,27 @@ function canvasPointForTile(tx: number, ty: number): { x: number; y: number } | 
   return { x, y };
 }
 
+function jobDebug(job: Job): JobDebug {
+  const tileY = (job.tile / world.width) | 0;
+  const tileX = job.tile - tileY * world.width;
+  return { tileX, tileY, kind: job.jobKind, state: job.lifecycle.kind };
+}
+
+function tileKindDebug(tx: number, ty: number): string | null {
+  if (tx < 0 || ty < 0 || tx >= world.width || ty >= world.height) {
+    return null;
+  }
+  return tileKindAt(world.tiles, ty * world.width + tx);
+}
+
+function jobSnapshotDebug(tx: number, ty: number): JobDebug | null {
+  if (tx < 0 || ty < 0 || tx >= world.width || ty >= world.height) {
+    return null;
+  }
+  const job = jobAtTile(world.jobs, asTileIndex(ty * world.width + tx));
+  return job === undefined ? null : jobDebug(job);
+}
+
 if (proof) {
   placeCamera();
   render();
@@ -229,6 +264,9 @@ if (proof) {
     },
     get drawCalls() {
       return renderer.info.render.calls;
+    },
+    get heldCount() {
+      return world.hand.count;
     },
     get camera() {
       return cameraSnapshot();
@@ -266,7 +304,55 @@ if (proof) {
     get hudText() {
       return hudText();
     },
+    impSnapshot() {
+      const imps: ImpDebug[] = [];
+      for (let i = 0; i < world.imps.slots.length; i += 1) {
+        const slot = world.imps.slots[i];
+        if (slot === undefined) {
+          continue;
+        }
+        switch (slot.kind) {
+          case "empty":
+            break;
+          case "live": {
+            const imp = slot.imp;
+            const job = jobHeldBy(world.jobs, workerOf(imp));
+            imps.push({
+              id: imp.id,
+              tileX: imp.tileX,
+              tileY: imp.tileY,
+              state: imp.state.kind,
+              job: job === undefined ? null : jobDebug(job),
+            });
+            break;
+          }
+          default: {
+            const never: never = slot;
+            return never;
+          }
+        }
+      }
+      return imps;
+    },
+    dropTiles(fromX: number, fromY: number) {
+      const tiles: { x: number; y: number }[] = [];
+      for (let y = 0; y < world.height; y += 1) {
+        for (let x = 0; x < world.width; x += 1) {
+          const code = world.tiles[y * world.width + x];
+          if (code === undefined || !isWalkableCode(code)) {
+            continue;
+          }
+          if (Math.max(Math.abs(x - fromX), Math.abs(y - fromY)) < 5) {
+            continue;
+          }
+          tiles.push({ x, y });
+        }
+      }
+      return tiles;
+    },
     canvasPointForTile,
+    tileKind: tileKindDebug,
+    jobSnapshot: jobSnapshotDebug,
     step(n: number) {
       if (!isSimStepping(actor.getSnapshot())) {
         syncHud();
@@ -277,7 +363,7 @@ if (proof) {
         cameraInput.tickHeldKeys();
       }
       syncMap(world.tiles, world.width, world.tilesVersion, map);
-      syncImps(world.imps, 1, impsVisual);
+      syncImps(world.imps, world.hand, 1, cameraInput.cursorTile(), impsVisual);
       placeCamera();
       syncHud();
       render();
@@ -309,7 +395,7 @@ if (proof) {
     }
     cameraInput.tickHeldKeys();
     syncMap(world.tiles, world.width, world.tilesVersion, map);
-    syncImps(world.imps, accumulator / TICK_DT, impsVisual);
+    syncImps(world.imps, world.hand, accumulator / TICK_DT, cameraInput.cursorTile(), impsVisual);
     placeCamera();
     syncHud();
     render();

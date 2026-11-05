@@ -1,4 +1,5 @@
 import { assign, setup, type SnapshotFrom } from "xstate";
+import { HAND_CAPACITY } from "../sim";
 
 export type InputCameraEvent =
   | { type: "RIGHT_DOWN" }
@@ -18,6 +19,7 @@ export type InputCameraEvent =
 export type InputCameraContext = {
   panKeys: number;
   pointerPan: boolean;
+  heldCount: number;
 };
 
 export const inputCameraMachine = setup({
@@ -28,17 +30,21 @@ export const inputCameraMachine = setup({
   guards: {
     noPanKeys: ({ context }) => context.panKeys === 0,
     lastPanKey: ({ context }) => context.panKeys <= 1 && !context.pointerPan,
+    handHasRoom: ({ context }) => context.heldCount < HAND_CAPACITY,
+    lastHeld: ({ context }) => context.heldCount <= 1,
   },
   actions: {
     markPointerPan: assign({ pointerPan: true }),
     clearPointerPan: assign({ pointerPan: false }),
     incPanKeys: assign({ panKeys: ({ context }) => context.panKeys + 1 }),
     decPanKeys: assign({ panKeys: ({ context }) => Math.max(0, context.panKeys - 1) }),
+    incHeld: assign({ heldCount: ({ context }) => context.heldCount + 1 }),
+    decHeld: assign({ heldCount: ({ context }) => Math.max(0, context.heldCount - 1) }),
   },
 }).createMachine({
   id: "inputCamera",
   initial: "Idle",
-  context: { panKeys: 0, pointerPan: false },
+  context: { panKeys: 0, pointerPan: false, heldCount: 0 },
   states: {
     Idle: {
       on: {
@@ -47,7 +53,7 @@ export const inputCameraMachine = setup({
         PAN_KEY_DOWN: { target: "Panning", actions: "incPanKeys" },
         LEFT_DOWN_TILE: "Tagging",
         SELECT_ROOM_TOOL: "Painting",
-        LEFT_DOWN_IMP: "Holding",
+        LEFT_DOWN_IMP: { target: "Holding", guard: "handHasRoom", actions: "incHeld" },
       },
     },
     Orbiting: {
@@ -83,7 +89,11 @@ export const inputCameraMachine = setup({
     },
     Holding: {
       on: {
-        DROP_WALKABLE: "Idle",
+        LEFT_DOWN_IMP: { target: "Holding", guard: "handHasRoom", actions: "incHeld" },
+        DROP_WALKABLE: [
+          { guard: "lastHeld", target: "Idle", actions: "decHeld" },
+          { target: "Holding", actions: "decHeld" },
+        ],
         DROP_REFUSED: "Holding",
       },
     },
@@ -102,4 +112,8 @@ export function isPanning(snapshot: InputCameraSnapshot): boolean {
 
 export function isTagging(snapshot: InputCameraSnapshot): boolean {
   return snapshot.matches("Tagging");
+}
+
+export function isHolding(snapshot: InputCameraSnapshot): boolean {
+  return snapshot.matches("Holding");
 }

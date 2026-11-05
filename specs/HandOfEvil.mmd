@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Held: pickUp [hand not full]
+    Walking --> Held: pickUp [job released]
+    Working --> Held: pickUp [job released]
+    Held --> Held: drop refused
+    Held --> Idle: drop on walkable tile

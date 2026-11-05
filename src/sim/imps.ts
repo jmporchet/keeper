@@ -43,10 +43,11 @@ export type ImpWorking = {
   work: WorkKind;
   remaining: number;
 };
+export type ImpHeld = { kind: "held" };
 export type ImpCarryEmpty = { kind: "empty" };
 export type ImpCarryGold = { kind: "gold"; amount: number };
 export type ImpCarry = ImpCarryEmpty | ImpCarryGold;
-export type ImpState = ImpIdle | ImpWandering | ImpWalking | ImpWorking | ImpDelivering;
+export type ImpState = ImpIdle | ImpWandering | ImpWalking | ImpWorking | ImpDelivering | ImpHeld;
 
 export type Imp = {
   id: ImpId;
@@ -67,6 +68,7 @@ export type Imp = {
   carry: ImpCarry;
   carryEmpty: ImpCarryEmpty;
   carryGold: ImpCarryGold;
+  held: ImpHeld;
   state: ImpState;
 };
 
@@ -104,6 +106,7 @@ export function createImp(index: number, tileX: number, tileY: number): Imp {
   };
   const carryEmpty: ImpCarryEmpty = { kind: "empty" };
   const carryGold: ImpCarryGold = { kind: "gold", amount: 0 };
+  const held: ImpHeld = { kind: "held" };
   return {
     id: asImpId(index),
     tileX,
@@ -123,6 +126,7 @@ export function createImp(index: number, tileX: number, tileY: number): Imp {
     carry: carryEmpty,
     carryEmpty,
     carryGold,
+    held,
     state: idle,
   };
 }
@@ -555,6 +559,8 @@ export function movingState(imp: Imp): ImpWandering | ImpWalking | ImpDelivering
       return undefined;
     case "delivering":
       return state;
+    case "held":
+      return undefined;
     default: {
       const never: never = state;
       return never;
@@ -619,6 +625,8 @@ function impStateCode(kind: ImpState["kind"]): number {
       return 4;
     case "delivering":
       return 5;
+    case "held":
+      return 6;
     default: {
       const never: never = kind;
       return never;
@@ -705,6 +713,8 @@ export function hashImps(board: ImpBoard): number {
             h = mix(h, moving.pathLength);
             h = mix(h, moving.progress);
             h = mixPath(h, imp.path, moving.pathLength);
+            break;
+          case "held":
             break;
           default: {
             const never: never = moving;

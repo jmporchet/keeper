@@ -1,3 +1,4 @@
+import type { Hand } from "./hand";
 import type { Tick } from "./ids";
 import type { ImpBoard } from "./imps";
 import type { JobBoard } from "./jobs";
@@ -17,6 +18,7 @@ export type World = {
   commandCursor: number;
   jobs: JobBoard;
   imps: ImpBoard;
+  hand: Hand;
   pathScratch: PathScratch;
 };
 

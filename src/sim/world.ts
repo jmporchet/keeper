@@ -1,9 +1,10 @@
-import { asTick, asTileIndex, type Tick, type TileIndex } from "./ids";
-import { createImpBoard, hashImps, spawnImp, spawnStartingImps } from "./imps";
+import { addHeld, createHand, hashHand, isHeld, removeHeld } from "./hand";
+import { asTick, asTileIndex, type ImpId, type Tick, type TileIndex } from "./ids";
+import { createImpBoard, hashImps, spawnImp, spawnStartingImps, workerOf, type Imp } from "./imps";
 import { stepImps } from "./imps.hot";
-import { cancelJobAtTile, createJobBoard, hashJobs, openJob } from "./jobs";
+import { cancelJobAtTile, createJobBoard, hashJobs, openJob, releaseWorker } from "./jobs";
 import { HEART_X, HEART_Y, MAP_HEIGHT, MAP_HALF, MAP_WIDTH, TILE_KIND, tileKindAt } from "./map";
-import { createPathScratch } from "./path";
+import { createPathScratch, isWalkableCode } from "./path";
 import { advanceRng } from "./rng";
 import { attachTiles, setTile, type World } from "./worldCore";
 
@@ -35,7 +36,9 @@ export type Command =
   | { kind: "addGold"; tick: Tick; amount: number }
   | { kind: "tag"; tick: Tick; tile: TileIndex }
   | { kind: "untag"; tick: Tick; tile: TileIndex }
-  | { kind: "spawnImp"; tick: Tick };
+  | { kind: "spawnImp"; tick: Tick }
+  | { kind: "pickUp"; tick: Tick; impId: ImpId }
+  | { kind: "drop"; tick: Tick; impId: ImpId; tileX: number; tileY: number };
 
 export function tileIndexFromWorld(x: number, z: number): TileIndex | undefined {
   const tx = Math.floor(x + MAP_HALF + 0.5);
@@ -129,6 +132,7 @@ export function createWorld(seed: number): World {
     commandCursor: 0,
     jobs: createJobBoard(width * height),
     imps,
+    hand: createHand(),
     pathScratch: createPathScratch(),
   };
   attachTiles(world, tiles);
@@ -157,6 +161,7 @@ export function hashWorld(world: World): number {
   }
   h = mix(h, world.tilesVersion);
   h = mix(h, hashJobs(world.jobs));
+  h = mix(h, hashHand(world.hand));
   const tiles = world.tiles;
   for (let i = 0; i < tiles.length; i += 1) {
     const cell = tiles[i];
@@ -219,6 +224,99 @@ function applyUntag(world: World, tile: TileIndex): void {
   }
 }
 
+function liveImpById(world: World, impId: ImpId): Imp | undefined {
+  const slot = world.imps.slots[impId];
+  if (slot === undefined) {
+    return undefined;
+  }
+  switch (slot.kind) {
+    case "empty":
+      return undefined;
+    case "live":
+      return slot.imp;
+    default: {
+      const never: never = slot;
+      return never;
+    }
+  }
+}
+
+function applyPickUp(world: World, impId: ImpId): void {
+  const imp = liveImpById(world, impId);
+  if (imp === undefined) {
+    return;
+  }
+  const state = imp.state;
+  switch (state.kind) {
+    case "held":
+      return;
+    case "idle":
+    case "wandering":
+    case "walking":
+    case "working":
+    case "delivering": {
+      if (!addHeld(world.hand, imp.id)) {
+        return;
+      }
+      releaseWorker(world.jobs, workerOf(imp));
+      imp.headingX = 0;
+      imp.headingY = 0;
+      imp.state = imp.held;
+      return;
+    }
+    default: {
+      const never: never = state;
+      return never;
+    }
+  }
+}
+
+function applyDrop(world: World, impId: ImpId, tileX: number, tileY: number): void {
+  if (tileX < 0 || tileY < 0 || tileX >= world.width || tileY >= world.height) {
+    return;
+  }
+  const tile = asTileIndex(tileY * world.width + tileX);
+  const code = world.tiles[tile];
+  if (code === undefined || !isWalkableCode(code)) {
+    return;
+  }
+  const imp = liveImpById(world, impId);
+  if (imp === undefined) {
+    return;
+  }
+  const state = imp.state;
+  switch (state.kind) {
+    case "held": {
+      if (!isHeld(world.hand, imp.id)) {
+        return;
+      }
+      if (!removeHeld(world.hand, imp.id)) {
+        return;
+      }
+      imp.tileX = tileX;
+      imp.tileY = tileY;
+      imp.prevX = tileX;
+      imp.prevZ = tileY;
+      imp.currX = tileX;
+      imp.currZ = tileY;
+      imp.headingX = 0;
+      imp.headingY = 0;
+      imp.state = imp.idle;
+      return;
+    }
+    case "idle":
+    case "wandering":
+    case "walking":
+    case "working":
+    case "delivering":
+      return;
+    default: {
+      const never: never = state;
+      return never;
+    }
+  }
+}
+
 function applyCommand(world: World, command: Command): void {
   switch (command.kind) {
     case "noop":
@@ -234,6 +332,12 @@ function applyCommand(world: World, command: Command): void {
       return;
     case "spawnImp":
       spawnImp(world.imps, HEART_X, HEART_Y);
+      return;
+    case "pickUp":
+      applyPickUp(world, command.impId);
+      return;
+    case "drop":
+      applyDrop(world, command.impId, command.tileX, command.tileY);
       return;
     default: {
       const never: never = command;

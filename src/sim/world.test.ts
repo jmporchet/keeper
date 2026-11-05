@@ -1,6 +1,6 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { asTick, asTileIndex } from "./ids";
+import { asImpId, asTick, asTileIndex } from "./ids";
 import {
   countTagged,
   createWorld,
@@ -244,7 +244,7 @@ function commandList(): fc.Arbitrary<Command[]> {
         fc.integer({ min: 0, max: TICKS - 1 }),
         fc.integer({ min: 1, max: 8 }),
         fc.integer({ min: 0, max: MAP_WIDTH * MAP_HEIGHT - 1 }),
-        fc.integer({ min: 0, max: 3 }),
+        fc.integer({ min: 0, max: 5 }),
       )
       .map(([tick, amount, tile, kind]) => {
         switch (kind) {
@@ -254,8 +254,15 @@ function commandList(): fc.Arbitrary<Command[]> {
             return addGold(tick, amount);
           case 2:
             return { kind: "tag", tick: asTick(tick), tile: asTileIndex(tile) };
-          default:
+          case 3:
             return { kind: "untag", tick: asTick(tick), tile: asTileIndex(tile) };
+          case 4:
+            return { kind: "pickUp", tick: asTick(tick), impId: asImpId(tile % 4) };
+          default: {
+            const tileX = tile % MAP_WIDTH;
+            const tileY = (tile / MAP_WIDTH) | 0;
+            return { kind: "drop", tick: asTick(tick), impId: asImpId(tile % 4), tileX, tileY };
+          }
         }
       }),
     { maxLength: 16 },

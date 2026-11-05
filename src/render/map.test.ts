@@ -1,6 +1,17 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
-import { createWorld, liveImpCount, setTile, STARTING_IMP_COUNT, TILE_KIND } from "../sim";
+import {
+  asImpId,
+  asTick,
+  asTileIndex,
+  createWorld,
+  liveImpCount,
+  MAP_WIDTH,
+  setTile,
+  STARTING_IMP_COUNT,
+  step,
+  TILE_KIND,
+} from "../sim";
 import { createImpMeshes, syncImps } from "./imps";
 import { countTilesByKind, createMapMeshes, syncMap } from "./map";
 
@@ -62,8 +73,19 @@ describe("map instances", () => {
     const world = createWorld(1);
     const scene = new THREE.Scene();
     const visual = createImpMeshes(scene);
-    syncImps(world.imps, 1, visual);
+    syncImps(world.imps, world.hand, 1, undefined, visual);
     expect(visual.mesh.count).toBe(STARTING_IMP_COUNT);
     expect(liveImpCount(world.imps)).toBe(STARTING_IMP_COUNT);
+  });
+
+  it("skips held imps on the grid and draws them near the cursor", () => {
+    const world = createWorld(1);
+    step(world, [{ kind: "pickUp", tick: asTick(0), impId: asImpId(0) }]);
+    const scene = new THREE.Scene();
+    const visual = createImpMeshes(scene);
+    syncImps(world.imps, world.hand, 1, undefined, visual);
+    expect(visual.mesh.count).toBe(STARTING_IMP_COUNT - 1);
+    syncImps(world.imps, world.hand, 1, asTileIndex(33 * MAP_WIDTH + 33), visual);
+    expect(visual.mesh.count).toBe(STARTING_IMP_COUNT);
   });
 });
