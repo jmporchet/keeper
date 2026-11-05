@@ -11,6 +11,7 @@ import {
   MAX_STEPS_PER_FRAME,
   step,
   TICK_DT,
+  tileKindAt,
   type TileKind,
   type World,
 } from "./sim";
@@ -37,7 +38,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0806);
 
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
 const lookAt = new THREE.Vector3(0, 0, 0);
 
 const world = createWorld(1);
@@ -52,6 +53,12 @@ function colorFor(kind: TileKind): number {
       return 0x6a5340;
     case "earth":
       return 0x2a1d14;
+    case "rock":
+      return 0x121014;
+    case "dirt":
+      return 0x4a3728;
+    case "room":
+      return 0x8a6a48;
     default: {
       const never: never = kind;
       return never;
@@ -62,10 +69,14 @@ function colorFor(kind: TileKind): number {
 function heightFor(kind: TileKind): number {
   switch (kind) {
     case "claimed":
+    case "dirt":
+    case "room":
       return 0.2;
     case "earth":
     case "goldSeam":
       return 1;
+    case "rock":
+      return 1.4;
     default: {
       const never: never = kind;
       return never;
@@ -89,10 +100,7 @@ function syncTiles(from: World): void {
   for (let y = 0; y < from.height; y += 1) {
     for (let x = 0; x < from.width; x += 1) {
       const i = y * from.width + x;
-      const kind = from.tiles[i];
-      if (kind === undefined) {
-        continue;
-      }
+      const kind = tileKindAt(from.tiles, i);
       const mesh = meshes[i];
       if (mesh === undefined) {
         addTileMesh(x, y, kind);
@@ -114,9 +122,9 @@ function syncTiles(from: World): void {
 
 syncTiles(world);
 
-scene.add(new THREE.AmbientLight(0x3a3228, 0.4));
-const torch = new THREE.PointLight(0xffbb77, 60, 24);
-torch.position.set(0, 5, 0);
+scene.add(new THREE.AmbientLight(0x3a3228, 0.55));
+const torch = new THREE.PointLight(0xffbb77, 200, 80);
+torch.position.set(0, 18, 0);
 scene.add(torch);
 
 const tickHud = document.getElementById("tick");

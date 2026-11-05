@@ -5,11 +5,30 @@ export const TICK_DT = 1 / TICK_HZ;
 export const MAX_FRAME_DELTA = 0.1;
 export const MAX_STEPS_PER_FRAME = 4;
 
-export const MAP_WIDTH = 9;
-export const MAP_HEIGHT = 9;
-export const MAP_HALF = 4;
+export const MAP_WIDTH = 64;
+export const MAP_HEIGHT = 64;
+export const MAP_HALF = 32;
 
-export type TileKind = "earth" | "goldSeam" | "claimed";
+export const TILE_KIND = {
+  earth: 0,
+  goldSeam: 1,
+  rock: 2,
+  dirt: 3,
+  claimed: 4,
+  room: 5,
+} as const;
+
+export type TileKind = keyof typeof TILE_KIND;
+export type TileKindCode = (typeof TILE_KIND)[TileKind];
+
+const TILE_KIND_FROM_CODE: readonly TileKind[] = [
+  "earth",
+  "goldSeam",
+  "rock",
+  "dirt",
+  "claimed",
+  "room",
+];
 
 export type Command =
   | { kind: "noop"; tick: Tick }
@@ -21,21 +40,50 @@ export type World = {
   rng: number;
   width: number;
   height: number;
-  tiles: TileKind[];
+  tiles: Uint8Array;
   goldStored: number;
+  commandCursor: number;
 };
 
-function kindCode(kind: TileKind): number {
-  switch (kind) {
-    case "earth":
-      return 0;
-    case "goldSeam":
-      return 1;
-    case "claimed":
-      return 2;
-    default: {
-      const never: never = kind;
-      return never;
+export function tileKindAt(tiles: Uint8Array, index: number): TileKind {
+  const code = tiles[index];
+  if (code === undefined) {
+    throw new Error("tile index out of range");
+  }
+  const kind = TILE_KIND_FROM_CODE[code];
+  if (kind === undefined) {
+    throw new Error("invalid tile kind");
+  }
+  return kind;
+}
+
+function isBorder(x: number, y: number, width: number, height: number): boolean {
+  return x < 2 || y < 2 || x >= width - 2 || y >= height - 2;
+}
+
+function isClaimedStart(x: number, y: number): boolean {
+  return x >= 30 && x <= 34 && y >= 30 && y <= 34;
+}
+
+function isGoldSeamStart(x: number, y: number): boolean {
+  const east = x >= 38 && x <= 42 && y >= 31 && y <= 32;
+  const south = x >= 31 && x <= 32 && y >= 38 && y <= 42;
+  return east || south;
+}
+
+function fillStartingMap(tiles: Uint8Array, width: number, height: number): void {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = y * width + x;
+      if (isBorder(x, y, width, height)) {
+        tiles[i] = TILE_KIND.rock;
+      } else if (isGoldSeamStart(x, y)) {
+        tiles[i] = TILE_KIND.goldSeam;
+      } else if (isClaimedStart(x, y)) {
+        tiles[i] = TILE_KIND.claimed;
+      } else {
+        tiles[i] = TILE_KIND.earth;
+      }
     }
   }
 }
@@ -43,22 +91,8 @@ function kindCode(kind: TileKind): number {
 export function createWorld(seed: number): World {
   const width = MAP_WIDTH;
   const height = MAP_HEIGHT;
-  const tiles: TileKind[] = [];
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const lx = x - MAP_HALF;
-      const lz = y - MAP_HALF;
-      const isGold = lx === 1 && lz === 0;
-      const isClaimed = Math.abs(lx) <= 1 && Math.abs(lz) <= 1;
-      if (isGold) {
-        tiles.push("goldSeam");
-      } else if (isClaimed) {
-        tiles.push("claimed");
-      } else {
-        tiles.push("earth");
-      }
-    }
-  }
+  const tiles = new Uint8Array(width * height);
+  fillStartingMap(tiles, width, height);
   return {
     seed: seed >>> 0,
     tick: asTick(0),
@@ -67,6 +101,7 @@ export function createWorld(seed: number): World {
     height,
     tiles,
     goldStored: 0,
+    commandCursor: 0,
   };
 }
 
@@ -95,7 +130,7 @@ export function hashWorld(world: World): number {
     if (cell === undefined) {
       continue;
     }
-    h = mix(h, kindCode(cell));
+    h = mix(h, cell);
   }
   return h >>> 0;
 }
@@ -143,34 +178,42 @@ function compareCommands(a: Command, b: Command): number {
   }
 }
 
+export function sortCommands(commands: readonly Command[]): Command[] {
+  const sorted = commands.slice();
+  sorted.sort((a, b) => {
+    if (a.tick !== b.tick) {
+      return a.tick - b.tick;
+    }
+    return compareCommands(a, b);
+  });
+  return sorted;
+}
+
 export function step(world: World, commands: readonly Command[]): void {
   const tick = world.tick;
-  const pending: Command[] = [];
-  for (let i = 0; i < commands.length; i += 1) {
+  let i = world.commandCursor;
+  while (i < commands.length) {
     const command = commands[i];
     if (command === undefined) {
+      i += 1;
       continue;
     }
-    if (command.tick === tick) {
-      pending.push(command);
-    }
-  }
-  pending.sort(compareCommands);
-  for (let i = 0; i < pending.length; i += 1) {
-    const command = pending[i];
-    if (command === undefined) {
-      continue;
+    if (command.tick !== tick) {
+      break;
     }
     applyCommand(world, command);
+    i += 1;
   }
+  world.commandCursor = i;
   nextRng(world);
   world.tick = asTick(world.tick + 1);
 }
 
 export function run(seed: number, commands: readonly Command[], ticks: number): World {
   const world = createWorld(seed);
+  const sorted = sortCommands(commands);
   for (let i = 0; i < ticks; i += 1) {
-    step(world, commands);
+    step(world, sorted);
   }
   return world;
 }
