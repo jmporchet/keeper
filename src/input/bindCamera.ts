@@ -14,6 +14,7 @@ import {
   tileKindAt,
   type Command,
   type CreatureId,
+  type HeroId,
   type ImpId,
   type TileIndex,
   type TileKind,
@@ -36,6 +37,12 @@ export type HeldKeys = { w: boolean; a: boolean; s: boolean; d: boolean };
 export type HeldArrows = { up: boolean; down: boolean; left: boolean; right: boolean };
 
 export type SweepMode = "tag" | "untag" | undefined;
+
+export type SpellTargeting = {
+  arm(): "none" | "lightning" | "heal";
+  castLightning(heroId: HeroId): void;
+  castHeal(creatureId: CreatureId): void;
+};
 
 const DOUBLE_CLICK_MS = 350;
 
@@ -133,6 +140,7 @@ export function bindCameraInput(
   getWorld: () => World,
   enqueue: (command: Command) => void,
   onChange: () => void,
+  spellTargeting?: SpellTargeting,
 ): {
   actor: ReturnType<typeof createActor<typeof inputCameraMachine>>;
   tickHeldKeys: () => void;
@@ -323,6 +331,34 @@ export function bindCameraInput(
     return undefined;
   }
 
+  function heroAtTile(tile: TileIndex): HeroId | undefined {
+    const world = getWorld();
+    const y = (tile / world.width) | 0;
+    const x = tile - y * world.width;
+    for (let i = 0; i < world.heroes.slots.length; i += 1) {
+      const slot = world.heroes.slots[i];
+      if (slot === undefined) {
+        continue;
+      }
+      switch (slot.kind) {
+        case "empty":
+          break;
+        case "live": {
+          const hero = slot.hero;
+          if (hero.tileX === x && hero.tileY === y) {
+            return hero.id;
+          }
+          break;
+        }
+        default: {
+          const never: never = slot;
+          return never;
+        }
+      }
+    }
+    return undefined;
+  }
+
   function heldDirection(): { dx: number; dy: number } | undefined {
     if (held.w || heldArrows.up) {
       return { dx: 0, dy: -1 };
@@ -420,6 +456,28 @@ export function bindCameraInput(
     }
     if (event.button !== 0) {
       return;
+    }
+    if (snapshot.matches("Idle") && spellTargeting !== undefined) {
+      const spellArm = spellTargeting.arm();
+      if (spellArm !== "none") {
+        const tile = pickFromEvent(event);
+        if (tile !== undefined) {
+          if (spellArm === "lightning") {
+            const heroId = heroAtTile(tile);
+            if (heroId !== undefined) {
+              spellTargeting.castLightning(heroId);
+            }
+          } else {
+            const creatureId = creatureAtTile(tile);
+            if (creatureId !== undefined) {
+              spellTargeting.castHeal(creatureId);
+            }
+          }
+        }
+        lastCreatureClickTile = undefined;
+        lastCreatureClickTime = 0;
+        return;
+      }
     }
     if (snapshot.matches("Idle")) {
       const tile = pickFromEvent(event);

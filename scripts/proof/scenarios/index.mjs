@@ -8,6 +8,7 @@ import * as heroes from "./heroes.mjs";
 import * as lightning from "./lightning.mjs";
 import * as heal from "./heal.mjs";
 import * as speed from "./speed.mjs";
+import * as spells from "./spells.mjs";
 import * as defeat from "./defeat.mjs";
 import * as victory from "./victory.mjs";
 import * as saveReplay from "./saveReplay.mjs";
@@ -28,6 +29,7 @@ export const scenarios = [
   lightning,
   heal,
   speed,
+  spells,
   defeat,
   victory,
   saveReplay,
