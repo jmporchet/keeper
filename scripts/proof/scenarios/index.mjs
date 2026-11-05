@@ -17,6 +17,7 @@ import * as workshop from "./workshop.mjs";
 import * as library from "./library.mjs";
 import * as warlock from "./warlock.mjs";
 import * as troll from "./troll.mjs";
+import * as levels from "./levels.mjs";
 import * as doors from "./doors.mjs";
 import * as panelPerf from "./panelPerf.mjs";
 
@@ -40,6 +41,7 @@ export const scenarios = [
   library,
   warlock,
   troll,
+  levels,
   doors,
   panelPerf,
 ];

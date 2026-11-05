@@ -1,4 +1,5 @@
 import { removeChicken } from "./chickens";
+import { COMBAT_DAMAGE } from "./heroes";
 import { asChickenId, asCreatureId, asTileIndex, type ChickenId, type CreatureId, type TileIndex } from "./ids";
 import { PORTAL_X, PORTAL_Y, ROOM_KIND, tileKindAt } from "./map";
 import { bumpPathGen, PATH_CELL_COUNT } from "./path";
@@ -18,12 +19,21 @@ export const LIBRARY_TRAIN_TICKS = 40;
 export const WANDER_PERIOD = 40;
 export const WANDER_CHANCE = 1;
 export const WANDER_ROLL = 2;
-export const CREATURE_MAX_LEVEL = 1;
+export const CREATURE_MAX_LEVEL = 3;
 export const CREATURE_HP = 3;
 export const BEETLE_HP = 5;
 export const WARLOCK_HP = 4;
 export const TROLL_HP = 6;
 export const CREATURE_HP_PER_LEVEL = 1;
+
+export function trainingTicksForLevel(level: number, boosted: boolean): number {
+  const base = boosted ? LIBRARY_TRAIN_TICKS : TRAIN_TICKS;
+  return base * (level + 1);
+}
+
+export function creatureMeleeDamage(level: number): number {
+  return COMBAT_DAMAGE * Math.max(1, level);
+}
 
 export type CreatureKind = "fly" | "beetle" | "warlock" | "troll";
 
@@ -567,15 +577,21 @@ export function beginTraining(world: World, creature: Creature, tile: TileIndex)
   creature.headingX = 0;
   creature.headingY = 0;
   creature.training.tile = tile;
-  creature.training.remaining = trainingBoostedByLibrary(world, tile) ? LIBRARY_TRAIN_TICKS : TRAIN_TICKS;
+  creature.training.remaining = trainingTicksForLevel(
+    creature.level,
+    trainingBoostedByLibrary(world, tile),
+  );
   creature.state = creature.training;
 }
 
 export function finishTraining(world: World, creature: Creature): void {
+  if (creature.level >= CREATURE_MAX_LEVEL) {
+    return;
+  }
   if (trainingBoostedByLibrary(world, creature.training.tile)) {
     world.researchDone = true;
   }
-  creature.level = CREATURE_MAX_LEVEL;
+  creature.level += 1;
   creature.maxHp += CREATURE_HP_PER_LEVEL;
   creature.hp += CREATURE_HP_PER_LEVEL;
   beginToBed(world, creature);

@@ -1,3 +1,4 @@
+import { creatureMeleeDamage } from "./creatures";
 import {
   beginAllLeaving,
   beginFighting,
@@ -361,7 +362,7 @@ function resolveCreatureAttacks(world: World): void {
         const heroSlot = world.heroes.slots[heroIndex];
         if (heroSlot !== undefined && heroSlot.kind === "live") {
           const hero = heroSlot.hero;
-          hero.hp -= COMBAT_DAMAGE;
+          hero.hp -= creatureMeleeDamage(creature.level);
           creature.attackCooldown = FIGHT_TICKS;
           if (hero.hp <= 0) {
             world.heroes.slots[heroIndex] = EMPTY_HERO_SLOT;

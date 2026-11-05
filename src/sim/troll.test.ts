@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   ARRIVE_TICKS,
   CREATURE_CAPACITY,
-  CREATURE_MAX_LEVEL,
   TROLL_HP,
   WARLOCK_HP,
   createCreature,
@@ -175,7 +174,7 @@ describe("troll portal gate", () => {
       if (creature.state.kind === "training") {
         sawTraining = true;
       }
-      if (creature.level >= CREATURE_MAX_LEVEL) {
+      if (creature.level >= 1) {
         sawLevel = true;
         if (creature.state.kind === "toBed" || creature.state.kind === "sleeping") {
           returned = true;

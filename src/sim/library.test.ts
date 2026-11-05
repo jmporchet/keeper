@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  CREATURE_MAX_LEVEL,
   LIBRARY_TRAIN_TICKS,
   TRAIN_TICKS,
   trainingBoostedByLibrary,
@@ -75,7 +74,7 @@ function measureTraining(world: World, commands: CommandLog): { ticks: number; l
     if (creature.state.kind === "training" && trainingStarted < 0) {
       trainingStarted = world.tick;
     }
-    if (trainingStarted >= 0 && creature.level >= CREATURE_MAX_LEVEL) {
+    if (trainingStarted >= 0 && creature.level >= 1) {
       return { ticks: world.tick - trainingStarted, level: creature.level };
     }
   }
@@ -139,7 +138,7 @@ describe("library room", () => {
       paint(0, LIBRARY_TILE, "library"),
     ]);
     const nearResult = measureTraining(near, nearCommands);
-    expect(nearResult.level).toBe(CREATURE_MAX_LEVEL);
+    expect(nearResult.level).toBe(1);
     expect(nearResult.ticks).toBe(LIBRARY_TRAIN_TICKS);
 
     const far = createWorld(1);
@@ -149,7 +148,7 @@ describe("library room", () => {
       paint(0, TRAINING_TILE, "training"),
     ]);
     const farResult = measureTraining(far, farCommands);
-    expect(farResult.level).toBe(CREATURE_MAX_LEVEL);
+    expect(farResult.level).toBe(1);
     expect(farResult.ticks).toBe(TRAIN_TICKS);
     expect(nearResult.ticks).toBeLessThan(farResult.ticks);
   });
