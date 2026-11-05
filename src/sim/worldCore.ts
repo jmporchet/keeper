@@ -49,6 +49,7 @@ export type World = {
   heartHp: number;
   heartMaxHp: number;
   heartBreached: boolean;
+  repairsDone: number;
   commandCursor: number;
   jobs: JobBoard;
   imps: ImpBoard;

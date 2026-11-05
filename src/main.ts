@@ -112,6 +112,8 @@ declare global {
       heartHp: number;
       heartMaxHp: number;
       heartBreached: boolean;
+      repairsDone: number;
+      waveIndex: number;
       liveCreatureCount: number;
       impCount: number;
       creatureCount: number;
@@ -356,6 +358,7 @@ function syncHud(): void {
     ticksUntilPayday(world.tick),
     world.heartHp,
     world.heartBreached,
+    world.repairsDone,
   );
   const snapshot = actor.getSnapshot();
   const paused = isPaused(snapshot);
@@ -611,6 +614,12 @@ if (proof) {
     },
     get heartBreached() {
       return world.heartBreached;
+    },
+    get repairsDone() {
+      return world.repairsDone;
+    },
+    get waveIndex() {
+      return world.repairsDone + 1;
     },
     get painting() {
       return isPainting(cameraInput.actor.getSnapshot());

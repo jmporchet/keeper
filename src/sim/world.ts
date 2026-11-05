@@ -103,6 +103,8 @@ export {
   HERO_CAPACITY,
   HERO_HP,
   HERO_PARTY_SIZE,
+  HERO_WAVE_HP_CAP,
+  HERO_WAVE_PARTY_CAP,
   hashHeroes,
   liveHeroCount,
   type Hero,
@@ -284,6 +286,7 @@ export function createWorld(seed: number): World {
     heartHp: HEART_HP,
     heartMaxHp: HEART_HP,
     heartBreached: false,
+    repairsDone: 0,
     commandCursor: 0,
     jobs: createJobBoard(width * height),
     imps,
@@ -316,6 +319,7 @@ export function hashWorld(world: World): number {
   h = mix(h, world.heartHp);
   h = mix(h, world.heartMaxHp);
   h = mix(h, world.heartBreached ? 1 : 0);
+  h = mix(h, world.repairsDone);
   h = mix(h, world.goldStock.length);
   for (let i = 0; i < world.goldStock.length; i += 1) {
     const stock = world.goldStock[i];
@@ -724,6 +728,7 @@ function applyRepairHeart(world: World): void {
   world.goldSpent += REPAIR_HEART_COST;
   world.heartHp = HEART_HP;
   world.heartBreached = false;
+  world.repairsDone += 1;
 }
 
 function applyCommand(world: World, command: Command): void {

@@ -196,6 +196,8 @@ export {
   HERO_CAPACITY,
   HERO_HP,
   HERO_PARTY_SIZE,
+  HERO_WAVE_HP_CAP,
+  HERO_WAVE_PARTY_CAP,
   hashHeroes,
   liveHeroCount,
   type Hero,

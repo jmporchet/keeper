@@ -82,6 +82,7 @@ describe("heart repair", () => {
     expect(world.heartBreached).toBe(false);
     expect(world.goldStored).toBe(0);
     expect(world.goldSpent).toBe(REPAIR_HEART_COST);
+    expect(world.repairsDone).toBe(1);
     expect(totalGold(world)).toBe(before);
   });
 
@@ -110,6 +111,7 @@ describe("heart repair", () => {
     expect(world.heartBreached).toBe(false);
     expect(world.goldStored).toBe(REPAIR_HEART_COST);
     expect(world.goldSpent).toBe(0);
+    expect(world.repairsDone).toBe(0);
   });
 
   it("refuses without partial payment when gold is short", () => {
@@ -122,6 +124,7 @@ describe("heart repair", () => {
     expect(world.heartBreached).toBe(true);
     expect(world.goldStored).toBe(REPAIR_HEART_COST - 1);
     expect(world.goldSpent).toBe(0);
+    expect(world.repairsDone).toBe(0);
   });
 
   it("allows a later hero wave to spawn after repair", () => {

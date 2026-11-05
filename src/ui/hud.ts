@@ -21,8 +21,9 @@ export function formatHud(
   ticksUntilPayday: number,
   heartHp: number,
   heartBreached: boolean,
+  repairsDone: number,
 ): string {
-  return `gold ${String(gold)} · imps ${String(imps)} · tick ${String(tick)} · ${formatPay(ticksUntilPayday)} · ${formatHeart(heartHp, heartBreached)}`;
+  return `gold ${String(gold)} · imps ${String(imps)} · tick ${String(tick)} · ${formatPay(ticksUntilPayday)} · ${formatHeart(heartHp, heartBreached)} · wave ${String(repairsDone + 1)}`;
 }
 
 export function createHud(element: HudElement | null): {
@@ -33,6 +34,7 @@ export function createHud(element: HudElement | null): {
     ticksUntilPayday: number,
     heartHp: number,
     heartBreached: boolean,
+    repairsDone: number,
   ): void;
 } {
   let prevGold: number | undefined;
@@ -41,6 +43,7 @@ export function createHud(element: HudElement | null): {
   let prevPay: number | undefined;
   let prevHeartHp: number | undefined;
   let prevHeartBreached: boolean | undefined;
+  let prevRepairsDone: number | undefined;
   return {
     update(
       gold: number,
@@ -49,6 +52,7 @@ export function createHud(element: HudElement | null): {
       ticksUntilPayday: number,
       heartHp: number,
       heartBreached: boolean,
+      repairsDone: number,
     ): void {
       if (
         prevGold === gold &&
@@ -56,7 +60,8 @@ export function createHud(element: HudElement | null): {
         prevTick === tick &&
         prevPay === ticksUntilPayday &&
         prevHeartHp === heartHp &&
-        prevHeartBreached === heartBreached
+        prevHeartBreached === heartBreached &&
+        prevRepairsDone === repairsDone
       ) {
         return;
       }
@@ -66,8 +71,17 @@ export function createHud(element: HudElement | null): {
       prevPay = ticksUntilPayday;
       prevHeartHp = heartHp;
       prevHeartBreached = heartBreached;
+      prevRepairsDone = repairsDone;
       if (element !== null) {
-        element.textContent = formatHud(gold, imps, tick, ticksUntilPayday, heartHp, heartBreached);
+        element.textContent = formatHud(
+          gold,
+          imps,
+          tick,
+          ticksUntilPayday,
+          heartHp,
+          heartBreached,
+          repairsDone,
+        );
       }
     },
   };

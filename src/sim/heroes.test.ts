@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { beginWander, freeBedTiles, liveCreatureCount, type Creature } from "./creatures";
+import { ARRIVE_TICKS, beginWander, freeBedTiles, liveCreatureCount, type Creature } from "./creatures";
 import {
   COMBAT_DAMAGE,
   FIGHT_TICKS,
   HERO_ARRIVE_TICKS,
+  HERO_HP,
   HERO_PARTY_SIZE,
+  HERO_WAVE_HP_CAP,
+  HERO_WAVE_PARTY_CAP,
   liveHeroCount,
   type Hero,
 } from "./heroes";
 import { asTick, asTileIndex, type TileIndex } from "./ids";
 import { liveImpCount } from "./imps";
-import { HEART_HP, HEART_X, HEART_Y } from "./map";
+import { HEART_HP, HEART_X, HEART_Y, REPAIR_HEART_COST } from "./map";
 import {
   createWorld,
   sortCommands,
@@ -30,6 +33,10 @@ function addGold(tick: number, amount: number): Command {
 
 function paintLair(tick: number, tile: TileIndex): Command {
   return { kind: "paintRoom", tick: asTick(tick), tile, room: "lair" };
+}
+
+function repairHeart(tick: number): Command {
+  return { kind: "repairHeart", tick: asTick(tick) };
 }
 
 function lairSetup(): Command[] {
@@ -121,6 +128,11 @@ describe("hero invasion", () => {
     expect(first.tileX).toBe(32);
     expect(first.tileY).toBe(35);
     expect(second.tileY).toBe(34);
+    expect(after.repairsDone).toBe(0);
+    expect(first.hp).toBe(HERO_HP);
+    expect(first.maxHp).toBe(HERO_HP);
+    expect(second.hp).toBe(HERO_HP);
+    expect(second.maxHp).toBe(HERO_HP);
   });
 
   it("paths toward the heart when no adjacent foe exists", () => {
@@ -304,6 +316,56 @@ describe("hero invasion", () => {
     expect(liveHeroCount(world.heroes)).toBe(0);
   });
 
+  it("escalates the next wave after a successful repair", () => {
+    const base = lairSetup();
+    const world = run(1, sortCommands(base), ARRIVE_TICKS + 1);
+    expect(liveCreatureCount(world.creatures)).toBe(1);
+    expect(liveHeroCount(world.heroes)).toBe(0);
+    world.heartHp = 0;
+    world.heartBreached = true;
+    const log = sortCommands([...base, repairHeart(world.tick)]);
+    step(world, log);
+    expect(world.repairsDone).toBe(1);
+    expect(world.heartBreached).toBe(false);
+    while (world.tick < HERO_ARRIVE_TICKS) {
+      step(world, log);
+    }
+    step(world, log);
+    expect(liveHeroCount(world.heroes)).toBe(HERO_PARTY_SIZE + 1);
+    const hero = liveHero(world, 0);
+    expect(hero.maxHp).toBe(HERO_HP + 1);
+    expect(hero.hp).toBeLessThanOrEqual(HERO_HP + 1);
+  });
+
+  it("caps wave party size and hero hp after many repairs", () => {
+    const base = lairSetup();
+    const world = run(1, sortCommands(base), ARRIVE_TICKS + 1);
+    expect(liveCreatureCount(world.creatures)).toBe(1);
+    const repairs: Command[] = [];
+    for (let i = 0; i < 10; i += 1) {
+      repairs.push(repairHeart(ARRIVE_TICKS + 1 + i));
+    }
+    const log = sortCommands([...base, ...repairs]);
+    for (let i = 0; i < repairs.length; i += 1) {
+      world.heartHp = 0;
+      world.heartBreached = true;
+      world.goldStored = REPAIR_HEART_COST + 1000;
+      step(world, log);
+    }
+    expect(world.repairsDone).toBe(10);
+    expect(liveHeroCount(world.heroes)).toBe(0);
+    while (world.tick < HERO_ARRIVE_TICKS) {
+      step(world, log);
+    }
+    step(world, log);
+    expect(liveHeroCount(world.heroes)).toBe(HERO_WAVE_PARTY_CAP);
+    for (let i = 0; i < HERO_WAVE_PARTY_CAP; i += 1) {
+      const hero = liveHero(world, i);
+      expect(hero.maxHp).toBe(HERO_WAVE_HP_CAP);
+      expect(hero.hp).toBeLessThanOrEqual(HERO_WAVE_HP_CAP);
+    }
+  });
+
   it("includes heart hp and breach in the world hash", () => {
     const world = createWorld(1);
     const before = hashWorld(world);
@@ -313,6 +375,15 @@ describe("hero invasion", () => {
     world.heartHp = 0;
     world.heartBreached = true;
     expect(hashWorld(world)).not.toBe(damaged);
+  });
+
+  it("includes repairsDone in the world hash", () => {
+    const world = createWorld(1);
+    const before = hashWorld(world);
+    world.repairsDone = 1;
+    expect(hashWorld(world)).not.toBe(before);
+    world.repairsDone = 2;
+    expect(hashWorld(world)).not.toBe(before);
   });
 
   it("is deterministic after 10000 ticks with heroes, creatures and imps", () => {
