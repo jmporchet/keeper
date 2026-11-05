@@ -94,6 +94,7 @@ export function syncMapInstances(
   groupCounts: Uint32Array,
   kindToGroup: Uint8Array,
   atlasCells: Uint8Array,
+  roomAtlasCells: Uint8Array,
   atlasAttributes: InstancedBufferAttribute[],
   taggedGroups: Uint8Array,
   taggedSlots: Int32Array,
@@ -169,7 +170,16 @@ export function syncMapInstances(
     mesh.setMatrixAt(slot, dummy.matrix);
     color.setHex(hex);
     mesh.setColorAt(slot, color);
-    const atlasCell = atlasCells[code];
+    let atlasCell = atlasCells[code];
+    if (code === TILE_KIND.room) {
+      const room = rooms[i];
+      if (room !== undefined) {
+        const roomCell = roomAtlasCells[room];
+        if (roomCell !== undefined) {
+          atlasCell = roomCell;
+        }
+      }
+    }
     const atlasAttribute = atlasAttributes[group];
     if (atlasCell !== undefined && atlasAttribute !== undefined) {
       atlasAttribute.array[slot] = atlasCell;

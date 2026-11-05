@@ -8,6 +8,7 @@ import {
   createWorld,
   liveImpCount,
   MAP_WIDTH,
+  ROOM_KIND,
   setTile,
   STARTING_IMP_COUNT,
   step,
@@ -15,7 +16,7 @@ import {
   TILE_KINDS,
   type TileRead,
 } from "../sim";
-import { ATLAS_CELL, atlasCellForKind } from "./atlas";
+import { ATLAS_CELL, atlasCellForKind, atlasCellForRoomKind } from "./atlas";
 import { createImpMeshes, syncImps } from "./imps";
 import { countTilesByKind, createMapMeshes, syncMap } from "./map";
 import {
@@ -163,6 +164,64 @@ describe("map instances", () => {
       expect(attribute.array[slot]).toBe(atlasCellForKind(kind));
       slots[group] = slot + 1;
     }
+  });
+
+  it("assigns each packed room instance the atlas cell for its room kind", () => {
+    const world = createWorld(1);
+    const scene = new THREE.Scene();
+    const map = createMapMeshes(scene);
+    const roomKinds = [
+      ROOM_KIND.treasury,
+      ROOM_KIND.lair,
+      ROOM_KIND.hatchery,
+      ROOM_KIND.training,
+      ROOM_KIND.workshop,
+      ROOM_KIND.library,
+    ];
+    const roomTiles: number[] = [];
+    for (let i = 0; i < world.tiles.length && roomTiles.length < roomKinds.length; i += 1) {
+      if (world.tiles[i] === TILE_KIND.claimed) {
+        roomTiles.push(i);
+      }
+    }
+    expect(roomTiles.length).toBe(roomKinds.length);
+    for (let j = 0; j < roomTiles.length; j += 1) {
+      const tile = roomTiles[j];
+      const room = roomKinds[j];
+      if (tile === undefined || room === undefined) {
+        continue;
+      }
+      world.rooms[tile] = room;
+      setTile(world, tile, TILE_KIND.room);
+    }
+    syncMap(world, map, 0);
+    const slots = new Uint32Array(map.meshes.length);
+    const packedRoomCells = new Set<number>();
+    for (let i = 0; i < world.tiles.length; i += 1) {
+      const code = world.tiles[i];
+      if (code === undefined) {
+        continue;
+      }
+      const group = map.kindToGroup[code];
+      if (group === undefined) {
+        continue;
+      }
+      const slot = slots[group];
+      const attribute = map.atlasAttributes[group];
+      if (slot === undefined || attribute === undefined) {
+        continue;
+      }
+      if (code === TILE_KIND.room) {
+        const room = world.rooms[i];
+        if (room !== undefined) {
+          const expected = atlasCellForRoomKind(room);
+          expect(attribute.array[slot]).toBe(expected);
+          packedRoomCells.add(expected);
+        }
+      }
+      slots[group] = slot + 1;
+    }
+    expect(packedRoomCells.size).toBe(roomKinds.length);
   });
 
   it("packs wall faces into the high tile groups with the wall atlas cell", () => {
