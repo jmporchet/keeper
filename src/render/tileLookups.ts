@@ -7,6 +7,7 @@ export const ROOM_LAIR_COLOR = 0x3f8f7f;
 export const ROOM_HATCHERY_COLOR = 0xb9a15c;
 export const ROOM_TRAINING_COLOR = 0xd9823b;
 export const ROOM_WORKSHOP_COLOR = 0x6f86b8;
+export const ROOM_LIBRARY_COLOR = 0x8c6bb1;
 export const ROOM_FLOOR_COLOR = 0x9a6a48;
 export const PORTAL_COLOR = 0x8a5cff;
 

@@ -106,7 +106,8 @@ function parseCommand(value: unknown): CommandResult {
         room !== "lair" &&
         room !== "hatchery" &&
         room !== "training" &&
-        room !== "workshop"
+        room !== "workshop" &&
+        room !== "library"
       ) {
         return { ok: false, reason: "invalidRoom" };
       }

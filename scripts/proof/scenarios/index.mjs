@@ -8,6 +8,7 @@ import * as heroes from "./heroes.mjs";
 import * as saveReplay from "./saveReplay.mjs";
 import * as possess from "./possess.mjs";
 import * as workshop from "./workshop.mjs";
+import * as library from "./library.mjs";
 import * as panelPerf from "./panelPerf.mjs";
 
 export const scenarios = [
@@ -21,5 +22,6 @@ export const scenarios = [
   saveReplay,
   possess,
   workshop,
+  library,
   panelPerf,
 ];

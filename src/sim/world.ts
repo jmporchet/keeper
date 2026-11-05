@@ -31,6 +31,7 @@ import {
   HEART_X,
   HEART_Y,
   LAIR_COST,
+  LIBRARY_COST,
   MAP_HEIGHT,
   MAP_HALF,
   MAP_WIDTH,
@@ -66,6 +67,7 @@ export {
   MAP_HALF,
   MAP_HEIGHT,
   LAIR_COST,
+  LIBRARY_COST,
   MAP_WIDTH,
   PORTAL_X,
   PORTAL_Y,
@@ -222,6 +224,7 @@ export function createWorld(seed: number): World {
   const hatcheryCache = new Int32Array(width * height);
   const trainingCache = new Int32Array(width * height);
   const workshopCache = new Int32Array(width * height);
+  const libraryCache = new Int32Array(width * height);
   const chickenTileCount = new Uint16Array(width * height);
   let walkableTileCount = 0;
   for (let i = 0; i < tiles.length; i += 1) {
@@ -262,6 +265,9 @@ export function createWorld(seed: number): World {
     workshopCache,
     workshopCacheCount: 0,
     workshopCacheVersion: -1,
+    libraryCache,
+    libraryCacheCount: 0,
+    libraryCacheVersion: -1,
     chickenTileCount,
     chickens: createChickenBoard(),
     chickensVersion: 0,
@@ -467,6 +473,17 @@ function applyPaintRoom(world: World, tile: TileIndex, room: RoomTool): void {
       world.roomsVersion += 1;
       return;
     }
+    case "library": {
+      if (world.goldStored < LIBRARY_COST) {
+        return;
+      }
+      world.goldStored -= LIBRARY_COST;
+      world.goldSpent += LIBRARY_COST;
+      setTile(world, tile, TILE_KIND.room);
+      world.rooms[tile] = ROOM_KIND.library;
+      world.roomsVersion += 1;
+      return;
+    }
     default: {
       const never: never = room;
       return never;
@@ -524,6 +541,17 @@ export function workshopTileCount(world: World): number {
   for (let i = 0; i < world.rooms.length; i += 1) {
     const room = world.rooms[i];
     if (room === ROOM_KIND.workshop) {
+      total += 1;
+    }
+  }
+  return total;
+}
+
+export function libraryTileCount(world: World): number {
+  let total = 0;
+  for (let i = 0; i < world.rooms.length; i += 1) {
+    const room = world.rooms[i];
+    if (room === ROOM_KIND.library) {
       total += 1;
     }
   }

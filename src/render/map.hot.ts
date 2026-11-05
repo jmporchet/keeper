@@ -5,6 +5,7 @@ import {
   ROOM_FLOOR_COLOR,
   ROOM_HATCHERY_COLOR,
   ROOM_LAIR_COLOR,
+  ROOM_LIBRARY_COLOR,
   ROOM_TRAINING_COLOR,
   ROOM_TREASURY_COLOR,
   ROOM_WORKSHOP_COLOR,
@@ -67,6 +68,8 @@ export function syncMapInstances(
         hex = ROOM_TRAINING_COLOR;
       } else if (room === ROOM_KIND.workshop) {
         hex = ROOM_WORKSHOP_COLOR;
+      } else if (room === ROOM_KIND.library) {
+        hex = ROOM_LIBRARY_COLOR;
       } else {
         hex = ROOM_FLOOR_COLOR;
       }

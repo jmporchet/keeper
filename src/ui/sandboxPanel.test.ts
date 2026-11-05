@@ -1,7 +1,44 @@
 import { describe, expect, it } from "vitest";
-import { asTick } from "../sim";
+import { asTick, type RoomTool, type Save } from "../sim";
 import { createHud, formatHud, hudGold, type HudElement } from "./hud";
-import { sandboxCommand } from "./sandboxPanel";
+import { createSandboxPanel, sandboxCommand } from "./sandboxPanel";
+
+type FakeButton = {
+  disabled: boolean;
+  pressed: string;
+  clicks: (() => void)[];
+  addEventListener(type: string, listener: () => void): void;
+  setAttribute(name: string, value: string): void;
+};
+
+function fakeButton(): FakeButton {
+  const button: FakeButton = {
+    disabled: false,
+    pressed: "false",
+    clicks: [],
+    addEventListener(_type, listener) {
+      button.clicks.push(listener);
+    },
+    setAttribute(name, value) {
+      if (name === "aria-pressed") {
+        button.pressed = value;
+      }
+    },
+  };
+  return button;
+}
+
+function fakePanelRoot(): { root: HTMLElement; buttons: Map<string, FakeButton> } {
+  const buttons = new Map<string, FakeButton>();
+  const root = {
+    querySelector(selector: string): FakeButton | null {
+      return buttons.get(selector) ?? null;
+    },
+  } as unknown as HTMLElement;
+  return { root, buttons };
+}
+
+const emptySave: Save = { version: 1, seed: 1, tick: 0, commands: [] };
 
 describe("sandbox panel commands", () => {
   it("queues spawnImp at the given tick", () => {
@@ -10,6 +47,36 @@ describe("sandbox panel commands", () => {
 
   it("queues addGold for 100 gold at the given tick", () => {
     expect(sandboxCommand("addGold", asTick(7))).toEqual({ kind: "addGold", tick: 7, amount: 100 });
+  });
+});
+
+describe("sandbox panel paint buttons", () => {
+  it("wires the paint library button to the library tool", () => {
+    const { root, buttons } = fakePanelRoot();
+    const libraryButton = fakeButton();
+    buttons.set("#paint-library", libraryButton);
+    const selected: RoomTool[] = [];
+    const panel = createSandboxPanel(
+      root,
+      () => asTick(0),
+      () => undefined,
+      (room) => {
+        selected.push(room);
+      },
+      () => emptySave,
+      () => undefined,
+      () => undefined,
+    );
+    const click = libraryButton.clicks[0];
+    if (click === undefined) {
+      throw new Error("paint library click handler was not registered");
+    }
+    click();
+    expect(selected).toEqual(["library"]);
+    panel.setPainting(true, "library");
+    expect(libraryButton.pressed).toBe("true");
+    panel.setPainting(false, "library");
+    expect(libraryButton.pressed).toBe("false");
   });
 });
 
